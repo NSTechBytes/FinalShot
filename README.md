@@ -28,7 +28,7 @@ In your `.ini` file, configure the `Finalshot.dll` plugin as follows:
 [mScreenshot]
 Measure=Plugin
 Plugin=Finalshot.dll
-SavePath="D:\\screenshot.png"    ; Define your custom path for the screenshot
+SavePath="D:\screenshot.png"    ; Define your custom path for the screenshot
 ScreenshotFinishAction=[!Log "Screenshot Saved"]  ; Action to execute after screenshot
 ```
 
@@ -42,7 +42,7 @@ ScreenshotFinishAction=[!Log "Screenshot Saved"]  ; Action to execute after scre
 [mScreenshot]
 Measure=Plugin
 Plugin=Finalshot.dll
-SavePath="C:\\Users\\YourUsername\\Pictures\\screenshot.png"
+SavePath="C:\Users\YourUsername\Pictures\screenshot.png"
 ScreenshotFinishAction=[!Log "Screenshot Saved"]
 ```
 
