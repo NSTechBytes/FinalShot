@@ -1,63 +1,118 @@
 ﻿using System;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using Rainmeter;
 
 namespace PluginScreenshot
 {
+    // Logger class for writing debug messages to a file.
+    public static class Logger
+    {
+        public static bool DebugEnabled = false;
+        public static string LogFilePath = "FinalShotDebug.log";
+
+        public static void Log(string message)
+        {
+            if (DebugEnabled)
+            {
+                try
+                {
+                    string logMessage = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " " + message + Environment.NewLine;
+                    File.AppendAllText(LogFilePath, logMessage);
+                }
+                catch { /* Ignore logging errors */ }
+            }
+        }
+    }
+
     internal class Measure
     {
-        private string savePath; // Store the save path from the .ini file
-        private string finishAction = ""; // Action to execute after screenshot is finished
-        private Rainmeter.API api; // Store reference to API
+        private string savePath;         // Save path from the .ini file
+        private string finishAction = "";  // Action to execute after screenshot is taken
+        private Rainmeter.API api;       // Rainmeter API reference
+
+        // Predefined coordinates for -ps command.
+        private int predefX;
+        private int predefY;
+        private int predefWidth;
+        private int predefHeight;
+
+        // DllImport for setting thread DPI awareness context.
+        [DllImport("user32.dll")]
+        private static extern IntPtr SetThreadDpiAwarenessContext(IntPtr dpiContext);
+        private static readonly IntPtr DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = new IntPtr(-4);
 
         public Measure(Rainmeter.API api)
         {
-            this.api = api; // Store API reference
+            this.api = api;
         }
 
         public void Reload(Rainmeter.API api, ref double maxValue)
         {
-            // Read the configuration from the .ini file
-            savePath = api.ReadString("SavePath", ""); // Do not set default path here
+            // Read configuration from the .ini file.
+            savePath = api.ReadString("SavePath", "");
             finishAction = api.ReadString("ScreenshotFinishAction", "");
+
+            predefX = api.ReadInt("PredefX", 0);
+            predefY = api.ReadInt("PredefY", 0);
+            predefWidth = api.ReadInt("PredefWidth", 0);
+            predefHeight = api.ReadInt("PredefHeight", 0);
+
+            // Read debugging options.
+            bool debugEnabled = api.ReadInt("DebugLog", 0) == 1;
+            Logger.DebugEnabled = debugEnabled;
+            string debugPath = api.ReadString("DebugLogPath", "");
+            if (!string.IsNullOrEmpty(debugPath))
+                Logger.LogFilePath = debugPath;
+
+            Logger.Log("Reload complete. SavePath: " + savePath);
+        }
+
+        // Helper: Run code in a DPI-aware thread context.
+        private void RunWithHighDpiContext(Action action)
+        {
+            IntPtr oldContext = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+            try { action(); }
+            finally { SetThreadDpiAwarenessContext(oldContext); }
         }
 
         public void ExecuteBatch(int actionCode)
         {
-            if (actionCode == 1) // Full screenshot
-            {
+            Logger.Log("ExecuteBatch called with actionCode: " + actionCode);
+            if (actionCode == 1)
                 TakeScreenshot();
-            }
-            else if (actionCode == 2) // Custom screenshot
-            {
+            else if (actionCode == 2)
                 TakeCustomScreenshot();
-            }
+            else if (actionCode == 3)
+                TakePredefinedScreenshot();
         }
 
         private void TakeScreenshot()
         {
             if (string.IsNullOrEmpty(savePath))
             {
-                api.Log(API.LogType.Error, "Error: No valid SavePath specified in the .ini file.");
-                return; // If save path is not specified, do nothing
+                api.Log(API.LogType.Error, "Error: No valid SavePath specified.");
+                Logger.Log("Error: No valid SavePath specified.");
+                return;
             }
 
-            // Take a screenshot of the entire screen
-            Rectangle bounds = Screen.GetBounds(Point.Empty);
-            using (Bitmap bitmap = new Bitmap(bounds.Width, bounds.Height))
+            RunWithHighDpiContext(() =>
             {
-                using (Graphics g = Graphics.FromImage(bitmap))
+                // Capture the entire virtual screen.
+                Rectangle bounds = SystemInformation.VirtualScreen;
+                Logger.Log("Full screenshot bounds: " + bounds);
+                using (Bitmap bitmap = new Bitmap(bounds.Width, bounds.Height))
                 {
-                    g.CopyFromScreen(Point.Empty, Point.Empty, bounds.Size);
+                    using (Graphics g = Graphics.FromImage(bitmap))
+                    {
+                        g.CopyFromScreen(bounds.Location, Point.Empty, bounds.Size);
+                    }
+                    SaveImage(bitmap);
                 }
-
-                SaveImage(bitmap);
-            }
-
-            // Execute the finish action after the screenshot is taken
+            });
             ExecuteFinishAction();
         }
 
@@ -65,69 +120,129 @@ namespace PluginScreenshot
         {
             if (string.IsNullOrEmpty(savePath))
             {
-                api.Log(API.LogType.Error, "Error: No valid SavePath specified in the .ini file.");
-                return; // If save path is not specified, do nothing
+                api.Log(API.LogType.Error, "Error: No valid SavePath specified.");
+                Logger.Log("Error: No valid SavePath for custom screenshot.");
+                return;
             }
-
+            Logger.Log("Launching custom screenshot form.");
+            // Launch the custom screenshot form.
             Application.Run(new CustomScreenshotForm(savePath, ExecuteFinishAction));
+        }
+
+        private void TakePredefinedScreenshot()
+        {
+            if (string.IsNullOrEmpty(savePath))
+            {
+                api.Log(API.LogType.Error, "Error: No valid SavePath specified.");
+                Logger.Log("Error: No valid SavePath for predefined screenshot.");
+                return;
+            }
+            if (predefWidth <= 0 || predefHeight <= 0)
+            {
+                api.Log(API.LogType.Error, "Error: Invalid predefined coordinates specified.");
+                Logger.Log("Error: Invalid predefined coordinates: " + predefX + "," + predefY + " " + predefWidth + "x" + predefHeight);
+                return;
+            }
+            RunWithHighDpiContext(() =>
+            {
+                Rectangle region = new Rectangle(predefX, predefY, predefWidth, predefHeight);
+                Logger.Log("Predefined screenshot region: " + region);
+                using (Bitmap bitmap = new Bitmap(region.Width, region.Height))
+                {
+                    using (Graphics g = Graphics.FromImage(bitmap))
+                    {
+                        g.CopyFromScreen(new Point(region.Left, region.Top), Point.Empty, region.Size);
+                    }
+                    SaveImage(bitmap);
+                }
+            });
+            ExecuteFinishAction();
         }
 
         private void SaveImage(Bitmap bitmap)
         {
-            // Always save as PNG format
-            bitmap.Save(savePath, ImageFormat.Png);
+            try
+            {
+                bitmap.Save(savePath, ImageFormat.Png);
+                Logger.Log("Image saved to: " + savePath);
+            }
+            catch (Exception ex)
+            {
+                api.Log(API.LogType.Error, "Error saving image: " + ex.Message);
+                Logger.Log("Error saving image: " + ex.Message);
+            }
         }
 
         private void ExecuteFinishAction()
         {
             if (!string.IsNullOrEmpty(finishAction))
             {
-                // Trigger the finish action (such as !ActivateConfig)
-                api.Execute(finishAction); // Use the API instance here
+                Logger.Log("Executing finish action: " + finishAction);
+                api.Execute(finishAction);
             }
         }
     }
 
+    // Custom screenshot form – now DPI aware so that mouse events report physical coordinates.
+    // This version attempts to handle multi-monitor selections with different DPI by compositing portions.
     public class CustomScreenshotForm : Form
     {
-        private Point startPoint;
-        private Rectangle selection;
+        private Point startPoint;      // Physical coordinates where mouse is pressed.
+        private Rectangle selection;   // Rectangle defined by the drag (in client coordinates).
         private string savePath;
         private bool isSelecting;
         private Action finishAction;
 
+        // DllImport for setting thread DPI awareness.
+        [DllImport("user32.dll")]
+        private static extern IntPtr SetThreadDpiAwarenessContext(IntPtr dpiContext);
+        private static readonly IntPtr DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = new IntPtr(-4);
+
         public CustomScreenshotForm(string savePath, Action finishAction)
         {
+            // Set thread DPI awareness so that mouse events are in physical pixels.
+            SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+
             this.savePath = savePath;
             this.finishAction = finishAction;
             this.DoubleBuffered = true;
             this.FormBorderStyle = FormBorderStyle.None;
-            this.WindowState = FormWindowState.Maximized;
+            // Cover the entire virtual screen.
+            this.Bounds = SystemInformation.VirtualScreen;
             this.BackColor = Color.Black;
             this.Opacity = 0.25;
             this.TopMost = true;
-            this.Cursor = Cursors.Cross; // Set cursor to crosshair for selection mode
-            this.MouseDown += new MouseEventHandler(OnMouseDown);
-            this.MouseMove += new MouseEventHandler(OnMouseMove);
-            this.MouseUp += new MouseEventHandler(OnMouseUp);
-            this.Paint += new PaintEventHandler(OnPaint);
+            this.Cursor = Cursors.Cross;
+            this.StartPosition = FormStartPosition.Manual;
+            // Position the form at the virtual screen's top-left.
+            this.Location = SystemInformation.VirtualScreen.Location;
+
+            this.MouseDown += OnMouseDown;
+            this.MouseMove += OnMouseMove;
+            this.MouseUp += OnMouseUp;
+            this.Paint += OnPaint;
+
+            Logger.Log("CustomScreenshotForm initialized. Bounds: " + this.Bounds);
         }
 
         private void OnMouseDown(object sender, MouseEventArgs e)
         {
+            // With DPI awareness enabled, e.Location is in physical pixels.
             startPoint = e.Location;
             isSelecting = true;
+            Logger.Log("Custom screenshot started at: " + startPoint);
         }
 
         private void OnMouseMove(object sender, MouseEventArgs e)
         {
             if (isSelecting)
             {
-                selection = new Rectangle(
-                    Math.Min(startPoint.X, e.X),
-                    Math.Min(startPoint.Y, e.Y),
-                    Math.Abs(startPoint.X - e.X),
-                    Math.Abs(startPoint.Y - e.Y));
+                // Update selection rectangle based on current mouse position.
+                int x = Math.Min(startPoint.X, e.X);
+                int y = Math.Min(startPoint.Y, e.Y);
+                int width = Math.Abs(startPoint.X - e.X);
+                int height = Math.Abs(startPoint.Y - e.Y);
+                selection = new Rectangle(x, y, width, height);
                 Invalidate();
             }
         }
@@ -135,64 +250,140 @@ namespace PluginScreenshot
         private void OnMouseUp(object sender, MouseEventArgs e)
         {
             isSelecting = false;
-
-            // Check if the selected area has a valid size
+            Logger.Log("Custom screenshot ended with selection: " + selection);
             if (selection.Width <= 0 || selection.Height <= 0)
             {
-                // Optionally, you can log an error or notify the user here.
-                // Simply close the form if no valid area is selected.
+                Logger.Log("Selection too small, closing form.");
                 this.Close();
                 return;
             }
-
-            // Hide the form before capturing the screenshot to avoid capturing the overlay
             this.Hide();
-            TakeScreenshot(selection);
-            this.Close(); // Close the form after capture
+            // Calculate the capture rectangle in absolute physical coordinates.
+            Rectangle captureRect = new Rectangle(
+                this.Bounds.Left + selection.X,
+                this.Bounds.Top + selection.Y,
+                selection.Width,
+                selection.Height);
+            Logger.Log("Capture rectangle (absolute physical coordinates): " + captureRect);
+            TakeScreenshot(captureRect);
+            this.Close();
         }
-
 
         private void OnPaint(object sender, PaintEventArgs e)
         {
             if (isSelecting)
             {
-                using (Pen pen = new Pen(Color.Red, 2))
+                // Draw only a bold dashed rectangle (no fill).
+                using (Pen borderPen = new Pen(Color.Red, 3))
                 {
-                    e.Graphics.DrawRectangle(pen, selection);
+                    borderPen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
+                    e.Graphics.DrawRectangle(borderPen, selection);
                 }
             }
         }
 
-        private void TakeScreenshot(Rectangle area)
+        private void TakeScreenshot(Rectangle captureRect)
         {
-            using (Bitmap bitmap = new Bitmap(area.Width, area.Height))
+            Logger.Log("Taking screenshot from rectangle: " + captureRect);
+            // Check if the captureRect is completely contained in one monitor.
+            bool isContained = false;
+            foreach (Screen screen in Screen.AllScreens)
             {
-                using (Graphics g = Graphics.FromImage(bitmap))
+                // Use screen.Bounds which should be in physical pixels for a DPI-aware process.
+                if (screen.Bounds.Contains(captureRect))
                 {
-                    g.CopyFromScreen(area.Location, Point.Empty, area.Size);
+                    isContained = true;
+                    break;
                 }
-
-                SaveImage(bitmap);
             }
 
-            // Execute the finish action after the screenshot is taken
+            if (isContained)
+            {
+                // Single-capture mode.
+                Logger.Log("Capture rectangle contained in one monitor; using single capture.");
+                TakeSingleCapture(captureRect);
+            }
+            else
+            {
+                // Composite capture mode: the selection spans multiple monitors.
+                Logger.Log("Capture rectangle spans multiple monitors; composing capture from parts.");
+                TakeCompositeCapture(captureRect);
+            }
             finishAction();
+        }
+
+        private void TakeSingleCapture(Rectangle rect)
+        {
+            // Use DPI-aware context for capturing.
+            IntPtr oldContext = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+            try
+            {
+                using (Bitmap bitmap = new Bitmap(rect.Width, rect.Height))
+                {
+                    using (Graphics g = Graphics.FromImage(bitmap))
+                    {
+                        g.CopyFromScreen(new Point(rect.Left, rect.Top), Point.Empty, rect.Size);
+                    }
+                    SaveImage(bitmap);
+                }
+            }
+            finally
+            {
+                SetThreadDpiAwarenessContext(oldContext);
+            }
+        }
+
+        private void TakeCompositeCapture(Rectangle rect)
+        {
+            // Create a final composite bitmap of the entire selection.
+            Bitmap finalBitmap = new Bitmap(rect.Width, rect.Height);
+            using (Graphics finalGraphics = Graphics.FromImage(finalBitmap))
+            {
+                // Iterate over all screens and capture the intersections.
+                foreach (Screen screen in Screen.AllScreens)
+                {
+                    Rectangle intersect = Rectangle.Intersect(rect, screen.Bounds);
+                    if (intersect.Width > 0 && intersect.Height > 0)
+                    {
+                        Logger.Log("Capturing intersection with screen (" + screen.DeviceName + "): " + intersect);
+                        // Capture this sub-region.
+                        using (Bitmap part = new Bitmap(intersect.Width, intersect.Height))
+                        {
+                            using (Graphics g = Graphics.FromImage(part))
+                            {
+                                g.CopyFromScreen(new Point(intersect.Left, intersect.Top), Point.Empty, intersect.Size);
+                            }
+                            // Draw this part into the final composite image.
+                            finalGraphics.DrawImage(part, new Rectangle(intersect.Left - rect.Left, intersect.Top - rect.Top, intersect.Width, intersect.Height));
+                        }
+                    }
+                }
+            }
+            SaveImage(finalBitmap);
         }
 
         private void SaveImage(Bitmap bitmap)
         {
-            // Always save as PNG format
-            bitmap.Save(savePath, ImageFormat.Png);
+            try
+            {
+                bitmap.Save(savePath, ImageFormat.Png);
+                Logger.Log("Custom screenshot saved to: " + savePath);
+            }
+            catch (Exception ex)
+            {
+                Logger.Log("Error saving custom screenshot: " + ex.Message);
+            }
         }
     }
 
     public static class Plugin
     {
+        // Do not mark the entire process as DPI aware to avoid affecting Rainmeter's UI.
         [DllExport]
         public static void Initialize(ref IntPtr data, IntPtr rm)
         {
-            Rainmeter.API api = new Rainmeter.API(rm); // Create API instance
-            data = GCHandle.ToIntPtr(GCHandle.Alloc(new Measure(api))); // Pass API to Measure
+            Rainmeter.API api = new Rainmeter.API(rm);
+            data = GCHandle.ToIntPtr(GCHandle.Alloc(new Measure(api)));
         }
 
         [DllExport]
@@ -211,7 +402,7 @@ namespace PluginScreenshot
         [DllExport]
         public static double Update(IntPtr data)
         {
-            return 0.0; // No numeric output
+            return 0.0;
         }
 
         [DllExport]
@@ -219,27 +410,18 @@ namespace PluginScreenshot
         {
             string arguments = Marshal.PtrToStringUni(args);
             Measure measure = (Measure)GCHandle.FromIntPtr(data).Target;
-
             if (arguments.Equals("-fs", StringComparison.OrdinalIgnoreCase))
-            {
-                // Full screenshot command
                 measure.ExecuteBatch(1);
-            }
             else if (arguments.Equals("-cs", StringComparison.OrdinalIgnoreCase))
-            {
-                // Custom screenshot command
                 measure.ExecuteBatch(2);
-            }
+            else if (arguments.Equals("-ps", StringComparison.OrdinalIgnoreCase))
+                measure.ExecuteBatch(3);
             else if (arguments.StartsWith("ExecuteBatch"))
             {
-                // Legacy support for numeric code commands
                 string[] parts = arguments.Split(' ');
                 if (parts.Length == 2 && int.TryParse(parts[1], out int actionCode))
-                {
                     measure.ExecuteBatch(actionCode);
-                }
             }
         }
-
     }
 }
