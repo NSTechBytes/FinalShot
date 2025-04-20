@@ -57,6 +57,7 @@ Define a measure that loads the plugin and configures the screenshot options:
 [MeasureScreenshot]
 Measure=Plugin
 Plugin=FinalShot
+;!Note supported Image extension are .png(default),jpg,.jpeg,.tiff,.bmp.
 SavePath=#@#Screenshots\screenshot.png
 PredefX=100
 PredefY=100
@@ -64,6 +65,8 @@ PredefWidth=400
 PredefHeight=300
 DebugLog=1
 DebugLogPath=#@#FinalShotDebug.log
+;Capture Mouse Cursor in Screenshot.
+ShowCursor=1
 ```
 
 ### 📸 **Screenshot Modes:**  

@@ -9,7 +9,6 @@ using Rainmeter;
 
 namespace PluginScreenshot
 {
-    // Logger class for writing debug messages to a file.
     public static class Logger
     {
         public static bool DebugEnabled = false;
@@ -24,37 +23,36 @@ namespace PluginScreenshot
                     string logMessage = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " " + message + Environment.NewLine;
                     File.AppendAllText(LogFilePath, logMessage);
                 }
-                catch { /* Ignore logging errors */ }
+                catch {}
             }
         }
     }
 
     internal class Measure
     {
-        private string savePath;         // Save path from the .ini file
-        private string finishAction = "";  // Action to execute after screenshot is taken
-        private Rainmeter.API api;       // Rainmeter API reference
-        public static bool showCursor; // Include cursor in the screenshot
-        public static int jpegQuality; // JPEG quality for saving images
-
-        // Predefined coordinates for -ps command.
+        private string savePath;        
+        private string finishAction = ""; 
+        private Rainmeter.API api;      
+        public static bool showCursor; 
+        public static int jpegQuality; 
+        private string finishAction = "";  
+        private Rainmeter.API api;       
+        public static bool showCursor;
         private int predefX;
         private int predefY;
         private int predefWidth;
         private int predefHeight;
 
-        // DllImport for setting thread DPI awareness context.
+
         [DllImport("user32.dll")]
         private static extern IntPtr SetThreadDpiAwarenessContext(IntPtr dpiContext);
         private static readonly IntPtr DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = new IntPtr(-4);
 
-        // DllImport for getting cursor information and drawing the cursor.
         [DllImport("user32.dll")]
         private static extern bool GetCursorInfo(out CURSORINFO pci);
         [DllImport("user32.dll")]
         private static extern bool DrawIcon(IntPtr hDC, int X, int Y, IntPtr hIcon);
 
-        // Structs for cursor information.
         [StructLayout(LayoutKind.Sequential)]
         private struct POINT { public int x, y; }
         [StructLayout(LayoutKind.Sequential)]
@@ -65,7 +63,6 @@ namespace PluginScreenshot
             public POINT ptScreenPos;
         }
 
-        // Constant for cursor information.
         private const int CURSOR_SHOWING = 0x00000001;
 
         public Measure(Rainmeter.API api)
@@ -75,7 +72,6 @@ namespace PluginScreenshot
 
         public void Reload(Rainmeter.API api, ref double maxValue)
         {
-            // Read configuration from the .ini file.
             savePath = api.ReadString("SavePath", "");
             finishAction = api.ReadString("ScreenshotFinishAction", "");
             showCursor = api.ReadInt("ShowCursor", 0) > 0;
@@ -84,8 +80,6 @@ namespace PluginScreenshot
             predefY = api.ReadInt("PredefY", 0);
             predefWidth = api.ReadInt("PredefWidth", 0);
             predefHeight = api.ReadInt("PredefHeight", 0);
-
-            // Read debugging options.
             bool debugEnabled = api.ReadInt("DebugLog", 0) == 1;
             Logger.DebugEnabled = debugEnabled;
             string debugPath = api.ReadString("DebugLogPath", "");
@@ -95,7 +89,6 @@ namespace PluginScreenshot
             Logger.Log("Reload complete. SavePath: " + savePath);
         }
 
-        // Helper: Draw the cursor on the screenshot.
         public static void DrawCursor(Graphics g, Rectangle bounds)
         {
             var ci = new CURSORINFO { cbSize = Marshal.SizeOf(typeof(CURSORINFO)) };
@@ -110,7 +103,6 @@ namespace PluginScreenshot
             }
         }
 
-        // Helper: Run code in a DPI-aware thread context.
         private void RunWithHighDpiContext(Action action)
         {
             IntPtr oldContext = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
@@ -140,7 +132,6 @@ namespace PluginScreenshot
 
             RunWithHighDpiContext(() =>
             {
-                // Capture the entire virtual screen.
                 Rectangle bounds = SystemInformation.VirtualScreen;
                 Logger.Log("Full screenshot bounds: " + bounds);
                 using (Bitmap bitmap = new Bitmap(bounds.Width, bounds.Height))
@@ -166,7 +157,6 @@ namespace PluginScreenshot
                 return;
             }
             Logger.Log("Launching custom screenshot form.");
-            // Launch the custom screenshot form.
             Application.Run(new CustomScreenshotForm(savePath, ExecuteFinishAction));
         }
 
@@ -255,38 +245,32 @@ namespace PluginScreenshot
         }
     }
 
-    // Custom screenshot form – now DPI aware so that mouse events report physical coordinates.
-    // This version attempts to handle multi-monitor selections with different DPI by compositing portions.
     public class CustomScreenshotForm : Form
     {
-        private Point startPoint;      // Physical coordinates where mouse is pressed.
-        private Rectangle selection;   // Rectangle defined by the drag (in client coordinates).
+        private Point startPoint;      
+        private Rectangle selection;   
         private string savePath;
         private bool isSelecting;
         private Action finishAction;
 
-        // DllImport for setting thread DPI awareness.
         [DllImport("user32.dll")]
         private static extern IntPtr SetThreadDpiAwarenessContext(IntPtr dpiContext);
         private static readonly IntPtr DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = new IntPtr(-4);
 
         public CustomScreenshotForm(string savePath, Action finishAction)
         {
-            // Set thread DPI awareness so that mouse events are in physical pixels.
             SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
             this.savePath = savePath;
             this.finishAction = finishAction;
             this.DoubleBuffered = true;
             this.FormBorderStyle = FormBorderStyle.None;
-            // Cover the entire virtual screen.
             this.Bounds = SystemInformation.VirtualScreen;
             this.BackColor = Color.Black;
             this.Opacity = 0.25;
             this.TopMost = true;
             this.Cursor = Cursors.Cross;
             this.StartPosition = FormStartPosition.Manual;
-            // Position the form at the virtual screen's top-left.
             this.Location = SystemInformation.VirtualScreen.Location;
 
             this.MouseDown += OnMouseDown;
@@ -299,7 +283,6 @@ namespace PluginScreenshot
 
         private void OnMouseDown(object sender, MouseEventArgs e)
         {
-            // With DPI awareness enabled, e.Location is in physical pixels.
             startPoint = e.Location;
             isSelecting = true;
             Logger.Log("Custom screenshot started at: " + startPoint);
@@ -309,7 +292,6 @@ namespace PluginScreenshot
         {
             if (isSelecting)
             {
-                // Update selection rectangle based on current mouse position.
                 int x = Math.Min(startPoint.X, e.X);
                 int y = Math.Min(startPoint.Y, e.Y);
                 int width = Math.Abs(startPoint.X - e.X);
@@ -330,7 +312,6 @@ namespace PluginScreenshot
                 return;
             }
             this.Hide();
-            // Calculate the capture rectangle in absolute physical coordinates.
             Rectangle captureRect = new Rectangle(
                 this.Bounds.Left + selection.X,
                 this.Bounds.Top + selection.Y,
@@ -345,8 +326,7 @@ namespace PluginScreenshot
         {
             if (isSelecting)
             {
-                // Draw only a bold dashed rectangle (no fill).
-                using (Pen borderPen = new Pen(Color.Red, 3))
+                using (Pen borderPen = new Pen(Color.Blue, 3))
                 {
                     borderPen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
                     e.Graphics.DrawRectangle(borderPen, selection);
@@ -357,11 +337,9 @@ namespace PluginScreenshot
         private void TakeScreenshot(Rectangle captureRect)
         {
             Logger.Log("Taking screenshot from rectangle: " + captureRect);
-            // Check if the captureRect is completely contained in one monitor.
             bool isContained = false;
             foreach (Screen screen in Screen.AllScreens)
             {
-                // Use screen.Bounds which should be in physical pixels for a DPI-aware process.
                 if (screen.Bounds.Contains(captureRect))
                 {
                     isContained = true;
@@ -371,13 +349,11 @@ namespace PluginScreenshot
 
             if (isContained)
             {
-                // Single-capture mode.
                 Logger.Log("Capture rectangle contained in one monitor; using single capture.");
                 TakeSingleCapture(captureRect);
             }
             else
             {
-                // Composite capture mode: the selection spans multiple monitors.
                 Logger.Log("Capture rectangle spans multiple monitors; composing capture from parts.");
                 TakeCompositeCapture(captureRect);
             }
@@ -386,7 +362,6 @@ namespace PluginScreenshot
 
         private void TakeSingleCapture(Rectangle rect)
         {
-            // Use DPI-aware context for capturing.
             IntPtr oldContext = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
             try
             {
@@ -409,18 +384,15 @@ namespace PluginScreenshot
 
         private void TakeCompositeCapture(Rectangle rect)
         {
-            // Create a final composite bitmap of the entire selection.
             Bitmap finalBitmap = new Bitmap(rect.Width, rect.Height);
             using (Graphics finalGraphics = Graphics.FromImage(finalBitmap))
             {
-                // Iterate over all screens and capture the intersections.
                 foreach (Screen screen in Screen.AllScreens)
                 {
                     Rectangle intersect = Rectangle.Intersect(rect, screen.Bounds);
                     if (intersect.Width > 0 && intersect.Height > 0)
                     {
                         Logger.Log("Capturing intersection with screen (" + screen.DeviceName + "): " + intersect);
-                        // Capture this sub-region.
                         using (Bitmap part = new Bitmap(intersect.Width, intersect.Height))
                         {
                             using (Graphics g = Graphics.FromImage(part))
@@ -429,7 +401,6 @@ namespace PluginScreenshot
                                 if (Measure.showCursor)
                                     Measure.DrawCursor(finalGraphics, rect);
                             }
-                            // Draw this part into the final composite image.
                             finalGraphics.DrawImage(part, new Rectangle(intersect.Left - rect.Left, intersect.Top - rect.Top, intersect.Width, intersect.Height));
                         }
                     }
@@ -476,14 +447,13 @@ namespace PluginScreenshot
                 case ".tiff":
                     return ImageFormat.Tiff;
                 default:
-                    return ImageFormat.Png; // fallback
+                    return ImageFormat.Png; 
             }
         }
     }
 
     public static class Plugin
     {
-        // Do not mark the entire process as DPI aware to avoid affecting Rainmeter's UI.
         [DllExport]
         public static void Initialize(ref IntPtr data, IntPtr rm)
         {
