@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using Rainmeter;
@@ -34,6 +35,7 @@ namespace PluginScreenshot
         private string finishAction = "";  // Action to execute after screenshot is taken
         private Rainmeter.API api;       // Rainmeter API reference
         public static bool showCursor; // Include cursor in the screenshot
+        public static int jpegQuality; // JPEG quality for saving images
 
         // Predefined coordinates for -ps command.
         private int predefX;
@@ -77,7 +79,7 @@ namespace PluginScreenshot
             savePath = api.ReadString("SavePath", "");
             finishAction = api.ReadString("ScreenshotFinishAction", "");
             showCursor = api.ReadInt("ShowCursor", 0) > 0;
-
+            jpegQuality = api.ReadInt("JpgQuality", 70);
             predefX = api.ReadInt("PredefX", 0);
             predefY = api.ReadInt("PredefY", 0);
             predefWidth = api.ReadInt("PredefWidth", 0);
@@ -204,13 +206,42 @@ namespace PluginScreenshot
         {
             try
             {
-                bitmap.Save(savePath, ImageFormat.Png);
-                Logger.Log("Image saved to: " + savePath);
+                ImageFormat format = GetImageFormat(savePath);
+
+                if (format.Equals(ImageFormat.Jpeg))
+                {
+                    var encoder = ImageCodecInfo.GetImageEncoders().FirstOrDefault(c => c.FormatID == ImageFormat.Jpeg.Guid);
+                    var encoderParams = new EncoderParameters(1);
+                    encoderParams.Param[0] = new EncoderParameter(Encoder.Quality, Measure.jpegQuality);
+                    bitmap.Save(savePath, encoder, encoderParams);
+                }
+                else
+                {
+                    bitmap.Save(savePath, format);
+                }
             }
             catch (Exception ex)
             {
-                api.Log(API.LogType.Error, "Error saving image: " + ex.Message);
-                Logger.Log("Error saving image: " + ex.Message);
+                Logger.Log("Error saving custom screenshot: " + ex.Message);
+            }
+        }
+
+        private ImageFormat GetImageFormat(string path)
+        {
+            string ext = Path.GetExtension(path).ToLowerInvariant();
+            switch (ext)
+            {
+                case ".jpg":
+                case ".jpeg":
+                    return ImageFormat.Jpeg;
+                case ".png":
+                    return ImageFormat.Png;
+                case ".bmp":
+                    return ImageFormat.Bmp;
+                case ".tiff":
+                    return ImageFormat.Tiff;
+                default:
+                    return ImageFormat.Png; // fallback
             }
         }
 
@@ -412,15 +443,24 @@ namespace PluginScreenshot
             try
             {
                 ImageFormat format = GetImageFormat(savePath);
-                bitmap.Save(savePath, format);
-                Logger.Log("Custom screenshot saved to: " + savePath);
+
+                if (format.Equals(ImageFormat.Jpeg))
+                {
+                    var encoder = ImageCodecInfo.GetImageEncoders().FirstOrDefault(c => c.FormatID == ImageFormat.Jpeg.Guid);
+                    var encoderParams = new EncoderParameters(1);
+                    encoderParams.Param[0] = new EncoderParameter(Encoder.Quality, Measure.jpegQuality);
+                    bitmap.Save(savePath, encoder, encoderParams);
+                }
+                else
+                {
+                    bitmap.Save(savePath, format);
+                }
             }
             catch (Exception ex)
             {
                 Logger.Log("Error saving custom screenshot: " + ex.Message);
             }
         }
-
         private ImageFormat GetImageFormat(string path)
         {
             string ext = Path.GetExtension(path).ToLowerInvariant();
