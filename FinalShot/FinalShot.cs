@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
@@ -33,6 +33,7 @@ namespace PluginScreenshot
         private string savePath;         // Save path from the .ini file
         private string finishAction = "";  // Action to execute after screenshot is taken
         private Rainmeter.API api;       // Rainmeter API reference
+        public static bool showCursor; // Include cursor in the screenshot
 
         // Predefined coordinates for -ps command.
         private int predefX;
@@ -45,6 +46,26 @@ namespace PluginScreenshot
         private static extern IntPtr SetThreadDpiAwarenessContext(IntPtr dpiContext);
         private static readonly IntPtr DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = new IntPtr(-4);
 
+        // DllImport for getting cursor information and drawing the cursor.
+        [DllImport("user32.dll")]
+        private static extern bool GetCursorInfo(out CURSORINFO pci);
+        [DllImport("user32.dll")]
+        private static extern bool DrawIcon(IntPtr hDC, int X, int Y, IntPtr hIcon);
+
+        // Structs for cursor information.
+        [StructLayout(LayoutKind.Sequential)]
+        private struct POINT { public int x, y; }
+        [StructLayout(LayoutKind.Sequential)]
+        private struct CURSORINFO
+        {
+            public int cbSize, flags;
+            public IntPtr hCursor;
+            public POINT ptScreenPos;
+        }
+
+        // Constant for cursor information.
+        private const int CURSOR_SHOWING = 0x00000001;
+
         public Measure(Rainmeter.API api)
         {
             this.api = api;
@@ -55,6 +76,7 @@ namespace PluginScreenshot
             // Read configuration from the .ini file.
             savePath = api.ReadString("SavePath", "");
             finishAction = api.ReadString("ScreenshotFinishAction", "");
+            showCursor = api.ReadInt("ShowCursor", 0) > 0;
 
             predefX = api.ReadInt("PredefX", 0);
             predefY = api.ReadInt("PredefY", 0);
@@ -69,6 +91,21 @@ namespace PluginScreenshot
                 Logger.LogFilePath = debugPath;
 
             Logger.Log("Reload complete. SavePath: " + savePath);
+        }
+
+        // Helper: Draw the cursor on the screenshot.
+        public static void DrawCursor(Graphics g, Rectangle bounds)
+        {
+            var ci = new CURSORINFO { cbSize = Marshal.SizeOf(typeof(CURSORINFO)) };
+            if (GetCursorInfo(out ci) && ci.flags == CURSOR_SHOWING)
+            {
+                IntPtr hdc = g.GetHdc();
+                DrawIcon(hdc,
+                         ci.ptScreenPos.x - bounds.Left,
+                         ci.ptScreenPos.y - bounds.Top,
+                         ci.hCursor);
+                g.ReleaseHdc();
+            }
         }
 
         // Helper: Run code in a DPI-aware thread context.
@@ -109,6 +146,8 @@ namespace PluginScreenshot
                     using (Graphics g = Graphics.FromImage(bitmap))
                     {
                         g.CopyFromScreen(bounds.Location, Point.Empty, bounds.Size);
+                        if (showCursor)
+                            DrawCursor(g, bounds);
                     }
                     SaveImage(bitmap);
                 }
@@ -152,6 +191,8 @@ namespace PluginScreenshot
                     using (Graphics g = Graphics.FromImage(bitmap))
                     {
                         g.CopyFromScreen(new Point(region.Left, region.Top), Point.Empty, region.Size);
+                        if (showCursor)
+                            DrawCursor(g, region);
                     }
                     SaveImage(bitmap);
                 }
@@ -323,6 +364,8 @@ namespace PluginScreenshot
                     using (Graphics g = Graphics.FromImage(bitmap))
                     {
                         g.CopyFromScreen(new Point(rect.Left, rect.Top), Point.Empty, rect.Size);
+                        if (Measure.showCursor)
+                            Measure.DrawCursor(g, rect);
                     }
                     SaveImage(bitmap);
                 }
@@ -352,6 +395,8 @@ namespace PluginScreenshot
                             using (Graphics g = Graphics.FromImage(part))
                             {
                                 g.CopyFromScreen(new Point(intersect.Left, intersect.Top), Point.Empty, intersect.Size);
+                                if (Measure.showCursor)
+                                    Measure.DrawCursor(finalGraphics, rect);
                             }
                             // Draw this part into the final composite image.
                             finalGraphics.DrawImage(part, new Rectangle(intersect.Left - rect.Left, intersect.Top - rect.Top, intersect.Width, intersect.Height));
