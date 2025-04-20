@@ -36,8 +36,6 @@ namespace PluginScreenshot
         public static bool showCursor; 
         public static int jpegQuality; 
         private string finishAction = "";  
-        private Rainmeter.API api;       
-        public static bool showCursor;
         private int predefX;
         private int predefY;
         private int predefWidth;
