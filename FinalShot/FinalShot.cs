@@ -411,12 +411,32 @@ namespace PluginScreenshot
         {
             try
             {
-                bitmap.Save(savePath, ImageFormat.Png);
+                ImageFormat format = GetImageFormat(savePath);
+                bitmap.Save(savePath, format);
                 Logger.Log("Custom screenshot saved to: " + savePath);
             }
             catch (Exception ex)
             {
                 Logger.Log("Error saving custom screenshot: " + ex.Message);
+            }
+        }
+
+        private ImageFormat GetImageFormat(string path)
+        {
+            string ext = Path.GetExtension(path).ToLowerInvariant();
+            switch (ext)
+            {
+                case ".jpg":
+                case ".jpeg":
+                    return ImageFormat.Jpeg;
+                case ".png":
+                    return ImageFormat.Png;
+                case ".bmp":
+                    return ImageFormat.Bmp;
+                case ".tiff":
+                    return ImageFormat.Tiff;
+                default:
+                    return ImageFormat.Png; // fallback
             }
         }
     }
