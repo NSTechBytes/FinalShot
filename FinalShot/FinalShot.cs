@@ -35,7 +35,6 @@ namespace PluginScreenshot
         private Rainmeter.API api;      
         public static bool showCursor; 
         public static int jpegQuality; 
-        private string finishAction = "";  
         private int predefX;
         private int predefY;
         private int predefWidth;
@@ -270,7 +269,6 @@ namespace PluginScreenshot
             this.Cursor = Cursors.Cross;
             this.StartPosition = FormStartPosition.Manual;
             this.Location = SystemInformation.VirtualScreen.Location;
-
             this.MouseDown += OnMouseDown;
             this.MouseMove += OnMouseMove;
             this.MouseUp += OnMouseUp;
