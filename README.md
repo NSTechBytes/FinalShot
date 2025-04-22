@@ -56,7 +56,7 @@ FinalShot supports full‑screen captures, predefined regions, custom selection,
 ```ini
 [MeasureScreenshot]
 Measure=Plugin
-Plugin=Plugins\FinalShot.dll
+Plugin=FinalShot
 ; Where to save the screenshot:
 SavePath=C:\Users\You\Pictures\shot.png
 ; 1 = include cursor, 0 = no cursor
@@ -123,7 +123,7 @@ DebugLog=0
 ```ini
 [MeasureFull]
 Measure=Plugin
-Plugin=Plugins\FinalShot.dll
+Plugin=FinalShot
 SavePath=#@#Screenshots\Full.png
 ShowCursor=1
 ScreenshotFinishAction=[!Refresh]
@@ -132,7 +132,7 @@ ScreenshotFinishAction=[!Refresh]
 ```ini
 [MeasureRegion]
 Measure=Plugin
-Plugin=Plugins\FinalShot.dll
+Plugin=FinalShot
 SavePath=#@#Screenshots\Region.png
 PredefX=200
 PredefY=150
