@@ -1,108 +1,163 @@
-# 📸 **FinalShot**  
+# FinalShot
 
-FinalShot is a powerful Rainmeter plugin written in **C#** that lets you capture screenshots directly from your Rainmeter skins! 🌟  
-Whether it's a full-screen capture, custom region, or predefined area, **FinalShot** has got you covered!  
-Plus, it works seamlessly with multi-monitor setups—even when monitors have different DPI scaling! 💻🖥️  
-
----
-
-## ✨ **Features**  
-
-- 🖥️ **Full-Screen Capture:**  
-  Capture the **entire virtual desktop** across all monitors.  
-
-- ✂️ **Custom Region Capture:**  
-  Drag and select a custom area on the screen with a **bold dashed red border**—clean and precise!  
-
-- 🗺️ **Predefined Region Capture:**  
-  Capture a specific area defined by coordinates in your skin's configuration.  
-
-- 🖥️🖥️ **Multi-Monitor Support:**  
-  Designed to work with **multiple monitors**, even with different DPI settings!  
-  The plugin composites multiple captures into a single image when needed.  
-
-- 🐞 **Debug Logging:**  
-  Optional **debug logging** helps troubleshoot DPI scaling and coordinate conversion issues.  
-  Enable debugging via your skin's `.ini` file.  
+A powerful Rainmeter plugin for capturing screenshots directly from your skins.  
+FinalShot supports full‑screen captures, predefined regions, custom selection, multi‑monitor composition, cursor inclusion, JPEG quality control, and post‑capture actions.
 
 ---
 
-## 🛠️ **Installation**  
+## Features
 
-1. **🔧 Build the Plugin:**  
-   - Open the **FinalShot solution** in Visual Studio.  
-   - Build the project (choose **Debug** or **Release**).  
-   - The compiled DLL (`FinalShot.dll`) will be located in your output directory.  
+- **Full‑Screen Capture** (`-fs`)  
+  Capture the entire virtual screen (all monitors).
 
-2. **📂 Copy the DLL:**  
-   - Place `FinalShot.dll` in Rainmeter’s plugins directory:  
-     ```
-     %USERPROFILE%\Documents\Rainmeter\Plugins
-     ```
-   - Or, use your **custom plugins folder** if configured.  
+- **Predefined Region** (`-ps`)  
+  Capture a fixed rectangle specified by X, Y, Width, and Height.
 
-3. **🎨 Setup Your Skin:**  
-   - Create a new folder for your skin (e.g., `FinalShotSkin`) in your Rainmeter skins directory.  
-   - Copy the **sample skin** into that folder.  
-   - Make sure that any folder referenced in the `SavePath` exists.  
+- **Custom Selection** (`-cs`)  
+  Draw a region on‑the‑fly with your mouse.
+
+- **Multi‑Monitor Composition**  
+  Seamlessly stitch captures across multiple monitors.
+
+- **Cursor Inclusion**  
+  Optionally include the mouse cursor in your screenshots.
+
+- **JPEG Quality Control**  
+  Adjust JPEG compression quality (0–100).
+
+- **Finish Actions**  
+  Execute any Rainmeter bang or external command after saving.
+
+- **Debug Logging**  
+  Optional logging with automatic log rotation.
 
 ---
 
-## 🚀 **Usage**  
+## Requirements
 
-### 🌈 In Your Rainmeter Skin  
-Define a measure that loads the plugin and configures the screenshot options:  
+- Windows 7 or later  
+- Rainmeter 4.x or later  
+- .NET Framework 4.5 or higher  
+
+---
+
+## Installation
+
+1. **Build** the plugin from source (or download the precompiled `FinalShot.dll`).  
+2. Copy `FinalShot.dll` into your Rainmeter **Plugins** folder (e.g. `…\Rainmeter\Plugins\`).  
+3. Edit your Rainmeter skin `.ini` to reference the plugin.
+
+---
+
+## Usage
+
+### 1. Define a Measure
 
 ```ini
 [MeasureScreenshot]
 Measure=Plugin
-Plugin=FinalShot
-;!Note supported Image extension are .png(default),jpg,.jpeg,.tiff,.bmp.
-SavePath=#@#Screenshots\screenshot.png
+Plugin=Plugins\FinalShot.dll
+; Where to save the screenshot:
+SavePath=C:\Users\You\Pictures\shot.png
+; 1 = include cursor, 0 = no cursor
+ShowCursor=1
+; JPEG quality (only if SavePath ends in .jpg/.jpeg)
+JpgQuality=85
+; Predefined region (for -ps):
 PredefX=100
 PredefY=100
-PredefWidth=400
-PredefHeight=300
-DebugLog=1
-DebugLogPath=#@#FinalShotDebug.log
-;Capture Mouse Cursor in Screenshot.
-ShowCursor=1
+PredefWidth=800
+PredefHeight=600
+; After saving, execute this bang or app:
+ScreenshotFinishAction=[!Log "Screenshot taken!"]
+; Enable debug logging (1 = on, 0 = off)
+DebugLog=0
+; (Optional) custom log path:
+; DebugLogPath=C:\Temp\FinalShotDebug.log
 ```
 
-### 📸 **Screenshot Modes:**  
-- **🖥️ Full Screen:** `[!CommandMeasure "MeasureScreenshot" "-fs"]`  
-- **🔲 Custom Region:** `[!CommandMeasure "MeasureScreenshot" "-cs"]`  
-- **📐 Predefined Region:** `[!CommandMeasure "MeasureScreenshot" "-ps"]`  
+### 2. Capture with Bangs
+
+- **Full‑Screen**  
+  ```ini
+  [!CommandMeasure MeasureScreenshot "-fs"]
+  ```
+
+- **Predefined Region**  
+  ```ini
+  [!CommandMeasure MeasureScreenshot "-ps"]
+  ```
+
+- **Custom Selection**  
+  ```ini
+  [!CommandMeasure MeasureScreenshot "-cs"]
+  ```
+
+- **Batch Execution**  
+  You can also call:
+  ```ini
+  [!CommandMeasure MeasureScreenshot "ExecuteBatch 1"]  ; full-screen
+  [!CommandMeasure MeasureScreenshot "ExecuteBatch 2"]  ; custom
+  [!CommandMeasure MeasureScreenshot "ExecuteBatch 3"]  ; predefined
+  ```
 
 ---
 
-## 📝 **Debugging**  
+## Settings Reference
 
-To enable debug logging, add these lines to your skin’s variables:  
+| Setting                 | Description                                                                                     | Default     |
+|-------------------------|-------------------------------------------------------------------------------------------------|-------------|
+| `SavePath`              | Full path (including filename & extension) where the screenshot will be saved.                   | (empty)     |
+| `ScreenshotFinishAction`| Rainmeter bang or command to run after saving.                                                   | (empty)     |
+| `ShowCursor`            | Include mouse cursor in capture? (1 = yes, 0 = no)                                               | 0           |
+| `JpgQuality`            | JPEG compression quality (0–100). Only applies to `.jpg` or `.jpeg` files.                        | 70          |
+| `PredefX`, `PredefY`    | Top‑left coordinates of the predefined capture region.                                           | 0           |
+| `PredefWidth`, `PredefHeight` | Width & height of the predefined capture region.                                            | 0           |
+| `DebugLog`              | Enable debug logging? (1 = yes, 0 = no).                                                         | 0           |
+| `DebugLogPath`          | Custom path for the debug log file (overrides default `FinalShotDebug.log`).                    | (empty)     |
+
+---
+
+## Examples
 
 ```ini
-DebugLog=1
-DebugLogPath=#@#FinalShotDebug.log
+[MeasureFull]
+Measure=Plugin
+Plugin=Plugins\FinalShot.dll
+SavePath=#@#Screenshots\Full.png
+ShowCursor=1
+ScreenshotFinishAction=[!Refresh]
 ```
 
-Debug logs help identify DPI scaling and coordinate conversion issues during **custom region capture**.  
+```ini
+[MeasureRegion]
+Measure=Plugin
+Plugin=Plugins\FinalShot.dll
+SavePath=#@#Screenshots\Region.png
+PredefX=200
+PredefY=150
+PredefWidth=1024
+PredefHeight=768
+ShowCursor=0
+```
 
 ---
 
-## 💪 **Contributing**  
+## Debug Logging
 
-Contributions are always welcome! 🌟  
-- 🐛 **Found a bug?** Open an issue!  
-- 💡 **Got an improvement?** Feel free to submit a pull request!  
+To troubleshoot, enable `DebugLog=1`. Logs are written to `FinalShotDebug.log` (or your custom `DebugLogPath`) and automatically rotate at 5 MB.
 
 ---
 
-## 📜 **License**  
+## Building from Source
 
-This project is licensed under the **[APACHE License](LICENSE)**.  
-Feel free to use, modify, and distribute as per the license terms.  
+1. Open the solution in Visual Studio.  
+2. Ensure your target framework is set to .NET Framework 4.5 or higher.  
+3. Build in **Release** mode.  
+4. Copy the resulting `FinalShot.dll` to your Rainmeter plugins folder.
 
 ---
 
-💙 **Enjoy capturing screenshots with FinalShot!** 💙  
-Developed with ❤️ by **NS Tech Bytes**  
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.  
