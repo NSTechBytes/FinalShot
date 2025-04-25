@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
@@ -15,7 +15,7 @@ namespace PluginScreenshot
         private static readonly object _lock = new object();
         public static bool DebugEnabled = false;
         public static string LogFilePath = "FinalShotDebug.log";
-        public static long MaxLogFileSize = 5 * 1024 * 1024; // 5�MB
+        public static long MaxLogFileSize = 5 * 1024 * 1024;
 
         public static void Log(string message)
         {
@@ -30,7 +30,7 @@ namespace PluginScreenshot
                     File.AppendAllText(LogFilePath, logMessage);
                 }
             }
-            catch { /* swallow */ }
+            catch {}
         }
 
         private static void RotateIfNeeded()
@@ -50,7 +50,7 @@ namespace PluginScreenshot
                     }
                 }
             }
-            catch { /* ignore */ }
+            catch {}
         }
     }
 
@@ -93,11 +93,16 @@ namespace PluginScreenshot
 
         [DllImport("user32.dll")]
         private static extern bool GetCursorInfo(out CURSORINFO pci);
+
         [DllImport("user32.dll")]
         private static extern bool DrawIcon(IntPtr hDC, int X, int Y, IntPtr hIcon);
 
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool GetIconInfo(IntPtr hIcon, out ICONINFO pIconInfo);
+
         [StructLayout(LayoutKind.Sequential)]
         private struct POINT { public int x, y; }
+
         [StructLayout(LayoutKind.Sequential)]
         private struct CURSORINFO
         {
@@ -105,6 +110,17 @@ namespace PluginScreenshot
             public IntPtr hCursor;
             public POINT ptScreenPos;
         }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct ICONINFO
+        {
+            public bool fIcon;         
+            public int xHotspot;     
+            public int yHotspot;       
+            public IntPtr hbmMask;    
+            public IntPtr hbmColor;   
+        }
+
         private const int CURSOR_SHOWING = 0x00000001;
 
         public static void DrawCursor(Graphics g, Rectangle bounds)
@@ -112,12 +128,14 @@ namespace PluginScreenshot
             var ci = new CURSORINFO { cbSize = Marshal.SizeOf(typeof(CURSORINFO)) };
             if (GetCursorInfo(out ci) && ci.flags == CURSOR_SHOWING)
             {
-                IntPtr hdc = g.GetHdc();
-                DrawIcon(hdc,
-                         ci.ptScreenPos.x - bounds.Left,
-                         ci.ptScreenPos.y - bounds.Top,
-                         ci.hCursor);
-                g.ReleaseHdc();
+                if (GetIconInfo(ci.hCursor, out ICONINFO iconInfo))
+                {
+                    IntPtr hdc = g.GetHdc();
+                    int x = ci.ptScreenPos.x - bounds.Left - iconInfo.xHotspot;
+                    int y = ci.ptScreenPos.y - bounds.Top - iconInfo.yHotspot;
+                    DrawIcon(hdc, x, y, ci.hCursor);
+                    g.ReleaseHdc();
+                }
             }
         }
 
@@ -171,19 +189,33 @@ namespace PluginScreenshot
 
         public static void TakeCustom(Settings settings, Action finishCallback)
         {
-            if (string.IsNullOrEmpty(settings.SavePath)) return;
+            Logger.Log($"TakeCustom() called. SavePath='{settings.SavePath}'  ShowCursor={settings.ShowCursor}");
+            if (string.IsNullOrWhiteSpace(settings.SavePath))
+            {
+                Logger.Log("TakeCustom: SavePath is empty, aborting custom capture.");
+                return;
+            }
             Application.Run(new CustomScreenshotForm(settings, finishCallback));
         }
 
+
         public static void CompositeCapture(Rectangle rect, Settings settings)
         {
+            // ←—— Guard against missing SavePath
+            if (settings == null || string.IsNullOrWhiteSpace(settings.SavePath))
+            {
+                Logger.Log("CompositeCapture: no SavePath, skipping.");
+                return;
+            }
+
             using (var finalBmp = new Bitmap(rect.Width, rect.Height))
             using (var finalG = Graphics.FromImage(finalBmp))
             {
                 foreach (var scr in Screen.AllScreens)
                 {
                     var inter = Rectangle.Intersect(rect, scr.Bounds);
-                    if (inter.Width <= 0 || inter.Height <= 0) continue;
+                    if (inter.Width <= 0 || inter.Height <= 0)
+                        continue;
 
                     using (var part = new Bitmap(inter.Width, inter.Height))
                     using (var g = Graphics.FromImage(part))
@@ -192,51 +224,67 @@ namespace PluginScreenshot
                         if (settings.ShowCursor)
                             DrawCursor(g, new Rectangle(Point.Empty, inter.Size));
                         finalG.DrawImage(part,
-                            inter.Left - rect.Left,
-                            inter.Top - rect.Top);
+                                         inter.Left - rect.Left,
+                                         inter.Top - rect.Top);
                     }
                 }
+
                 SaveImageSafely(finalBmp, settings);
             }
         }
+
 
         private static void SaveImageSafely(Bitmap source, Settings settings)
         {
             try
             {
+                if (source == null) { Logger.Log("SaveImageSafely: source bitmap is null"); return; }
+                if (settings == null) { Logger.Log("SaveImageSafely: settings is null"); return; }
+
+                string path = settings.SavePath;
+                if (string.IsNullOrWhiteSpace(path))
+                {
+                    Logger.Log("SaveImageSafely: SavePath is null or empty");
+                    return;
+                }
+                string dir = Path.GetDirectoryName(path);
+                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                    Directory.CreateDirectory(dir);
+
                 using (var clone = new Bitmap(source.Width, source.Height, source.PixelFormat))
                 using (var g = Graphics.FromImage(clone))
                 {
                     g.DrawImageUnscaled(source, 0, 0);
 
-                    var fmt = GetImageFormat(settings.SavePath);
-                    using (var fs = new FileStream(
-                        settings.SavePath,
-                        FileMode.Create,
-                        FileAccess.Write,
-                        FileShare.None))
+                    var fmt = GetImageFormat(path);
+                    using var fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
+
+                    if (fmt.Guid == ImageFormat.Jpeg.Guid)
                     {
-                        if (fmt.Guid == ImageFormat.Jpeg.Guid)
+                        var enc = ImageCodecInfo
+                                    .GetImageEncoders()
+                                    .FirstOrDefault(e => e.FormatID == ImageFormat.Jpeg.Guid);
+                        if (enc == null)
                         {
-                            var enc = ImageCodecInfo
-                                .GetImageEncoders()
-                                .First(e => e.FormatID == ImageFormat.Jpeg.Guid);
-                            var pars = new EncoderParameters(1);
-                            pars.Param[0] = new EncoderParameter(
-                                Encoder.Quality,
-                                settings.JpegQuality);
-                            clone.Save(fs, enc, pars);
+                            Logger.Log("SaveImageSafely: JPEG encoder not found, falling back to PNG");
+                            clone.Save(fs, ImageFormat.Png);
                         }
                         else
                         {
-                            clone.Save(fs, fmt);
+                            var pars = new EncoderParameters(1);
+                            pars.Param[0] = new EncoderParameter(Encoder.Quality, settings.JpegQuality);
+                            clone.Save(fs, enc, pars);
                         }
+                    }
+                    else
+                    {
+                        clone.Save(fs, fmt);
                     }
                 }
             }
             catch (Exception ex)
             {
-                Logger.Log("Error saving screenshot: " + ex.Message);
+                Logger.Log("Error saving screenshot: " + ex.ToString());
             }
         }
 
@@ -249,7 +297,7 @@ namespace PluginScreenshot
             return ImageFormat.Png;
         }
 
-        private static void ExecuteFinishAction(Settings settings)
+        public static void ExecuteFinishAction(Settings settings)
         {
             if (string.IsNullOrEmpty(settings.FinishAction)) return;
             try
@@ -317,8 +365,10 @@ namespace PluginScreenshot
         private void OnMouseUp(object s, MouseEventArgs e)
         {
             _dragging = false;
+            Logger.Log($"CustomScreenshotForm: user dropped selection {_selection}");
             if (_selection.Width < 1 || _selection.Height < 1)
             {
+                Logger.Log("CustomScreenshotForm: selection too small, closing.");
                 Close();
                 return;
             }
@@ -394,7 +444,11 @@ namespace PluginScreenshot
             }
             else if (string.Equals(cmd, "-cs", StringComparison.OrdinalIgnoreCase))
             {
-                ScreenshotManager.TakeCustom(settings, () => { });
+                ScreenshotManager.TakeCustom(settings, () =>
+                {
+                    Logger.Log("Custom capture done, calling FinishAction.");
+                    ScreenshotManager.ExecuteFinishAction(settings);
+                });
             }
             else if (cmd.StartsWith("ExecuteBatch ", StringComparison.OrdinalIgnoreCase))
             {
