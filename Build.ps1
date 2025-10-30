@@ -1,4 +1,4 @@
-#usage -----> powershell -ExecutionPolicy Bypass -Command "& {. .\Build.ps1; Dist -major 1 -minor 0 -patch 0}"
+#usage -----> powershell -ExecutionPolicy Bypass -Command "& {. .\Build.ps1; Dist -major 1 -minor 6 -patch 0}"
 $msbuild = "C:\Program Files\Microsoft Visual Studio\2022\Community\Msbuild\Current\Bin\MSBuild.exe"
 
 function Add-RMSkinFooter {
