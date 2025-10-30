@@ -1,7 +1,22 @@
 # FinalShot
 
-A powerful Rainmeter plugin for capturing screenshots directly from your skins.  
-FinalShot supports full‑screen captures, predefined regions, custom selection, multi‑monitor composition, cursor inclusion, JPEG quality control, and post‑capture actions.
+A powerful Rainmeter plugin for capturing screenshots directly from your skins with beautiful themed notifications.  
+FinalShot supports full‑screen captures, predefined regions, custom selection, window capture, multi‑monitor composition, cursor inclusion, JPEG quality control, and post‑capture actions.
+
+![Skin Preview](.github/Skin_Preview.png)
+
+### Toast Notifications
+
+<table>
+  <tr>
+    <td><img src=".github/Dark_Toast.png" alt="Dark Mode Toast" /></td>
+    <td><img src=".github/Light_Toast.png" alt="Light Mode Toast" /></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Dark Mode</b></td>
+    <td align="center"><b>Light Mode</b></td>
+  </tr>
+</table>
 
 ---
 
@@ -15,6 +30,15 @@ FinalShot supports full‑screen captures, predefined regions, custom selection,
 
 - **Custom Selection** (`-cs`)  
   Draw a region on‑the‑fly with your mouse.
+
+- **Window Capture** (`-ws|windowtitle`)  
+  Capture a specific window by its exact title.
+
+- **Toast Notifications**  
+  Beautiful themed notifications that adapt to Windows Dark/Light mode with screenshot preview.
+
+- **Notification Sound**  
+  Plays the Windows notification sound on successful capture.
 
 - **Multi‑Monitor Composition**  
   Seamlessly stitch captures across multiple monitors.
@@ -61,6 +85,8 @@ Plugin=FinalShot
 SavePath=C:\Users\You\Pictures\shot.png
 ; 1 = include cursor, 0 = no cursor
 ShowCursor=1
+; 1 = show notification with preview, 0 = no notification
+ShowNotification=1
 ; JPEG quality (only if SavePath ends in .jpg/.jpeg)
 JpgQuality=85
 ; Predefined region (for -ps):
@@ -93,6 +119,13 @@ DebugLog=0
   [!CommandMeasure MeasureScreenshot "-cs"]
   ```
 
+- **Window Capture**  
+  ```ini
+  [!CommandMeasure MeasureScreenshot "-ws|Notepad"]
+  [!CommandMeasure MeasureScreenshot "-ws|Google Chrome"]
+  ```
+  Note: Window title must match exactly as shown in the title bar.
+
 - **Batch Execution**  
   You can also call:
   ```ini
@@ -110,6 +143,7 @@ DebugLog=0
 | `SavePath`              | Full path (including filename & extension) where the screenshot will be saved.                   | (empty)     |
 | `ScreenshotFinishAction`| Rainmeter bang or command to run after saving.                                                   | (empty)     |
 | `ShowCursor`            | Include mouse cursor in capture? (1 = yes, 0 = no)                                               | 0           |
+| `ShowNotification`      | Show toast notification with preview after capture? (1 = yes, 0 = no)                           | 0           |
 | `JpgQuality`            | JPEG compression quality (0–100). Only applies to `.jpg` or `.jpeg` files.                        | 70          |
 | `PredefX`, `PredefY`    | Top‑left coordinates of the predefined capture region.                                           | 0           |
 | `PredefWidth`, `PredefHeight` | Width & height of the predefined capture region.                                            | 0           |
@@ -120,15 +154,18 @@ DebugLog=0
 
 ## Examples
 
+### Full Screen Capture with Notification
 ```ini
 [MeasureFull]
 Measure=Plugin
 Plugin=FinalShot
 SavePath=#@#Screenshots\Full.png
 ShowCursor=1
+ShowNotification=1
 ScreenshotFinishAction=[!Refresh]
 ```
 
+### Predefined Region Capture
 ```ini
 [MeasureRegion]
 Measure=Plugin
@@ -139,6 +176,21 @@ PredefY=150
 PredefWidth=1024
 PredefHeight=768
 ShowCursor=0
+ShowNotification=1
+```
+
+### Window Capture
+```ini
+[MeasureWindow]
+Measure=Plugin
+Plugin=FinalShot
+SavePath=#@#Screenshots\Window.png
+ShowCursor=0
+ShowNotification=1
+
+[CaptureNotepad]
+Meter=String
+LeftMouseUpAction=[!CommandMeasure MeasureWindow "-ws|Untitled - Notepad"]
 ```
 
 ---
