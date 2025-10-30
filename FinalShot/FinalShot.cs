@@ -91,6 +91,22 @@ namespace PluginScreenshot
         private static extern IntPtr SetThreadDpiAwarenessContext(IntPtr dpiContext);
         private static readonly IntPtr DPI_PER_MONITOR_AWARE_V2 = new IntPtr(-4);
 
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct RECT
+        {
+            public int Left;
+            public int Top;
+            public int Right;
+            public int Bottom;
+        }
+
         [DllImport("user32.dll")]
         private static extern bool GetCursorInfo(out CURSORINFO pci);
 
@@ -196,6 +212,62 @@ namespace PluginScreenshot
                 return;
             }
             Application.Run(new CustomScreenshotForm(settings, finishCallback));
+        }
+
+        public static void TakeWindowScreenshot(Settings settings, string windowTitle)
+        {
+            Logger.Log($"TakeWindowScreenshot() called. WindowTitle='{windowTitle}'");
+            if (string.IsNullOrEmpty(settings.SavePath))
+            {
+                Logger.Log("TakeWindowScreenshot: SavePath is empty, aborting.");
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(windowTitle))
+            {
+                Logger.Log("TakeWindowScreenshot: WindowTitle is empty, aborting.");
+                return;
+            }
+
+            WithHighDpiContext(() =>
+            {
+                IntPtr hWnd = FindWindow(null, windowTitle);
+                if (hWnd == IntPtr.Zero)
+                {
+                    Logger.Log($"TakeWindowScreenshot: Window '{windowTitle}' not found.");
+                    return;
+                }
+
+                if (GetWindowRect(hWnd, out RECT rect))
+                {
+                    int width = rect.Right - rect.Left;
+                    int height = rect.Bottom - rect.Top;
+
+                    if (width <= 0 || height <= 0)
+                    {
+                        Logger.Log($"TakeWindowScreenshot: Invalid window dimensions {width}x{height}");
+                        return;
+                    }
+
+                    Rectangle bounds = new Rectangle(rect.Left, rect.Top, width, height);
+                    Logger.Log($"TakeWindowScreenshot: Capturing window at {bounds}");
+
+                    using (var bmp = new Bitmap(width, height))
+                    using (var g = Graphics.FromImage(bmp))
+                    {
+                        g.CopyFromScreen(bounds.Location, Point.Empty, bounds.Size);
+                        if (settings.ShowCursor)
+                            DrawCursor(g, bounds);
+                        SaveImageSafely(bmp, settings);
+                    }
+                }
+                else
+                {
+                    Logger.Log($"TakeWindowScreenshot: Failed to get window rect for '{windowTitle}'");
+                }
+            });
+
+            ExecuteFinishAction(settings);
         }
 
 
@@ -449,6 +521,12 @@ namespace PluginScreenshot
                     Logger.Log("Custom capture done, calling FinishAction.");
                     ScreenshotManager.ExecuteFinishAction(settings);
                 });
+            }
+            else if (cmd.StartsWith("-ws|", StringComparison.OrdinalIgnoreCase))
+            {
+                string windowTitle = cmd.Substring(4); // Extract everything after "-ws|"
+                Logger.Log($"ExecuteBang: Window screenshot requested for '{windowTitle}'");
+                ScreenshotManager.TakeWindowScreenshot(settings, windowTitle);
             }
             else if (cmd.StartsWith("ExecuteBatch ", StringComparison.OrdinalIgnoreCase))
             {
