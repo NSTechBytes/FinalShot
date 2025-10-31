@@ -1,6 +1,6 @@
 ﻿{
     "skinDir":  ".\\Resources\\Skins",
-    "version":  "1.6.0",
+    "version":  "1.7.0",
     "minimumVersion":  "4.5",
     "author":  "nstechbytes",
     "variableFiles":  "",
@@ -17,5 +17,5 @@
     "load":  "FinalShot\\Main.ini",
     "headerImage":  ".\\Resources\\banner.bmp",
     "configPrefix":  "FinalShot",
-    "output":  ".\\dist\\FinalShot_v1.6.0.rmskin"
+    "output":  ".\\dist\\FinalShot_v1.7.0.rmskin"
 }

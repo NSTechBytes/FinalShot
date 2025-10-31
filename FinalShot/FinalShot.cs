@@ -65,6 +65,7 @@ namespace PluginScreenshot
         public int JpegQuality { get; private set; }
         public Rectangle PredefinedRegion { get; private set; }
         public bool ShowNotification { get; private set; }
+        public bool UsePrintWindow { get; private set; }
 
         public Settings(API api)
         {
@@ -74,6 +75,7 @@ namespace PluginScreenshot
             ShowCursor = api.ReadInt("ShowCursor", 0) > 0;
             JpegQuality = api.ReadInt("JpgQuality", 70);
             ShowNotification = api.ReadInt("ShowNotification", 0) > 0;
+            UsePrintWindow = api.ReadInt("UsePrintWindow", 0) > 0;
             int x = api.ReadInt("PredefX", 0);
             int y = api.ReadInt("PredefY", 0);
             int w = api.ReadInt("PredefWidth", 0);
@@ -116,6 +118,9 @@ namespace PluginScreenshot
 
         [DllImport("user32.dll")]
         private static extern bool DrawIcon(IntPtr hDC, int X, int Y, IntPtr hIcon);
+
+        [DllImport("user32.dll")]
+        private static extern bool PrintWindow(IntPtr hWnd, IntPtr hdcBlt, uint nFlags);
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool GetIconInfo(IntPtr hIcon, out ICONINFO pIconInfo);
@@ -232,7 +237,7 @@ namespace PluginScreenshot
 
         public static void TakeWindowScreenshot(Settings settings, string windowTitle)
         {
-            Logger.Log($"TakeWindowScreenshot() called. WindowTitle='{windowTitle}'");
+            Logger.Log($"TakeWindowScreenshot() called. WindowTitle='{windowTitle}', UsePrintWindow={settings.UsePrintWindow}");
             if (string.IsNullOrEmpty(settings.SavePath))
             {
                 Logger.Log("TakeWindowScreenshot: SavePath is empty, aborting.");
@@ -271,7 +276,41 @@ namespace PluginScreenshot
                     using (var bmp = new Bitmap(width, height))
                     using (var g = Graphics.FromImage(bmp))
                     {
-                        g.CopyFromScreen(bounds.Location, Point.Empty, bounds.Size);
+                        if (settings.UsePrintWindow)
+                        {
+                            // Use PrintWindow API for exclusive window capture
+                            Logger.Log("TakeWindowScreenshot: Using PrintWindow API");
+                            IntPtr hdc = g.GetHdc();
+                            try
+                            {
+                                // PW_RENDERFULLCONTENT = 0x00000002
+                                bool result = PrintWindow(hWnd, hdc, 0x00000002);
+                                if (!result)
+                                {
+                                    Logger.Log("TakeWindowScreenshot: PrintWindow failed, falling back to CopyFromScreen");
+                                    g.ReleaseHdc(hdc);
+                                    g.CopyFromScreen(bounds.Location, Point.Empty, bounds.Size);
+                                }
+                                else
+                                {
+                                    g.ReleaseHdc(hdc);
+                                    Logger.Log("TakeWindowScreenshot: PrintWindow succeeded");
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Logger.Log($"TakeWindowScreenshot: PrintWindow exception: {ex.Message}");
+                                try { g.ReleaseHdc(hdc); } catch { }
+                                g.CopyFromScreen(bounds.Location, Point.Empty, bounds.Size);
+                            }
+                        }
+                        else
+                        {
+                            // Use CopyFromScreen for screen-based capture (includes overlapping windows)
+                            Logger.Log("TakeWindowScreenshot: Using CopyFromScreen");
+                            g.CopyFromScreen(bounds.Location, Point.Empty, bounds.Size);
+                        }
+
                         if (settings.ShowCursor)
                             DrawCursor(g, bounds);
                         SaveImageSafely(bmp, settings);

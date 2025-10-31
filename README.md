@@ -32,7 +32,8 @@ FinalShot supports full‑screen captures, predefined regions, custom selection,
   Draw a region on‑the‑fly with your mouse.
 
 - **Window Capture** (`-ws|windowtitle`)  
-  Capture a specific window by its exact title.
+  Capture a specific window by its exact title.  
+  Supports two modes: exclusive window capture (using `PrintWindow` API) or screen-based capture (includes overlapping windows).
 
 - **Toast Notifications**  
   Beautiful themed notifications that adapt to Windows Dark/Light mode with screenshot preview.
@@ -87,6 +88,8 @@ SavePath=C:\Users\You\Pictures\shot.png
 ShowCursor=1
 ; 1 = show notification with preview, 0 = no notification
 ShowNotification=1
+; Window capture mode (1 = exclusive window, 0 = screen-based)
+UsePrintWindow=1
 ; JPEG quality (only if SavePath ends in .jpg/.jpeg)
 JpgQuality=85
 ; Predefined region (for -ps):
@@ -144,6 +147,7 @@ DebugLog=0
 | `ScreenshotFinishAction`| Rainmeter bang or command to run after saving.                                                   | (empty)     |
 | `ShowCursor`            | Include mouse cursor in capture? (1 = yes, 0 = no)                                               | 0           |
 | `ShowNotification`      | Show toast notification with preview after capture? (1 = yes, 0 = no)                           | 0           |
+| `UsePrintWindow`        | Window capture mode: 1 = exclusive window (no overlaps), 0 = screen-based (includes overlaps)   | 0           |
 | `JpgQuality`            | JPEG compression quality (0–100). Only applies to `.jpg` or `.jpeg` files.                        | 70          |
 | `PredefX`, `PredefY`    | Top‑left coordinates of the predefined capture region.                                           | 0           |
 | `PredefWidth`, `PredefHeight` | Width & height of the predefined capture region.                                            | 0           |
@@ -179,7 +183,7 @@ ShowCursor=0
 ShowNotification=1
 ```
 
-### Window Capture
+### Window Capture (Exclusive Mode)
 ```ini
 [MeasureWindow]
 Measure=Plugin
@@ -187,10 +191,22 @@ Plugin=FinalShot
 SavePath=#@#Screenshots\Window.png
 ShowCursor=0
 ShowNotification=1
+; Capture only the window (no overlapping windows)
+UsePrintWindow=1
 
 [CaptureNotepad]
 Meter=String
 LeftMouseUpAction=[!CommandMeasure MeasureWindow "-ws|Untitled - Notepad"]
+```
+
+### Window Capture (Screen-Based Mode)
+```ini
+[MeasureWindowScreen]
+Measure=Plugin
+Plugin=FinalShot
+SavePath=#@#Screenshots\WindowScreen.png
+; Capture whatever is visible on screen (includes overlapping windows)
+UsePrintWindow=0
 ```
 
 ---
