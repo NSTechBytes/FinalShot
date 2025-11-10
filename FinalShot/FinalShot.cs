@@ -334,7 +334,7 @@ namespace PluginScreenshot
 
         public static void CompositeCapture(Rectangle rect, Settings settings)
         {
-            // ←—— Guard against missing SavePath
+            // Guard against missing SavePath
             if (settings == null || string.IsNullOrWhiteSpace(settings.SavePath))
             {
                 Logger.Log("CompositeCapture: no SavePath, skipping.");
