@@ -85,7 +85,13 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AssemblyInfo.cs" />
-    <Compile Include="FinalShot.cs" />
+    <Compile Include="Plugin.cs" />
+    <Compile Include="Core\Logger.cs" />
+    <Compile Include="Core\Settings.cs" />
+    <Compile Include="Core\NativeMethods.cs" />
+    <Compile Include="Capture\ScreenshotManager.cs" />
+    <Compile Include="UI\CustomScreenshotForm.cs" />
+    <Compile Include="UI\NotificationForm.cs" />
     <Compile Include="$(SolutionDir).\API\RainmeterAPI.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
