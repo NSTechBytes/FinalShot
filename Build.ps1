@@ -62,6 +62,7 @@ function BumpVersion {
         [Parameter(Mandatory = $true)][string]$ver
     )
 
+    # --- skin_definition.json ---
     $skinDefPath = Join-Path (Get-Location).Path "Resources\skin_definition.json"
     
     if (!(Test-Path $skinDefPath)) {
@@ -71,10 +72,30 @@ function BumpVersion {
     $skinDef = Get-Content $skinDefPath -Raw | ConvertFrom-Json
 
     $skinDef.version = $ver
+    $skinDef.output  = ".\dist\FinalShot_v$ver.rmskin"
 
     ($skinDef | ConvertTo-Json -Depth 10) | Set-Content $skinDefPath -Encoding UTF8
 
-    Write-Host "Bumped skin_definition.json to version $ver" -ForegroundColor Green
+    Write-Host "Bumped skin_definition.json to version $ver (output: .\dist\FinalShot_v$ver.rmskin)" -ForegroundColor Green
+
+    # --- AssemblyInfo.cs ---
+    $assemblyInfoPath = Join-Path (Get-Location).Path "FinalShot\AssemblyInfo.cs"
+
+    if (!(Test-Path $assemblyInfoPath)) {
+        Write-Host "AssemblyInfo.cs not found at: $assemblyInfoPath - skipping" -ForegroundColor Yellow
+        return
+    }
+
+    $content = Get-Content $assemblyInfoPath -Raw
+
+    # Replace AssemblyVersion e.g. "1.6.0.0" -> "1.7.0.0"
+    $newAssemblyVer = "$ver.0"
+    $replacement = '[assembly: AssemblyVersion("' + $newAssemblyVer + '")]'
+    $content = $content -replace '\[assembly: AssemblyVersion\("[\d\.]+"\)\]', $replacement
+
+    Set-Content -Path $assemblyInfoPath -Value $content -Encoding UTF8 -NoNewline
+
+    Write-Host "Bumped AssemblyInfo.cs AssemblyVersion to $newAssemblyVer" -ForegroundColor Green
 }
 
 function New-Package {
@@ -528,6 +549,9 @@ function Dist {
         throw "Solution file not found: $solutionFile"
     }
 
+    $ver = "$($major).$($minor).$($patch)"
+    BumpVersion $ver
+
     if (Test-Path $msbuild) {
         Write-Host "Starting build process..." -ForegroundColor Yellow
         
@@ -560,9 +584,6 @@ function Dist {
     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue .\dist
     New-Item -ItemType Directory -Path ".\dist\x64" -Force | Out-Null
     New-Item -ItemType Directory -Path ".\dist\x32" -Force | Out-Null
-
-    $ver = "$($major).$($minor).$($patch)"
-    BumpVersion $ver
 
     # Find and copy built DLLs to standardized folders
     $builtX64 = Find-BuiltDll -Architecture "x64" -ProjectName $projectName
