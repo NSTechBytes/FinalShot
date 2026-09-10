@@ -6,58 +6,33 @@ using System.Text;
 
 namespace PluginScreenshot
 {
-    /// <summary>
-    /// Exact port of ShareX's WindowsRectangleList for FinalShot (.NET 4.8 / WinForms).
-    ///
-    /// Four fixes vs previous version to match ShareX behaviour
-    /// ──────────────────────────────────────────────────────────
-    /// Fix A — Top-level rect uses DWM extended frame bounds first (DWMWA_EXTENDED_FRAME_BOUNDS)
-    ///   Plain GetWindowRect includes invisible shadow/border pixels on modern Windows.
-    ///   ShareX calls CaptureHelpers.GetWindowRectangle which tries DWM first.
-    ///   Without this, oversized shadow rects eclipse child-control entries in the
-    ///   post-filter, and hover detection snaps to wrong positions.
-    ///
-    /// Fix B — IsWindowVisible NOT called on child controls
-    ///   IsWindowVisible walks the entire parent chain. Many valid visible controls
-    ///   (Explorer sidebar, DirectUIHWND panels) return false because a parent in the
-    ///   chain is transiently considered invisible by the OS during enumeration.
-    ///   ShareX only calls windowInfo.IsVisible (== IsWindowVisible) for top-level
-    ///   windows (clipRect == null). Child handles get their rect clipped and checked
-    ///   for validity — no visibility call.
-    ///
-    /// Fix C — parentHandles tracks ALL enumerated handles, not just top-level ones
-    ///   EnumChildWindows can enumerate container controls whose own children should
-    ///   also be enumerated. parentHandles prevents re-entering the same handle.
-    ///   We now add every handle to parentHandles when recursing, not just top-level.
-    ///
-    /// Fix D — Post-filter: children vs children only (never vs parent top-level)
-    ///   In _results, children always appear BEFORE their parent top-level entry
-    ///   (guaranteed by the order of _results.Add calls in CheckHandle).
-    ///   The filter loop builds the visible list in _results order.  When a child
-    ///   is evaluated, its parent top-level entry has NOT yet been added to visible —
-    ///   so the child is only blocked by earlier children/client-rects, never by its
-    ///   own parent.  This matches ShareX exactly.
-    /// </summary>
+    // Enumerates visible windows and child controls using EnumWindows / EnumChildWindows.
+    // Exact port of ShareX's WindowsRectangleList for FinalShot (.NET 4.8 / WinForms).
     internal class WindowsDetector
     {
-        // ── Configuration ────────────────────────────────────────────
+        // Configuration
 
+        // Window class names to skip entirely (e.g. NVIDIA GeForce Overlay)
         public List<string> IgnoreClassNames { get; } = new List<string>
         {
-            "CEF-OSC-WIDGET"   // NVIDIA GeForce Overlay DT
+            "CEF-OSC-WIDGET"
         };
 
+        // Handles to skip — add the overlay form's own handle before calling GetWindowList
         public List<IntPtr> IgnoreHandles { get; } = new List<IntPtr>();
 
+        // When true, child controls inside each top-level window are included
         public bool IncludeChildWindows { get; set; }
 
-        // ── Private state ────────────────────────────────────────────
+        // Private state — reset on each GetWindowList call
 
         private List<WindowInfo> _results;
         private HashSet<IntPtr>  _parentHandles;
 
-        // ── Public API ───────────────────────────────────────────────
+        // Public API
 
+        // Returns a z-ordered list of visible window and control rectangles in screen coords.
+        // Safe to call on a background thread.
         public List<WindowInfo> GetWindowList()
         {
             _results       = new List<WindowInfo>();
@@ -73,17 +48,10 @@ namespace PluginScreenshot
                 Logger.Log("WindowsDetector.GetWindowList exception: " + ex.Message);
             }
 
-            // ── Post-filter (Fix D) ──────────────────────────────────
-            // Exact port of ShareX's final loop.
-            // _results ordering:  child entries appear BEFORE their parent top-level
-            // entry (because EnumChildWindows + client-rect adds happen before the
-            // final _results.Add for the top-level window in CheckHandle).
-            //
-            // The sequential build of `result` means:
-            //   • Top-level windows → always kept.
-            //   • Non-top-level entries → kept unless a PREVIOUSLY added entry
-            //     (which is an earlier child or client-rect, NOT yet the parent
-            //     top-level) already fully contains this rect.
+            // Post-filter: children appear before their parent in _results (guaranteed by
+            // CheckHandle ordering), so when a child is evaluated its parent top-level is
+            // not yet in result — children are only blocked by earlier children, never by
+            // their own parent. Top-level entries are always kept.
             var result = new List<WindowInfo>(_results.Count);
 
             foreach (WindowInfo w in _results)
@@ -109,14 +77,14 @@ namespace PluginScreenshot
             return result;
         }
 
-        // ── EnumWindows callback ─────────────────────────────────────
+        // EnumWindows callback
 
         private bool CheckTopLevelWindow(IntPtr hWnd, IntPtr lParam)
         {
             return CheckHandle(hWnd, clipRect: null);
         }
 
-        // ── Core handler ─────────────────────────────────────────────
+        // Core handler — shared for top-level and child windows
 
         private bool CheckHandle(IntPtr hWnd, Rectangle? clipRect)
         {
@@ -125,9 +93,9 @@ namespace PluginScreenshot
 
             bool isTopLevel = clipRect == null;
 
-            // Fix B: only call IsWindowVisible for top-level windows.
-            // Child controls (clipRect != null) skip this check — many valid controls
-            // (Explorer sidebar etc.) fail IsWindowVisible due to parent-chain walking.
+            // Only call IsWindowVisible for top-level windows.
+            // Many valid child controls (Explorer sidebar, DirectUIHWND panels) fail
+            // IsWindowVisible because it walks the parent chain — skip this for children.
             if (isTopLevel && !NativeMethods.IsWindowVisible(hWnd))
                 return true;
 
@@ -153,12 +121,12 @@ namespace PluginScreenshot
                 }
             }
 
-            // ── Rectangle ────────────────────────────────────────────
+            // Compute bounding rectangle
 
             Rectangle rect;
             if (isTopLevel)
             {
-                // Fix A: prefer DWM extended frame bounds (visible rect, no shadow)
+                // Prefer DWM extended frame bounds — the visually rendered rect without shadow pixels
                 rect = GetWindowRectangle(hWnd);
             }
             else
@@ -172,22 +140,23 @@ namespace PluginScreenshot
             if (rect.Width <= 0 || rect.Height <= 0)
                 return true;
 
-            // ── Children first, then self (Fix D ordering) ───────────
+            // Add children before self so they precede the parent in _results.
+            // This is required by the post-filter (children must be seen before parent).
+
             if (isTopLevel)
             {
-                // Enumerate child controls
                 if (IncludeChildWindows && !_parentHandles.Contains(hWnd))
                 {
                     _parentHandles.Add(hWnd);
                     Rectangle parentRect = rect;
 
-                    // Named delegate — prevents GC during P/Invoke
+                    // Store delegate in a named local to prevent GC during P/Invoke
                     NativeMethods.EnumWindowsProc childCb =
                         (childHwnd, _lp) => CheckHandle(childHwnd, parentRect);
                     NativeMethods.EnumChildWindows(hWnd, childCb, IntPtr.Zero);
                 }
 
-                // Client-rect sub-entry (finer snapping, e.g. Chrome toolbar vs page)
+                // Add a client-rect sub-entry for finer snapping (e.g. Chrome toolbar vs page area)
                 Rectangle clientRect = GetClientRect(hWnd);
                 if (clientRect.Width > 0 && clientRect.Height > 0 && clientRect != rect)
                 {
@@ -201,7 +170,7 @@ namespace PluginScreenshot
             }
             else
             {
-                // Fix C: track child containers too so we don't re-enter them
+                // Track child containers so we don't recurse into the same handle twice
                 if (IncludeChildWindows && !_parentHandles.Contains(hWnd))
                 {
                     _parentHandles.Add(hWnd);
@@ -213,7 +182,7 @@ namespace PluginScreenshot
                 }
             }
 
-            // Self — always last so children precede parent in _results
+            // Add self last so all children appear before this entry in _results
             _results.Add(new WindowInfo
             {
                 Handle     = hWnd,
@@ -224,16 +193,12 @@ namespace PluginScreenshot
             return true;
         }
 
-        // ── Helpers ──────────────────────────────────────────────────
+        // Helpers
 
-        /// <summary>
-        /// Fix A: mirrors ShareX's CaptureHelpers.GetWindowRectangle.
-        /// Tries DWMWA_EXTENDED_FRAME_BOUNDS first (visible frame, no shadow pixels);
-        /// falls back to plain GetWindowRect.
-        /// </summary>
+        // Mirrors ShareX's CaptureHelpers.GetWindowRectangle.
+        // Tries DWMWA_EXTENDED_FRAME_BOUNDS first; falls back to plain GetWindowRect.
         private static Rectangle GetWindowRectangle(IntPtr hWnd)
         {
-            // Try DWM extended frame bounds — gives the visually rendered rect
             int hr = NativeMethods.DwmGetWindowAttribute(
                 hWnd,
                 NativeMethods.DWMWA_EXTENDED_FRAME_BOUNDS,
@@ -247,7 +212,6 @@ namespace PluginScreenshot
                     return dwm;
             }
 
-            // Fallback
             if (NativeMethods.GetWindowRect(hWnd, out NativeMethods.RECT r))
                 return RectFromNative(r);
 

@@ -14,30 +14,23 @@ namespace PluginScreenshot
         public bool ShowNotification { get; private set; }
         public bool UsePrintWindow { get; private set; }
 
-        // ── Window-detection settings (Task 3) ──────────────────────
-        /// <summary>
-        /// When true, CustomScreenshotForm highlights windows under the cursor.
-        /// Set DetectWindows=0 in the skin ini to restore pure drag-only behaviour.
-        /// Default: 1 (on).
-        /// </summary>
+        // When true, CustomScreenshotForm highlights windows under the cursor.
+        // Set DetectWindows=0 in the skin ini to use drag-only mode.
         public bool DetectWindows { get; private set; }
 
-        /// <summary>
-        /// When true, child controls are also enumerated inside each top-level window,
-        /// allowing finer-grained snapping. Requires DetectWindows=1.
-        /// Default: 1 (on).
-        /// </summary>
+        // When true, child controls inside each window are also detected.
+        // Requires DetectWindows=1.
         public bool DetectControls { get; private set; }
 
         public Settings(API api)
         {
-            Api = api;
-            SavePath       = api.ReadString("SavePath", "");
-            FinishAction   = api.ReadString("ScreenshotFinishAction", "");
-            ShowCursor     = api.ReadInt("ShowCursor", 0) > 0;
-            JpegQuality    = api.ReadInt("JpgQuality", 70);
+            Api              = api;
+            SavePath         = api.ReadString("SavePath", "");
+            FinishAction     = api.ReadString("ScreenshotFinishAction", "");
+            ShowCursor       = api.ReadInt("ShowCursor", 0) > 0;
+            JpegQuality      = api.ReadInt("JpgQuality", 70);
             ShowNotification = api.ReadInt("ShowNotification", 0) > 0;
-            UsePrintWindow = api.ReadInt("UsePrintWindow", 0) > 0;
+            UsePrintWindow   = api.ReadInt("UsePrintWindow", 0) > 0;
 
             int x = api.ReadInt("PredefX", 0);
             int y = api.ReadInt("PredefY", 0);
@@ -53,7 +46,9 @@ namespace PluginScreenshot
             if (!string.IsNullOrEmpty(dbg))
                 Logger.LogFilePath = dbg;
 
-            Logger.Log($"Settings reloaded. SavePath={SavePath}  DetectWindows={DetectWindows}  DetectControls={DetectControls}");
+            Logger.Log("Settings reloaded. SavePath=" + SavePath
+                + "  DetectWindows=" + DetectWindows
+                + "  DetectControls=" + DetectControls);
         }
     }
 }

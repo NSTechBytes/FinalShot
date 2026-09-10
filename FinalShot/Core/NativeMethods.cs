@@ -3,23 +3,17 @@ using System.Runtime.InteropServices;
 
 namespace PluginScreenshot
 {
-    /// <summary>
-    /// Centralized Win32 P/Invoke declarations and structs used across FinalShot.
-    /// </summary>
+    // Centralized Win32 P/Invoke declarations and structs used across FinalShot.
     internal static class NativeMethods
     {
-        // ──────────────────────────────────────────────────────────────
         // DPI Awareness
-        // ──────────────────────────────────────────────────────────────
 
         [DllImport("user32.dll")]
         public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr dpiContext);
 
         public static readonly IntPtr DPI_PER_MONITOR_AWARE_V2 = new IntPtr(-4);
 
-        // ──────────────────────────────────────────────────────────────
-        // Window — find / rect / print
-        // ──────────────────────────────────────────────────────────────
+        // Window find / rect / print
 
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         public static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
@@ -31,9 +25,7 @@ namespace PluginScreenshot
         [DllImport("user32.dll")]
         public static extern bool PrintWindow(IntPtr hWnd, IntPtr hdcBlt, uint nFlags);
 
-        // ──────────────────────────────────────────────────────────────
-        // Window — enumeration (Task 1)
-        // ──────────────────────────────────────────────────────────────
+        // Window enumeration
 
         public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
@@ -49,10 +41,7 @@ namespace PluginScreenshot
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool IsWindowVisible(IntPtr hWnd);
 
-        // ──────────────────────────────────────────────────────────────
-        // Window — style / class (Task 1)
-        // Runtime branch handles x86 vs x64 without separate builds.
-        // ──────────────────────────────────────────────────────────────
+        // Window style and class — runtime branch handles x86 vs x64
 
         [DllImport("user32.dll", EntryPoint = "GetWindowLong")]
         private static extern int GetWindowLong32(IntPtr hWnd, int nIndex);
@@ -60,7 +49,6 @@ namespace PluginScreenshot
         [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr")]
         private static extern IntPtr GetWindowLongPtr64(IntPtr hWnd, int nIndex);
 
-        /// <summary>Returns the window long at <paramref name="nIndex"/> for both x86 and x64.</summary>
         public static int GetWindowLong(IntPtr hWnd, int nIndex)
         {
             return IntPtr.Size == 8
@@ -71,9 +59,7 @@ namespace PluginScreenshot
         [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         public static extern int GetClassName(IntPtr hWnd, System.Text.StringBuilder lpClassName, int nMaxCount);
 
-        // ──────────────────────────────────────────────────────────────
-        // Window — client rect (Task 1)
-        // ──────────────────────────────────────────────────────────────
+        // Window client rect
 
         [DllImport("user32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]
@@ -83,37 +69,31 @@ namespace PluginScreenshot
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool ClientToScreen(IntPtr hWnd, ref POINT lpPoint);
 
-        // ──────────────────────────────────────────────────────────────
-        // DWM — cloaked window check (Task 1)
-        // ──────────────────────────────────────────────────────────────
+        // DWM attributes — cloaked check and extended frame bounds
 
         [DllImport("dwmapi.dll")]
         public static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out int pvAttribute, int cbAttribute);
 
-        /// <summary>Overload for retrieving a RECT attribute (e.g. DWMWA_EXTENDED_FRAME_BOUNDS).</summary>
+        // Overload for RECT attributes such as DWMWA_EXTENDED_FRAME_BOUNDS
         [DllImport("dwmapi.dll")]
         public static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out RECT pvAttribute, int cbAttribute);
 
-        /// <summary>DWMWA_CLOAKED = 14 — non-zero means the window is cloaked (virtual desktop, etc.).</summary>
+        // DWMWA_CLOAKED = 14, non-zero means the window is cloaked (virtual desktop etc.)
         public const int DWMWA_CLOAKED = 14;
 
-        /// <summary>DWMWA_EXTENDED_FRAME_BOUNDS = 9 — the visible DWM frame rect, excluding shadow pixels.</summary>
+        // DWMWA_EXTENDED_FRAME_BOUNDS = 9, the visible DWM frame rect excluding shadow pixels
         public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
 
-        // ──────────────────────────────────────────────────────────────
-        // GWL / extended-style constants (Task 1)
-        // ──────────────────────────────────────────────────────────────
+        // GWL and extended-style constants
 
-        public const int GWL_EXSTYLE          = -20;
-        public const int WS_EX_TOOLWINDOW     = 0x00000080;
-        public const int WS_EX_NOACTIVATE     = 0x08000000;
+        public const int GWL_EXSTYLE      = -20;
+        public const int WS_EX_TOOLWINDOW = 0x00000080;
+        public const int WS_EX_NOACTIVATE = 0x08000000;
 
         // PrintWindow flag
         public const uint PW_RENDERFULLCONTENT = 0x00000002;
 
-        // ──────────────────────────────────────────────────────────────
         // Cursor
-        // ──────────────────────────────────────────────────────────────
 
         [DllImport("user32.dll")]
         public static extern bool GetCursorInfo(out CURSORINFO pci);
@@ -126,9 +106,7 @@ namespace PluginScreenshot
 
         public const int CURSOR_SHOWING = 0x00000001;
 
-        // ──────────────────────────────────────────────────────────────
         // Structs
-        // ──────────────────────────────────────────────────────────────
 
         [StructLayout(LayoutKind.Sequential)]
         public struct RECT
