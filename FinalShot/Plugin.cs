@@ -62,6 +62,16 @@ namespace PluginScreenshot
                 Logger.Log($"ExecuteBang: Window screenshot requested for '{windowTitle}'");
                 ScreenshotManager.TakeWindowScreenshot(settings, windowTitle);
             }
+            else if (string.Equals(cmd, "-gif-start", StringComparison.OrdinalIgnoreCase))
+            {
+                Logger.Log("ExecuteBang: -gif-start received.");
+                GifCaptureManager.StartRecording(settings);
+            }
+            else if (string.Equals(cmd, "-gif-stop", StringComparison.OrdinalIgnoreCase))
+            {
+                Logger.Log("ExecuteBang: -gif-stop received.");
+                GifCaptureManager.StopAndSave(settings);
+            }
             else if (cmd.StartsWith("ExecuteBatch ", StringComparison.OrdinalIgnoreCase))
             {
                 if (int.TryParse(cmd.Split(' ')[1], out int code))
