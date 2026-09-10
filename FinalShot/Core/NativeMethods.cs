@@ -90,8 +90,15 @@ namespace PluginScreenshot
         [DllImport("dwmapi.dll")]
         public static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out int pvAttribute, int cbAttribute);
 
+        /// <summary>Overload for retrieving a RECT attribute (e.g. DWMWA_EXTENDED_FRAME_BOUNDS).</summary>
+        [DllImport("dwmapi.dll")]
+        public static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out RECT pvAttribute, int cbAttribute);
+
         /// <summary>DWMWA_CLOAKED = 14 — non-zero means the window is cloaked (virtual desktop, etc.).</summary>
         public const int DWMWA_CLOAKED = 14;
+
+        /// <summary>DWMWA_EXTENDED_FRAME_BOUNDS = 9 — the visible DWM frame rect, excluding shadow pixels.</summary>
+        public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
 
         // ──────────────────────────────────────────────────────────────
         // GWL / extended-style constants (Task 1)
