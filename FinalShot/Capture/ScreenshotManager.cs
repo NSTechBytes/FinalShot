@@ -106,7 +106,9 @@ namespace PluginScreenshot
                 Logger.Log("TakeCustom: SavePath is empty, aborting custom capture.");
                 return;
             }
-            Application.Run(new CustomScreenshotForm(settings, finishCallback));
+            // Use RunModal: spawns a fresh STA thread each time so Rainmeter never
+            // crashes on the second call (Application.Run on a reused thread fails).
+            CustomScreenshotForm.RunModal(settings, finishCallback);
         }
 
         // Window Capture

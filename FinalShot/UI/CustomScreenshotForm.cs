@@ -2,44 +2,87 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
-using System.Threading.Tasks;
+using System.Threading;
 using System.Windows.Forms;
 
 namespace PluginScreenshot
 {
     /// <summary>
-    /// Full-screen overlay form that lets the user either:
-    ///   (a) click on a detected window/control to capture it instantly, OR
-    ///   (b) drag a free-selection rectangle anywhere on screen.
+    /// Full-screen overlay for ShareX-style window highlight + free-select drag capture.
     ///
-    /// When DetectWindows = true the form loads the visible window list asynchronously
-    /// on startup (Task 4) and highlights the window under the cursor ShareX-style
-    /// (Tasks 5 + 6).  A left-click on a highlighted window captures it immediately
-    /// (Task 7).  Esc / right-click dismiss the overlay (Task 8).
+    /// Three bugs fixed in this version
+    /// ──────────────────────────────────
+    /// 1. TASKBAR ICON
+    ///    ShowInTaskbar = false added.
     ///
-    /// When DetectWindows = false the form behaves exactly like the original drag-only
-    /// version (Task 8 guard).
+    /// 2. INVISIBLE OVERLAY / WHITE BORDER
+    ///    TransparencyKey approach removed.  TransparencyKey only does colour-keying;
+    ///    semi-transparent GDI brushes (Color.FromArgb with alpha) do NOT work — only
+    ///    the exact key colour gets punched out, everything else is fully opaque on a
+    ///    black surface, making the whole form look wrong or invisible.
+    ///    Back to Opacity = 0.5 (Black background).  Colours are pre-brightened so they
+    ///    survive the 0.5 multiply and are clearly visible on screen:
+    ///      Cyan  (0,255,255) × 0.5  →  (0,127,127)  — crisp teal border
+    ///      White (255,255,255) × 0.5 → (127,127,127) — visible dash overlay
+    ///    At 50% the dim overlay also renders correctly as a dark semi-transparent layer.
+    ///
+    /// 3. RAINMETER CRASH ON SECOND CLICK
+    ///    TakeCustom() was calling Application.Run() directly on Rainmeter's unmanaged
+    ///    plugin thread.  The first call works, but after the form closes the thread is
+    ///    left in a bad state; the second call crashes Rainmeter.
+    ///    Fix: RunModal() spawns a fresh dedicated STA thread for every capture session
+    ///    and blocks via Thread.Join() until it exits — exactly the same pattern used
+    ///    by ShowNotificationWithImage() in this project.
+    ///    Also removed async/await from OnFormLoad.  async void captures the
+    ///    SynchronizationContext at the point of first await; on a Rainmeter-originated
+    ///    thread that context is null, so the continuation after Task.Run() ran on a
+    ///    ThreadPool thread and called Invalidate() from the wrong thread.
+    ///    Replaced with ThreadPool.QueueUserWorkItem + BeginInvoke to marshal the
+    ///    result back to the UI (STA) thread safely.
     /// </summary>
     public class CustomScreenshotForm : Form
     {
-        // ── injected dependencies ────────────────────────────────────
         private readonly Settings _settings;
         private readonly Action   _finishCallback;
 
-        // ── drag-selection state ─────────────────────────────────────
+        // drag-selection state
         private Point     _start;
         private Rectangle _selection;
         private bool      _dragging;
 
-        // ── window-detection state (Tasks 4-7) ──────────────────────
-        private List<WindowInfo> _windows      = new List<WindowInfo>();
-        private WindowInfo       _hoveredWindow = null;
-        private bool             _windowsLoaded = false;
+        // window-detection state
+        private List<WindowInfo> _windows             = new List<WindowInfo>();
+        private WindowInfo       _hoveredWindow        = null;
+        private bool             _windowsLoaded        = false;
         private bool             _pendingWindowCapture = false;
 
-        // ────────────────────────────────────────────────────────────
-        // Constructor
-        // ────────────────────────────────────────────────────────────
+        // ── Static factory ───────────────────────────────────────────
+
+        /// <summary>
+        /// Spawns a fresh STA thread, runs the overlay form on it, and blocks until
+        /// the form closes.  Call this instead of new + Application.Run directly.
+        /// </summary>
+        public static void RunModal(Settings settings, Action finishCallback)
+        {
+            var thread = new Thread(() =>
+            {
+                try
+                {
+                    Application.Run(new CustomScreenshotForm(settings, finishCallback));
+                }
+                catch (Exception ex)
+                {
+                    Logger.Log("CustomScreenshotForm thread error: " + ex.Message);
+                }
+            });
+
+            thread.SetApartmentState(ApartmentState.STA);
+            thread.IsBackground = true;
+            thread.Start();
+            thread.Join();  // block Rainmeter's plugin thread until the form exits
+        }
+
+        // ── Constructor ──────────────────────────────────────────────
 
         public CustomScreenshotForm(Settings settings, Action finishCallback)
         {
@@ -47,18 +90,17 @@ namespace PluginScreenshot
             _settings       = settings;
             _finishCallback = finishCallback;
 
-            DoubleBuffered    = true;
-            FormBorderStyle   = FormBorderStyle.None;
-            Bounds            = SystemInformation.VirtualScreen;
-            BackColor         = Color.Black;
-            Opacity           = 0.25;
-            TopMost           = true;
-            Cursor            = Cursors.Cross;
-            StartPosition     = FormStartPosition.Manual;
-            Location          = SystemInformation.VirtualScreen.Location;
-
-            // Enable keyboard input so Esc works (Task 8)
-            KeyPreview        = true;
+            DoubleBuffered  = true;
+            FormBorderStyle = FormBorderStyle.None;
+            ShowInTaskbar   = false;          // Fix 1: no taskbar button
+            Bounds          = SystemInformation.VirtualScreen;
+            BackColor       = Color.Black;
+            Opacity         = 0.5;            // Fix 2: visible overlay; colours pre-brightened
+            TopMost         = true;
+            Cursor          = Cursors.Cross;
+            StartPosition   = FormStartPosition.Manual;
+            Location        = SystemInformation.VirtualScreen.Location;
+            KeyPreview      = true;
 
             Load      += OnFormLoad;
             KeyDown   += OnKeyDown;
@@ -68,75 +110,70 @@ namespace PluginScreenshot
             Paint     += OnPaint;
         }
 
-        // ────────────────────────────────────────────────────────────
-        // Task 4 — Load window list asynchronously on form Load
-        // ────────────────────────────────────────────────────────────
+        // ── Form Load: enumerate windows on background thread ────────
 
-        private async void OnFormLoad(object sender, EventArgs e)
+        private void OnFormLoad(object sender, EventArgs e)
         {
             if (!_settings.DetectWindows) return;
 
-            try
+            // Fix 3: no async/await — use ThreadPool + BeginInvoke to stay thread-safe
+            var form = this;
+            ThreadPool.QueueUserWorkItem(_ =>
             {
-                var detector = new WindowsDetector
+                try
                 {
-                    IncludeChildWindows = _settings.DetectControls
-                };
-                // Ignore our own overlay handle so it never appears as a candidate
-                detector.IgnoreHandles.Add(this.Handle);
+                    var detector = new WindowsDetector
+                    {
+                        IncludeChildWindows = _settings.DetectControls
+                    };
+                    detector.IgnoreHandles.Add(form.Handle);
 
-                // Background thread — UI stays responsive immediately
-                List<WindowInfo> result = await Task.Run(() => detector.GetWindowList());
+                    List<WindowInfo> result = detector.GetWindowList();
 
-                if (!IsDisposed && !_dragging)
-                {
-                    _windows      = result;
-                    _windowsLoaded = true;
-                    Logger.Log($"WindowsDetector: loaded {result.Count} window entries.");
-                    Invalidate();
+                    if (!form.IsDisposed)
+                    {
+                        form.BeginInvoke(new Action(() =>
+                        {
+                            if (!form.IsDisposed && !_dragging)
+                            {
+                                _windows       = result;
+                                _windowsLoaded = true;
+                                Logger.Log("WindowsDetector: loaded " + result.Count + " entries.");
+                                form.Invalidate();
+                            }
+                        }));
+                    }
                 }
-            }
-            catch (Exception ex)
-            {
-                Logger.Log("WindowsDetector load error: " + ex.Message);
-            }
+                catch (Exception ex)
+                {
+                    Logger.Log("WindowsDetector error: " + ex.Message);
+                }
+            });
         }
 
-        // ────────────────────────────────────────────────────────────
-        // Task 8 — Keyboard / right-click cancellation
-        // ────────────────────────────────────────────────────────────
+        // ── Keyboard ─────────────────────────────────────────────────
 
         private void OnKeyDown(object s, KeyEventArgs e)
         {
             if (e.KeyCode == Keys.Escape)
             {
-                Logger.Log("CustomScreenshotForm: Escape pressed, closing.");
+                Logger.Log("CustomScreenshotForm: Escape, closing.");
                 Close();
             }
         }
 
-        // ────────────────────────────────────────────────────────────
-        // Task 7 + 8 — MouseDown
-        // ────────────────────────────────────────────────────────────
+        // ── MouseDown ────────────────────────────────────────────────
 
         private void OnMouseDown(object s, MouseEventArgs e)
         {
-            // Right-click → cancel (Task 8)
-            if (e.Button == MouseButtons.Right)
-            {
-                Logger.Log("CustomScreenshotForm: right-click cancel.");
-                Close();
-                return;
-            }
-
-            if (e.Button != MouseButtons.Left) return;
+            if (e.Button == MouseButtons.Right) { Close(); return; }
+            if (e.Button != MouseButtons.Left)  return;
 
             _start = e.Location;
 
             if (_windowsLoaded && _hoveredWindow != null && _settings.DetectWindows)
             {
-                // Task 7: clicking on a highlighted window — wait for mouse-up to confirm
-                // (may transition to free-drag if the user moves ≥4px first)
+                // Hover candidate present — pending capture (4 px drag threshold below)
                 _pendingWindowCapture = true;
                 _dragging             = false;
             }
@@ -147,14 +184,11 @@ namespace PluginScreenshot
             }
         }
 
-        // ────────────────────────────────────────────────────────────
-        // Tasks 5 + 7 — MouseMove
-        // ────────────────────────────────────────────────────────────
+        // ── MouseMove ────────────────────────────────────────────────
 
         private void OnMouseMove(object s, MouseEventArgs e)
         {
-            // ── pending window-capture: check if the user starts dragging ──
-            // Mirrors ShareX's PendingHover → Creating transition at 4 px.
+            // PendingHover → Creating at 4 px (matches ShareX behaviour)
             if (_pendingWindowCapture)
             {
                 double dist = Math.Sqrt(
@@ -163,41 +197,35 @@ namespace PluginScreenshot
 
                 if (dist >= 4)
                 {
-                    // User is dragging — cancel window-snap and start free-select
                     _pendingWindowCapture = false;
                     _hoveredWindow        = null;
                     _dragging             = true;
-                    // Fall through to the dragging block below
+                    // fall through into drag block
                 }
                 else
                 {
-                    return; // Still inside the 4px dead-zone — wait
+                    return;
                 }
             }
 
-            // ── existing drag-selection logic ──
             if (_dragging)
             {
-                int x = Math.Min(_start.X, e.X);
-                int y = Math.Min(_start.Y, e.Y);
-                int w = Math.Abs(_start.X - e.X);
-                int h = Math.Abs(_start.Y - e.Y);
-                _selection = new Rectangle(x, y, w, h);
+                _selection = new Rectangle(
+                    Math.Min(_start.X, e.X),
+                    Math.Min(_start.Y, e.Y),
+                    Math.Abs(_start.X - e.X),
+                    Math.Abs(_start.Y - e.Y));
                 Invalidate();
                 return;
             }
 
-            // ── Task 5: hover detection (only when idle and windows are loaded) ──
+            // Idle: hover detection
             if (_windowsLoaded && _settings.DetectWindows)
             {
-                // Convert form-local mouse position to screen coordinates
-                Point screenPt = PointToScreen(e.Location);
+                Point      screenPt = PointToScreen(e.Location);
+                WindowInfo found    = null;
 
-                WindowInfo found = null;
-
-                // EnumWindows returns windows in z-order (topmost first).
-                // _results mirrors that order, so the first hit is the topmost window
-                // at this point — exactly what we want.
+                // EnumWindows gives topmost-first; first hit wins
                 for (int i = 0; i < _windows.Count; i++)
                 {
                     if (_windows[i].Rectangle.Contains(screenPt))
@@ -215,21 +243,18 @@ namespace PluginScreenshot
             }
         }
 
-        // ────────────────────────────────────────────────────────────
-        // Tasks 7 + 8 — MouseUp
-        // ────────────────────────────────────────────────────────────
+        // ── MouseUp ──────────────────────────────────────────────────
 
         private void OnMouseUp(object s, MouseEventArgs e)
         {
             if (e.Button != MouseButtons.Left) return;
 
-            // ── Task 7: window-snap capture ──
+            // Window-snap capture
             if (_pendingWindowCapture && _hoveredWindow != null)
             {
                 _pendingWindowCapture = false;
                 Rectangle captureRect = _hoveredWindow.Rectangle;
-                Logger.Log($"CustomScreenshotForm: window capture {captureRect}");
-
+                Logger.Log("Window capture: " + captureRect);
                 Hide();
                 ScreenshotManager.CompositeCapture(captureRect, _settings);
                 _finishCallback();
@@ -237,22 +262,17 @@ namespace PluginScreenshot
                 return;
             }
 
-            // ── Original free-selection capture ──
+            // Free-selection capture
             _dragging             = false;
             _pendingWindowCapture = false;
 
-            Logger.Log($"CustomScreenshotForm: user dropped selection {_selection}");
-
             if (_selection.Width < 1 || _selection.Height < 1)
             {
-                Logger.Log("CustomScreenshotForm: selection too small, closing.");
                 Close();
                 return;
             }
 
             Hide();
-
-            // Convert form-local selection to absolute screen coordinates
             var absRect = new Rectangle(
                 Bounds.Left + _selection.X,
                 Bounds.Top  + _selection.Y,
@@ -264,74 +284,62 @@ namespace PluginScreenshot
             Close();
         }
 
-        // ────────────────────────────────────────────────────────────
-        // Task 6 — OnPaint: ShareX-style highlight + drag rectangle
-        // ────────────────────────────────────────────────────────────
+        // ── OnPaint ──────────────────────────────────────────────────
 
         private void OnPaint(object s, PaintEventArgs e)
         {
             Graphics g = e.Graphics;
 
-            // ── Drag mode: draw the classic dashed blue selection box ──
+            // Drag mode: dashed selection rectangle
             if (_dragging)
             {
-                using (var pen = new Pen(Color.DodgerBlue, 2) { DashStyle = DashStyle.Dash })
+                // Cyan × 0.5 opacity → visible teal-blue on screen
+                using (var pen = new Pen(Color.Cyan, 2) { DashStyle = DashStyle.Dash })
                     g.DrawRectangle(pen, _selection);
                 return;
             }
 
-            // ── Hover mode: ShareX-style window highlight ──
-            if (_windowsLoaded && _hoveredWindow != null)
+            // Hover mode
+            if (!_windowsLoaded || _hoveredWindow == null) return;
+
+            // Screen → form-local coords
+            Rectangle formRect = new Rectangle(
+                _hoveredWindow.Rectangle.X - Bounds.Left,
+                _hoveredWindow.Rectangle.Y - Bounds.Top,
+                _hoveredWindow.Rectangle.Width,
+                _hoveredWindow.Rectangle.Height);
+
+            Rectangle active = Rectangle.Intersect(
+                formRect, new Rectangle(0, 0, Width, Height));
+
+            if (active.Width <= 0 || active.Height <= 0) return;
+
+            // 1. Additional dim on surrounding bands.
+            //    The form base is Black@50%; painting extra dark on the outside makes
+            //    the hovered region visibly brighter/clearer by contrast.
+            using (var dimBrush = new SolidBrush(Color.FromArgb(120, 0, 0, 0)))
             {
-                // Convert hovered window rect from screen coords to form-local coords
-                Rectangle formRect = new Rectangle(
-                    _hoveredWindow.Rectangle.X - Bounds.Left,
-                    _hoveredWindow.Rectangle.Y - Bounds.Top,
-                    _hoveredWindow.Rectangle.Width,
-                    _hoveredWindow.Rectangle.Height);
+                if (active.Top    > 0)
+                    g.FillRectangle(dimBrush, 0, 0, Width, active.Top);
+                if (active.Left   > 0)
+                    g.FillRectangle(dimBrush, 0, active.Top, active.Left, active.Height);
+                if (active.Right  < Width)
+                    g.FillRectangle(dimBrush, active.Right, active.Top, Width - active.Right, active.Height);
+                if (active.Bottom < Height)
+                    g.FillRectangle(dimBrush, 0, active.Bottom, Width, Height - active.Bottom);
+            }
 
-                // Clamp to form surface so we never draw outside our own bounds
-                Rectangle clipped = Rectangle.Intersect(
-                    formRect,
-                    new Rectangle(0, 0, Width, Height));
+            // 2. Solid bright border — Cyan × 0.5 opacity = (0,127,127) on screen
+            using (var accentPen = new Pen(Color.Cyan, 3))
+                g.DrawRectangle(accentPen, active);
 
-                if (clipped.Width <= 0 || clipped.Height <= 0) return;
-
-                // 1. Dim the four surrounding bands (ShareX DrawDimmedOutside)
-                //    The form itself is already at 25% opacity; the extra dim on the
-                //    surrounding area makes the highlighted window stand out clearly.
-                using (var dimBrush = new SolidBrush(Color.FromArgb(100, 0, 0, 0)))
-                {
-                    // Top band
-                    if (clipped.Top > 0)
-                        g.FillRectangle(dimBrush, 0, 0, Width, clipped.Top);
-
-                    // Left band
-                    if (clipped.Left > 0)
-                        g.FillRectangle(dimBrush, 0, clipped.Top, clipped.Left, clipped.Height);
-
-                    // Right band
-                    int rightStart = clipped.Right;
-                    if (rightStart < Width)
-                        g.FillRectangle(dimBrush, rightStart, clipped.Top, Width - rightStart, clipped.Height);
-
-                    // Bottom band
-                    int bottomStart = clipped.Bottom;
-                    if (bottomStart < Height)
-                        g.FillRectangle(dimBrush, 0, bottomStart, Width, Height - bottomStart);
-                }
-
-                // 2. Solid accent border — blue (ShareX DrawAntRectangle accent layer)
-                using (var accentPen = new Pen(Color.DodgerBlue, 2))
-                    g.DrawRectangle(accentPen, clipped);
-
-                // 3. Dashed black overlay border (ShareX AntDashPen)
-                using (var dashPen = new Pen(Color.FromArgb(230, 0, 0, 0), 1))
-                {
-                    dashPen.DashStyle   = DashStyle.Custom;
-                    dashPen.DashPattern = new float[] { 5f, 5f };
-                    g.DrawRectangle(dashPen, clipped);
-                }
+            // 3. White dashed overlay for the ant-march effect
+            //    White × 0.5 = (127,127,127) — clearly visible on the dark overlay
+            using (var dashPen = new Pen(Color.White, 1))
+            {
+                dashPen.DashStyle   = DashStyle.Custom;
+                dashPen.DashPattern = new float[] { 5f, 5f };
+                g.DrawRectangle(dashPen, active);
             }
         }
     }
