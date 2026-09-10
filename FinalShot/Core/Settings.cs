@@ -43,6 +43,27 @@ namespace PluginScreenshot
         /// </summary>
         public int GifMaxWidth { get; private set; }
 
+        /// <summary>
+        /// Bang executed the moment GIF recording starts (capture thread launched).
+        /// Useful for turning a skin button red, showing a "● REC" label, etc.
+        /// Example: [!SetOption GifToggle_BackGround This "Fill Color 120,30,30,200"][!UpdateMeter *][!Redraw]
+        /// </summary>
+        public string GifStartAction { get; private set; }
+
+        /// <summary>
+        /// Bang executed when a recording is cancelled via -gif-cancel
+        /// (frames discarded, no file written). Useful for resetting the skin UI.
+        /// Example: [!Log "GIF cancelled"][!SetOption Row2_Label FontColor "255,100,100"][!UpdateMeter Row2_Label][!Redraw]
+        /// </summary>
+        public string GifCancelAction { get; private set; }
+
+        /// <summary>
+        /// Bang executed the moment encoding begins (capture stopped, frames handed
+        /// to the encoder). Useful for showing an "Encoding…" spinner or label.
+        /// Example: [!SetOption Row2_Label Text "Encoding..."][!UpdateMeter Row2_Label][!Redraw]
+        /// </summary>
+        public string OnGifEncodingAction { get; private set; }
+
         public Settings(API api)
         {
             Api              = api;
@@ -73,6 +94,10 @@ namespace PluginScreenshot
             if (GifMaxWidth < 100)  GifMaxWidth = 100;
             if (GifMaxWidth > 3840) GifMaxWidth = 3840;
 
+            GifStartAction      = api.ReadString("GifStartAction",      "");
+            GifCancelAction     = api.ReadString("GifCancelAction",     "");
+            OnGifEncodingAction = api.ReadString("OnGifEncodingAction", "");
+
             Logger.DebugEnabled = api.ReadInt("DebugLog", 0) == 1;
             string dbg = api.ReadString("DebugLogPath", "");
             if (!string.IsNullOrEmpty(dbg))
@@ -83,7 +108,10 @@ namespace PluginScreenshot
                 + "  DetectControls=" + DetectControls
                 + "  GifSavePath=" + GifSavePath
                 + "  GifFPS=" + GifFPS
-                + "  GifDuration=" + GifDuration);
+                + "  GifDuration=" + GifDuration
+                + "  GifStartAction=" + (string.IsNullOrEmpty(GifStartAction) ? "(none)" : "(set)")
+                + "  GifCancelAction=" + (string.IsNullOrEmpty(GifCancelAction) ? "(none)" : "(set)")
+                + "  OnGifEncodingAction=" + (string.IsNullOrEmpty(OnGifEncodingAction) ? "(none)" : "(set)"));
         }
     }
 }

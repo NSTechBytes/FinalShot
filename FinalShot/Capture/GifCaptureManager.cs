@@ -92,6 +92,10 @@ namespace PluginScreenshot
                 _captureThread.Name = "FinalShot-GifCapture";
                 _captureThread.Start();
             }
+
+            // Fire GifStartAction outside the lock so it never holds _stateLock
+            // while calling back into Rainmeter (avoids potential deadlock).
+            ExecuteAction(settings, settings.GifStartAction, "GifStartAction");
         }
 
         /// <summary>
@@ -173,6 +177,7 @@ namespace PluginScreenshot
         /// <summary>
         /// Cancels the active recording session and discards all captured frames.
         /// No file is written and <c>FinishAction</c> is NOT executed.
+        /// <c>GifCancelAction</c> IS executed once the frames have been discarded.
         ///
         /// Safe to call at any time:
         ///   • Idle      → ignored.
@@ -180,7 +185,7 @@ namespace PluginScreenshot
         ///   • Encoding  → ignored (encoding is already running; cannot interrupt
         ///                 safely without file corruption).
         /// </summary>
-        public static void CancelRecording()
+        public static void CancelRecording(Settings settings)
         {
             Thread captureThreadSnapshot;
             GifFrameBuffer bufferSnapshot;
@@ -212,7 +217,6 @@ namespace PluginScreenshot
             {
                 try
                 {
-                    // Wait for the capture thread to notice _stopRequested and exit.
                     captureThreadSnapshot?.Join();
                     Logger.Log("GifCaptureManager.CancelRecording: capture thread joined.");
                 }
@@ -222,10 +226,12 @@ namespace PluginScreenshot
                 }
                 finally
                 {
-                    // Dispose the buffer — GifFrameBuffer.Dispose() drains and
-                    // disposes all queued Bitmaps so there are no memory leaks.
+                    // Dispose all buffered frames — no file is written.
                     bufferSnapshot?.Dispose();
                     Logger.Log("GifCaptureManager.CancelRecording: frames discarded, state is Idle.");
+
+                    // Notify the skin that the recording was cancelled.
+                    ExecuteAction(settings, settings.GifCancelAction, "GifCancelAction");
                 }
             });
             cleanupThread.IsBackground = true;
@@ -313,6 +319,9 @@ namespace PluginScreenshot
             captureThread?.Join();
             Logger.Log("GifCaptureManager.EncodeAndFinish: capture thread joined, starting encode.");
 
+            // Notify the skin that encoding is now beginning.
+            ExecuteAction(settings, settings.OnGifEncodingAction, "OnGifEncodingAction");
+
             var frames = new List<Bitmap>();
             try
             {
@@ -389,6 +398,29 @@ namespace PluginScreenshot
             catch (Exception ex)
             {
                 Logger.Log($"GifCaptureManager.ShowGifNotification: {ex.Message}");
+            }
+        }
+
+        // ------------------------------------------------------------------ //
+        //  Action executor helper
+        // ------------------------------------------------------------------ //
+
+        /// <summary>
+        /// Executes a Rainmeter bang string via the API.
+        /// Does nothing if <paramref name="action"/> is null or empty.
+        /// Logs the action name on success and any exception on failure.
+        /// </summary>
+        private static void ExecuteAction(Settings settings, string action, string actionName)
+        {
+            if (string.IsNullOrEmpty(action)) return;
+            try
+            {
+                Logger.Log($"GifCaptureManager: executing {actionName}.");
+                settings.Api.Execute(action);
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"GifCaptureManager: error executing {actionName} — {ex.Message}");
             }
         }
     }

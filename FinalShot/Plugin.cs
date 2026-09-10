@@ -80,7 +80,7 @@ namespace PluginScreenshot
             else if (string.Equals(cmd, "-gif-cancel", StringComparison.OrdinalIgnoreCase))
             {
                 Logger.Log("ExecuteBang: -gif-cancel received.");
-                GifCaptureManager.CancelRecording();
+                GifCaptureManager.CancelRecording(settings);
             }
             else if (cmd.StartsWith("ExecuteBatch ", StringComparison.OrdinalIgnoreCase))
             {
