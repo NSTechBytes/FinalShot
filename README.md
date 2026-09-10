@@ -300,3 +300,14 @@ To troubleshoot, enable `DebugLog=1`. Logs are written to `FinalShotDebug.log` (
 ## License
 
 This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+
+---
+
+## Support the Developer
+
+FinalShot is free and open-source. If you find it useful, consider supporting its development. It helps keep the project active and motivates new features.
+
+- 🎁 **Patreon:** [patreon.com/cw/nstechbytes](https://patreon.com/cw/nstechbytes)
+- ⭐ **Star this repo:** it's free and means a lot!
+
+Thank you for your support!
