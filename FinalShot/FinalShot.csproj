@@ -89,6 +89,8 @@
     <Compile Include="Core\Logger.cs" />
     <Compile Include="Core\Settings.cs" />
     <Compile Include="Core\NativeMethods.cs" />
+    <Compile Include="Core\WindowInfo.cs" />
+    <Compile Include="Core\WindowsDetector.cs" />
     <Compile Include="Capture\ScreenshotManager.cs" />
     <Compile Include="UI\CustomScreenshotForm.cs" />
     <Compile Include="UI\NotificationForm.cs" />
