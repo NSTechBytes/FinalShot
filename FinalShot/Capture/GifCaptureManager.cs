@@ -12,13 +12,24 @@ namespace PluginScreenshot
     /// Controls the full lifecycle of a GIF screen recording session.
     ///
     /// State machine:
-    ///   Idle ──[StartRecording]──► Recording ──[StopAndSave]──► Encoding ──► Idle
+    ///
+    ///   Idle ──[StartRecording / ToggleRecording]──► Recording
+    ///                                                    │
+    ///                              [StopAndSave / ToggleRecording]
+    ///                                                    │
+    ///                                                 Encoding ──► Idle
+    ///                                                    │
+    ///                              [CancelRecording] ────┘ (frames discarded, no file)
     ///
     /// Thread model:
     ///   • StartRecording() returns immediately; a background thread captures frames.
     ///   • StopAndSave() signals the capture thread to stop, waits for it to finish,
-    ///     then encodes all frames synchronously on a new background thread so that
-    ///     the Rainmeter plugin thread is never blocked.
+    ///     then encodes all frames on a new background thread so the Rainmeter plugin
+    ///     thread is never blocked.
+    ///   • CancelRecording() signals the capture thread to stop and discards all
+    ///     frames without encoding — no file is written.
+    ///   • ToggleRecording() calls StartRecording() when Idle, StopAndSave() when
+    ///     Recording. Does nothing while Encoding is in progress.
     ///
     /// Concurrency safety:
     ///   All public methods are guarded by _stateLock and a volatile state flag.
@@ -127,6 +138,100 @@ namespace PluginScreenshot
         /// Useful for the skin to conditionally enable/disable buttons.
         /// </summary>
         public static bool IsActive => _state != State.Idle;
+
+        /// <summary>
+        /// Toggles recording state:
+        ///   • Idle      → calls <see cref="StartRecording"/> (begin capturing).
+        ///   • Recording → calls <see cref="StopAndSave"/> (stop and encode).
+        ///   • Encoding  → ignored (encoding already in progress, do nothing).
+        ///
+        /// This lets a single skin button act as both Start and Stop.
+        /// </summary>
+        public static void ToggleRecording(Settings settings)
+        {
+            State current;
+            lock (_stateLock) { current = _state; }
+
+            switch (current)
+            {
+                case State.Idle:
+                    Logger.Log("GifCaptureManager.ToggleRecording: Idle → starting recording.");
+                    StartRecording(settings);
+                    break;
+
+                case State.Recording:
+                    Logger.Log("GifCaptureManager.ToggleRecording: Recording → stopping and saving.");
+                    StopAndSave(settings);
+                    break;
+
+                case State.Encoding:
+                    Logger.Log("GifCaptureManager.ToggleRecording: Encoding in progress — ignored.");
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// Cancels the active recording session and discards all captured frames.
+        /// No file is written and <c>FinishAction</c> is NOT executed.
+        ///
+        /// Safe to call at any time:
+        ///   • Idle      → ignored.
+        ///   • Recording → capture thread is stopped, all frames are discarded.
+        ///   • Encoding  → ignored (encoding is already running; cannot interrupt
+        ///                 safely without file corruption).
+        /// </summary>
+        public static void CancelRecording()
+        {
+            Thread captureThreadSnapshot;
+            GifFrameBuffer bufferSnapshot;
+
+            lock (_stateLock)
+            {
+                if (_state != State.Recording)
+                {
+                    Logger.Log($"GifCaptureManager.CancelRecording: state is {_state}, nothing to cancel.");
+                    return;
+                }
+
+                // Move directly back to Idle — EncodeAndFinish will never be called.
+                _state         = State.Idle;
+                _stopRequested = true;
+
+                captureThreadSnapshot = _captureThread;
+                bufferSnapshot        = _buffer;
+
+                _captureThread = null;
+                _buffer        = null;
+            }
+
+            Logger.Log("GifCaptureManager.CancelRecording: signalled capture thread to stop, discarding frames.");
+
+            // Clean up on a background thread so we don't block the Rainmeter call
+            // while waiting for the capture thread to exit its current sleep.
+            var cleanupThread = new Thread(() =>
+            {
+                try
+                {
+                    // Wait for the capture thread to notice _stopRequested and exit.
+                    captureThreadSnapshot?.Join();
+                    Logger.Log("GifCaptureManager.CancelRecording: capture thread joined.");
+                }
+                catch (Exception ex)
+                {
+                    Logger.Log($"GifCaptureManager.CancelRecording: join error — {ex.Message}");
+                }
+                finally
+                {
+                    // Dispose the buffer — GifFrameBuffer.Dispose() drains and
+                    // disposes all queued Bitmaps so there are no memory leaks.
+                    bufferSnapshot?.Dispose();
+                    Logger.Log("GifCaptureManager.CancelRecording: frames discarded, state is Idle.");
+                }
+            });
+            cleanupThread.IsBackground = true;
+            cleanupThread.Name = "FinalShot-GifCancel";
+            cleanupThread.Start();
+        }
 
         // ------------------------------------------------------------------ //
         //  Capture loop (runs on _captureThread)

@@ -72,6 +72,16 @@ namespace PluginScreenshot
                 Logger.Log("ExecuteBang: -gif-stop received.");
                 GifCaptureManager.StopAndSave(settings);
             }
+            else if (string.Equals(cmd, "-gif-toggle", StringComparison.OrdinalIgnoreCase))
+            {
+                Logger.Log("ExecuteBang: -gif-toggle received.");
+                GifCaptureManager.ToggleRecording(settings);
+            }
+            else if (string.Equals(cmd, "-gif-cancel", StringComparison.OrdinalIgnoreCase))
+            {
+                Logger.Log("ExecuteBang: -gif-cancel received.");
+                GifCaptureManager.CancelRecording();
+            }
             else if (cmd.StartsWith("ExecuteBatch ", StringComparison.OrdinalIgnoreCase))
             {
                 if (int.TryParse(cmd.Split(' ')[1], out int code))
