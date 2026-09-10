@@ -7,16 +7,6 @@ using System.Windows.Forms;
 
 namespace PluginScreenshot
 {
-    // Full-screen overlay for ShareX-style window highlight and free-select drag capture.
-    //
-    // Transparency: Opacity = 0.5 with BackColor = Black.
-    // All drawn colours are pre-brightened to survive the 0.5 multiply:
-    //   Cyan  (0,255,255) x 0.5  -> (0,127,127)   visible teal border
-    //   White (255,255,255) x 0.5 -> (127,127,127) visible dash overlay
-    //
-    // Threading: RunModal() spawns a fresh STA thread per capture session so
-    // Rainmeter never crashes on the second call. ThreadPool + BeginInvoke is used
-    // instead of async/await to marshal the window list back to the UI thread safely.
     public class CustomScreenshotForm : Form
     {
         private readonly Settings _settings;

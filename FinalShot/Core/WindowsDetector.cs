@@ -194,9 +194,6 @@ namespace PluginScreenshot
         }
 
         // Helpers
-
-        // Mirrors ShareX's CaptureHelpers.GetWindowRectangle.
-        // Tries DWMWA_EXTENDED_FRAME_BOUNDS first; falls back to plain GetWindowRect.
         private static Rectangle GetWindowRectangle(IntPtr hWnd)
         {
             int hr = NativeMethods.DwmGetWindowAttribute(
