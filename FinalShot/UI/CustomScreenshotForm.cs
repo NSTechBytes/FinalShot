@@ -23,10 +23,14 @@ namespace PluginScreenshot
         private bool             _windowsLoaded        = false;
         private bool             _pendingWindowCapture = false;
 
-        // Static factory — always use this, never Application.Run directly
+        // ------------------------------------------------------------------ //
+        //  Static factory — always use this, never Application.Run directly
+        // ------------------------------------------------------------------ //
 
-        // Spawns a fresh STA thread and blocks until the form closes.
-        // Using a new thread every time prevents the Rainmeter crash on second call.
+        /// <summary>
+        /// Spawns a fresh STA thread and blocks until the form closes.
+        /// Using a new thread every time prevents the Rainmeter crash on the second call.
+        /// </summary>
         public static void RunModal(Settings settings, Action finishCallback)
         {
             var thread = new Thread(() =>
@@ -47,7 +51,9 @@ namespace PluginScreenshot
             thread.Join();
         }
 
-        // Constructor
+        // ------------------------------------------------------------------ //
+        //  Constructor
+        // ------------------------------------------------------------------ //
 
         public CustomScreenshotForm(Settings settings, Action finishCallback)
         {
@@ -75,7 +81,9 @@ namespace PluginScreenshot
             Paint     += OnPaint;
         }
 
-        // Form Load — enumerate windows on a background thread
+        // ------------------------------------------------------------------ //
+        //  Form Load — enumerate windows on a background thread
+        // ------------------------------------------------------------------ //
 
         private void OnFormLoad(object sender, EventArgs e)
         {
@@ -115,7 +123,9 @@ namespace PluginScreenshot
             });
         }
 
-        // Keyboard — Esc closes without capture
+        // ------------------------------------------------------------------ //
+        //  Keyboard
+        // ------------------------------------------------------------------ //
 
         private void OnKeyDown(object s, KeyEventArgs e)
         {
@@ -123,7 +133,9 @@ namespace PluginScreenshot
                 Close();
         }
 
-        // Mouse down
+        // ------------------------------------------------------------------ //
+        //  Mouse down
+        // ------------------------------------------------------------------ //
 
         private void OnMouseDown(object s, MouseEventArgs e)
         {
@@ -134,8 +146,8 @@ namespace PluginScreenshot
 
             if (_windowsLoaded && _hoveredWindow != null && _settings.DetectWindows)
             {
-                // A window is highlighted — wait for mouse-up to confirm capture.
-                // If the user drags more than 4 px first, switch to free-select instead.
+                // A window is highlighted — wait for mouse-up to confirm.
+                // If the user drags more than 4 px, switch to free-select.
                 _pendingWindowCapture = true;
                 _dragging             = false;
             }
@@ -146,11 +158,13 @@ namespace PluginScreenshot
             }
         }
 
-        // Mouse move
+        // ------------------------------------------------------------------ //
+        //  Mouse move
+        // ------------------------------------------------------------------ //
 
         private void OnMouseMove(object s, MouseEventArgs e)
         {
-            // Switch from pending-capture to free-drag if the user moves more than 4 px
+            // Switch from pending-capture to free-drag if the user moves > 4 px.
             if (_pendingWindowCapture)
             {
                 double dist = Math.Sqrt(
@@ -180,7 +194,7 @@ namespace PluginScreenshot
                 return;
             }
 
-            // Idle hover detection — find the topmost window under the cursor
+            // Idle hover: find the topmost window under the cursor.
             if (_windowsLoaded && _settings.DetectWindows)
             {
                 Point      screenPt = PointToScreen(e.Location);
@@ -203,7 +217,9 @@ namespace PluginScreenshot
             }
         }
 
-        // Mouse up
+        // ------------------------------------------------------------------ //
+        //  Mouse up
+        // ------------------------------------------------------------------ //
 
         private void OnMouseUp(object s, MouseEventArgs e)
         {
@@ -244,24 +260,40 @@ namespace PluginScreenshot
             Close();
         }
 
-        // Paint
+        // ------------------------------------------------------------------ //
+        //  Paint
+        // ------------------------------------------------------------------ //
 
         private void OnPaint(object s, PaintEventArgs e)
         {
             Graphics g = e.Graphics;
 
-            // Drag mode: dashed selection rectangle
-            if (_dragging)
+            // ---- Drag mode ----
+            if (_dragging && _selection.Width > 1 && _selection.Height > 1)
             {
-                using (var pen = new Pen(Color.Cyan, 2) { DashStyle = DashStyle.Dash })
-                    g.DrawRectangle(pen, _selection);
+                Rectangle sel    = _selection;
+                Rectangle client = new Rectangle(0, 0, Width, Height);
+
+                // Semi-transparent blue fill inside the selection.
+                using (var fill = new SolidBrush(GifSnapSelector.SelectionFillColor))
+                    g.FillRectangle(fill, sel);
+
+                // Solid blue border.
+                using (var pen = new Pen(GifSnapSelector.SelectionBorderColor, 2))
+                    g.DrawRectangle(pen, sel.X, sel.Y, sel.Width - 1, sel.Height - 1);
+
+                // Corner handles.
+                GifSnapSelector.DrawCornerHandles(g, sel);
+
+                // Size label.
+                GifSnapSelector.DrawSizeLabel(g, sel, client);
                 return;
             }
 
-            // Hover mode: dim surroundings and draw border around the hovered window
+            // ---- Window-hover mode ----
             if (!_windowsLoaded || _hoveredWindow == null) return;
 
-            // Convert hovered rect from screen coords to form-local coords
+            // Convert hovered rect from screen coords to form-local coords.
             Rectangle formRect = new Rectangle(
                 _hoveredWindow.Rectangle.X - Bounds.Left,
                 _hoveredWindow.Rectangle.Y - Bounds.Top,
@@ -271,26 +303,31 @@ namespace PluginScreenshot
             Rectangle active = Rectangle.Intersect(formRect, new Rectangle(0, 0, Width, Height));
             if (active.Width <= 0 || active.Height <= 0) return;
 
-            // Extra dim on the four surrounding bands — makes the hovered region stand out
-            using (var dimBrush = new SolidBrush(Color.FromArgb(120, 0, 0, 0)))
+            // Extra dim on the four surrounding bands.
+            using (var dimBrush = new SolidBrush(GifSnapSelector.DimColor))
             {
-                if (active.Top    > 0)     g.FillRectangle(dimBrush, 0, 0, Width, active.Top);
-                if (active.Left   > 0)     g.FillRectangle(dimBrush, 0, active.Top, active.Left, active.Height);
-                if (active.Right  < Width)  g.FillRectangle(dimBrush, active.Right, active.Top, Width - active.Right, active.Height);
-                if (active.Bottom < Height) g.FillRectangle(dimBrush, 0, active.Bottom, Width, Height - active.Bottom);
+                if (active.Top    > 0)      g.FillRectangle(dimBrush, 0,            0,            Width,                   active.Top);
+                if (active.Left   > 0)      g.FillRectangle(dimBrush, 0,            active.Top,   active.Left,             active.Height);
+                if (active.Right  < Width)  g.FillRectangle(dimBrush, active.Right, active.Top,   Width - active.Right,    active.Height);
+                if (active.Bottom < Height) g.FillRectangle(dimBrush, 0,            active.Bottom, Width,                  Height - active.Bottom);
             }
 
-            // Solid cyan border
-            using (var accentPen = new Pen(Color.Cyan, 3))
-                g.DrawRectangle(accentPen, active);
+            // Semi-transparent blue fill inside the hovered window.
+            using (var fill = new SolidBrush(GifSnapSelector.SelectionFillColor))
+                g.FillRectangle(fill, active);
 
-            // White dashed overlay for the ant-march effect
-            using (var dashPen = new Pen(Color.White, 1))
-            {
-                dashPen.DashStyle   = DashStyle.Custom;
-                dashPen.DashPattern = new float[] { 5f, 5f };
-                g.DrawRectangle(dashPen, active);
-            }
+            // Solid blue border.
+            using (var accentPen = new Pen(GifSnapSelector.SelectionBorderColor, 2))
+                g.DrawRectangle(accentPen, active.X, active.Y, active.Width - 1, active.Height - 1);
+
+            // Corner handles.
+            GifSnapSelector.DrawCornerHandles(g, active);
+
+            // Size label (uses window pixel size, not form-local size).
+            Rectangle sizeRect = new Rectangle(active.X, active.Y,
+                                               _hoveredWindow.Rectangle.Width,
+                                               _hoveredWindow.Rectangle.Height);
+            GifSnapSelector.DrawSizeLabel(g, sizeRect, new Rectangle(0, 0, Width, Height));
         }
     }
 }
