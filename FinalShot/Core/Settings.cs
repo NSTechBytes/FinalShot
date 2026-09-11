@@ -37,6 +37,13 @@ namespace PluginScreenshot
         public int GifDuration { get; private set; }
 
         /// <summary>
+        /// Fixed region used by -gif-predefined.
+        /// Defined by GifPredefX, GifPredefY, GifPredefWidth, GifPredefHeight in the skin INI.
+        /// Falls back to PredefinedRegion if not set.
+        /// </summary>
+        public Rectangle GifPredefinedRegion { get; private set; }
+
+        /// <summary>
         /// Bang executed the moment GIF recording starts (capture thread launched).
         /// Useful for turning a skin button red, showing a "● REC" label, etc.
         /// Example: [!SetOption GifToggle_BackGround This "Fill Color 120,30,30,200"][!UpdateMeter *][!Redraw]
@@ -101,6 +108,14 @@ namespace PluginScreenshot
             GifDuration = api.ReadInt("GifDuration", 0);
             if (GifDuration < 0) GifDuration = 0;
 
+            // GifPredefinedRegion — uses GifPredefX/Y/Width/Height if set,
+            // otherwise falls back to the screenshot PredefinedRegion.
+            int gx = api.ReadInt("GifPredefX",      x);
+            int gy = api.ReadInt("GifPredefY",      y);
+            int gw = api.ReadInt("GifPredefWidth",  w);
+            int gh = api.ReadInt("GifPredefHeight", h);
+            GifPredefinedRegion = new Rectangle(gx, gy, gw, gh);
+
             GifStartAction      = api.ReadString("GifStartAction",      "");
             GifCancelAction     = api.ReadString("GifCancelAction",     "");
             OnGifEncodingAction = api.ReadString("OnGifEncodingAction", "");
@@ -117,6 +132,7 @@ namespace PluginScreenshot
                 + "  GifSavePath=" + GifSavePath
                 + "  GifFPS=" + GifFPS
                 + "  GifDuration=" + GifDuration
+                + "  GifPredefinedRegion=" + GifPredefinedRegion
                 + "  GifEncodeWhileRecord=" + GifEncodeWhileRecord
                 + "  GifStartAction=" + (string.IsNullOrEmpty(GifStartAction) ? "(none)" : "(set)")
                 + "  GifCancelAction=" + (string.IsNullOrEmpty(GifCancelAction) ? "(none)" : "(set)")
