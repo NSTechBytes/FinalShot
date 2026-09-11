@@ -152,7 +152,7 @@ namespace PluginScreenshot
                 {
                     var enc = new GifStreamEncoder();
                     enc.Open(settings.GifSavePath, captureRegion.Width, captureRegion.Height,
-                             settings.EncoderQuality);
+                             settings.EncoderQuality, settings.GifCompression);
                     _streamEncoder = enc;
                     _encoderThread = new Thread(() => StreamEncodeLoop(enc, _buffer));
                     _encoderThread.IsBackground = true;
@@ -477,7 +477,8 @@ namespace PluginScreenshot
                             return;
                         }
                         AnimatedGifEncoder.Encode(frames, settings.GifSavePath,
-                                                  settings.EncoderQuality);
+                                                  settings.EncoderQuality,
+                                                  settings.GifCompression);
                         success = true;
                     }
                     finally

@@ -80,6 +80,20 @@ namespace PluginScreenshot
         /// <summary>Resolved encoder parameters for the current GifQuality level.</summary>
         public GifEncoderQuality EncoderQuality { get; private set; }
 
+        /// <summary>
+        /// GIF compression level, 1–3. Default 2.
+        ///   1 = Aggressive — duplicate frames are dropped and identical consecutive
+        ///       frames are merged (their delays are accumulated). Best file size for
+        ///       low-motion recordings (e.g. screen with static background).
+        ///   2 = Normal (default) — duplicate frames are dropped. Good balance.
+        ///   3 = Off — every captured frame is written regardless of content.
+        ///       Use when every frame must be preserved (fast motion, smooth animation).
+        ///
+        /// Compression is independent of Quality — you can have high quality + high
+        /// compression, or low quality + no compression.
+        /// </summary>
+        public int GifCompression { get; private set; }
+
         public string GifStartAction { get; private set; }
         public string GifCancelAction { get; private set; }
         public string OnGifEncodingAction { get; private set; }
@@ -125,6 +139,10 @@ namespace PluginScreenshot
             if (GifQuality > 5) GifQuality = 5;
             EncoderQuality = GifEncoderQuality.FromLevel(GifQuality);
 
+            GifCompression = api.ReadInt("GifCompression", 2);
+            if (GifCompression < 1) GifCompression = 1;
+            if (GifCompression > 3) GifCompression = 3;
+
             GifStartAction       = api.ReadString("GifStartAction",      "");
             GifCancelAction      = api.ReadString("GifCancelAction",     "");
             GifPauseAction       = api.ReadString("GifPauseAction",      "");
@@ -148,6 +166,7 @@ namespace PluginScreenshot
                     + " (colors=" + EncoderQuality.Colors
                     + " samples=" + EncoderQuality.MaxSamples
                     + " dither="  + EncoderQuality.Dither + ")"
+                + "  GifCompression=" + GifCompression
                 + "  GifPredefinedRegion=" + GifPredefinedRegion
                 + "  GifEncodeWhileRecord=" + GifEncodeWhileRecord
                 + "  GifStartAction="      + (string.IsNullOrEmpty(GifStartAction)      ? "(none)" : "(set)")

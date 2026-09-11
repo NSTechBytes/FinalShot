@@ -8,25 +8,34 @@ using System.Runtime.InteropServices;
 namespace PluginScreenshot
 {
     // ======================================================================
-    //  AnimatedGifEncoder
-    //  Pure .NET 4.8 animated GIF encoder.
+    //  AnimatedGifEncoder  —  Pure .NET 4.8 animated GIF encoder.
     //
-    //  Pipeline per frame:
-    //    1. Median-cut quantisation — builds an optimal palette from actual pixels.
-    //    2. Build a 32×32×32 colour-lookup-cube for O(1) nearest-colour lookup.
-    //    3. Floyd-Steinberg error-diffusion dithering (optional, controlled by quality).
-    //    4. GIF-compatible LZW compression.
-    //    5. Write raw GIF89a bytes directly.
+    //  Key optimisation (10x file-size reduction):
+    //    • One GLOBAL palette is built once from a sample of all frames.
+    //    • Every frame is quantised against that same palette so identical
+    //      pixels get the same index in consecutive frames.
+    //    • The last palette slot is reserved as a TRANSPARENT index.
+    //    • Each frame only writes pixels that CHANGED vs the previous frame;
+    //      unchanged pixels are written as the transparent index.
+    //    • Disposal method is set to "do not dispose" (1) so unchanged pixels
+    //      from the previous frame remain visible through the transparency.
+    //    • LZW sees massive runs of the same transparent index → compresses
+    //      dramatically better than per-frame independent palettes.
     // ======================================================================
     internal static class AnimatedGifEncoder
     {
+        // The last palette entry is always the transparent index.
+        // This means quality.Colors is the number of *real* colour entries;
+        // the actual palette written is quality.Colors entries where the last
+        // one is designated transparent.
+        private const int TRANSPARENT_IDX_OFFSET = 1; // last slot = Colors - 1
+
         // ------------------------------------------------------------------ //
         //  Public entry point — batch encode
         // ------------------------------------------------------------------ //
 
-        /// <summary>Encodes a list of frames into an animated GIF at the given quality.</summary>
         public static void Encode(IList<GifFrame> frames, string outputPath,
-                                  GifEncoderQuality quality)
+                                  GifEncoderQuality quality, int compression = 2)
         {
             if (frames == null || frames.Count == 0)
                 throw new ArgumentException("No frames to encode.");
@@ -42,8 +51,40 @@ namespace PluginScreenshot
 
             Logger.Log($"AnimatedGifEncoder: {frames.Count} frames, {w}x{h}, " +
                        $"colors={quality.Colors}, samples={quality.MaxSamples}, " +
-                       $"dither={quality.Dither}, out={outputPath}");
+                       $"dither={quality.Dither}, compression={compression}, out={outputPath}");
 
+            // --- Step 1: Read all frames into BGRA buffers ---
+            // (needed for global palette building and delta encoding)
+            var bgraFrames = new List<byte[]>(frames.Count);
+            foreach (var f in frames)
+                bgraFrames.Add(ReadBgraInternal(f.Bitmap, w, h));
+
+            // --- Step 2: Build ONE global palette from all frames ---
+            // We use Colors-1 actual colour entries and reserve the last slot
+            // as the transparent index. This avoids losing a colour to transparency
+            // while still keeping the table size a power of 2.
+            int    realColors  = quality.Colors; // e.g. 256
+            int    transpIdx   = realColors - 1; // e.g. 255
+            Color[] palette    = MediaCutQuantizer.BuildGlobal(
+                                     bgraFrames, w * h,
+                                     realColors - 1,       // ask for one fewer real colour
+                                     quality.MaxSamples);  // returns realColors-1 entries
+
+            // Expand palette to full size; last slot = transparent sentinel (Black)
+            if (palette.Length < realColors)
+            {
+                var expanded = new Color[realColors];
+                palette.CopyTo(expanded, 0);
+                expanded[transpIdx] = Color.Black; // colour value doesn't matter, never displayed
+                palette = expanded;
+            }
+
+            // --- Step 3: Build lookup cube for the global palette ---
+            byte[] cube = BuildLookupCubeInternal(palette, transpIdx);
+
+            Logger.Log($"AnimatedGifEncoder: global palette built, transpIdx={transpIdx}");
+
+            // --- Step 4: Write GIF ---
             using (var fs = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None))
             using (var bw = new BinaryWriter(fs))
             {
@@ -53,44 +94,94 @@ namespace PluginScreenshot
                 // Logical Screen Descriptor — no global colour table
                 WriteU16Internal(bw, (ushort)w);
                 WriteU16Internal(bw, (ushort)h);
-                bw.Write((byte)0x00); // no GCT
+                bw.Write((byte)0x00);
                 bw.Write((byte)0x00);
                 bw.Write((byte)0x00);
 
                 WriteNetscapeLoopInternal(bw, 0);
 
-                for (int i = 0; i < frames.Count; i++)
+                bool   deduplicate = (compression <= 2);
+                byte[] prevIndices = null; // quantised indices of previous written frame
+                int    pendingCs   = 0;
+                int    written     = 0;
+
+                for (int i = 0; i < bgraFrames.Count; i++)
                 {
-                    Logger.Log($"AnimatedGifEncoder: encoding frame {i + 1}/{frames.Count}");
-                    EncodeFrame(bw, frames[i].Bitmap, frames[i].DelayCs, quality);
+                    byte[] bgra    = bgraFrames[i];
+                    int    delayCs = frames[i].DelayCs;
+
+                    // Quantise this frame against the global palette
+                    byte[] indices = quality.Dither
+                        ? DitherInternal(bgra, w, h, palette, cube, transpIdx)
+                        : QuantizeNoDither(bgra, w, h, cube);
+
+                    // Deduplication: if ALL pixels are unchanged → skip frame
+                    if (deduplicate && prevIndices != null)
+                    {
+                        if (BytesEqual(indices, prevIndices))
+                        {
+                            pendingCs += delayCs;
+                            Logger.Log($"AnimatedGifEncoder: frame {i+1} duplicate skipped.");
+                            continue;
+                        }
+                    }
+
+                    int effectiveCs = delayCs + pendingCs;
+                    pendingCs = 0;
+
+                    // Delta: replace unchanged pixels with transparent index
+                    byte[] deltaIndices = (prevIndices != null)
+                        ? ApplyDelta(indices, prevIndices, transpIdx)
+                        : indices; // first frame — no delta
+
+                    Logger.Log($"AnimatedGifEncoder: writing frame {i+1}/{frames.Count} delay={effectiveCs}cs");
+                    WriteGifFrameWithTransparency(bw, deltaIndices, palette, w, h,
+                                                  effectiveCs, transpIdx);
+
+                    prevIndices = indices; // store undelta'd indices for next comparison
+                    written++;
                 }
 
                 bw.Write((byte)0x3B); // GIF trailer
+                Logger.Log($"AnimatedGifEncoder: done — {written}/{frames.Count} frames written → {outputPath}");
             }
-
-            Logger.Log($"AnimatedGifEncoder: done — {outputPath}");
         }
 
         // ------------------------------------------------------------------ //
-        //  Per-frame encode
+        //  Delta: replace unchanged pixels with transparent index
         // ------------------------------------------------------------------ //
 
-        private static void EncodeFrame(BinaryWriter bw, Bitmap src, int delayCs,
-                                        GifEncoderQuality quality)
+        private static byte[] ApplyDelta(byte[] current, byte[] previous, int transpIdx)
         {
-            int w = src.Width;
-            int h = src.Height;
+            byte[] delta = new byte[current.Length];
+            byte   t     = (byte)transpIdx;
+            for (int i = 0; i < current.Length; i++)
+                delta[i] = (current[i] == previous[i]) ? t : current[i];
+            return delta;
+        }
 
-            byte[]  bgra    = ReadBgraInternal(src, w, h);
-            Color[] palette = MediaCutQuantizer.Build(bgra, w * h,
-                                                      quality.Colors,
-                                                      quality.MaxSamples);
-            byte[]  cube    = BuildLookupCubeInternal(palette);
-            byte[]  indices = quality.Dither
-                ? DitherInternal(bgra, w, h, palette, cube)
-                : QuantizeNoDither(bgra, w, h, cube);
+        // ------------------------------------------------------------------ //
+        //  Fast byte-array equality check
+        // ------------------------------------------------------------------ //
 
-            WriteGifFrameInternal(bw, indices, palette, w, h, delayCs);
+        internal static bool BytesEqual(byte[] a, byte[] b)
+        {
+            if (a.Length != b.Length) return false;
+            int chunks = a.Length / 8;
+            int rem    = a.Length % 8;
+            if (chunks > 0)
+            {
+                long[] la = new long[chunks];
+                long[] lb = new long[chunks];
+                Buffer.BlockCopy(a, 0, la, 0, chunks * 8);
+                Buffer.BlockCopy(b, 0, lb, 0, chunks * 8);
+                for (int i = 0; i < chunks; i++)
+                    if (la[i] != lb[i]) return false;
+            }
+            int off = chunks * 8;
+            for (int i = 0; i < rem; i++)
+                if (a[off + i] != b[off + i]) return false;
+            return true;
         }
 
         // ------------------------------------------------------------------ //
@@ -123,10 +214,13 @@ namespace PluginScreenshot
         }
 
         // ------------------------------------------------------------------ //
-        //  Colour-lookup cube  (32 × 32 × 32 = 32 768 entries)
+        //  Colour-lookup cube  (32×32×32, skips the transparent slot)
         // ------------------------------------------------------------------ //
 
         internal static byte[] BuildLookupCubeInternal(Color[] palette)
+            => BuildLookupCubeInternal(palette, -1);
+
+        internal static byte[] BuildLookupCubeInternal(Color[] palette, int skipIdx)
         {
             const int BITS = 5;
             const int SIZE = 32;
@@ -140,17 +234,18 @@ namespace PluginScreenshot
                 byte g = (byte)((gi << 3) | 4);
                 byte b = (byte)((bi << 3) | 4);
                 cube[(ri << (BITS * 2)) | (gi << BITS) | bi] =
-                    (byte)FindNearest(palette, r, g, b);
+                    (byte)FindNearest(palette, r, g, b, skipIdx);
             }
             return cube;
         }
 
-        private static int FindNearest(Color[] palette, byte r, byte g, byte b)
+        private static int FindNearest(Color[] palette, byte r, byte g, byte b, int skipIdx)
         {
             int  best  = 0;
             long bestD = long.MaxValue;
             for (int i = 0; i < palette.Length; i++)
             {
+                if (i == skipIdx) continue; // never map real pixels to the transparent slot
                 long dr = r - palette[i].R;
                 long dg = g - palette[i].G;
                 long db = b - palette[i].B;
@@ -164,11 +259,13 @@ namespace PluginScreenshot
             => cube[((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3)];
 
         // ------------------------------------------------------------------ //
-        //  Floyd-Steinberg dithering  (quality 4-5)
+        //  Floyd-Steinberg dithering (quality 3-5)
+        //  Transparent index is excluded from the nearest-colour search.
         // ------------------------------------------------------------------ //
 
         internal static byte[] DitherInternal(byte[] bgra, int w, int h,
-                                              Color[] palette, byte[] cube)
+                                              Color[] palette, byte[] cube,
+                                              int skipIdx = -1)
         {
             float[] errCurR = new float[w], errCurG = new float[w], errCurB = new float[w];
             float[] errNxtR = new float[w], errNxtG = new float[w], errNxtB = new float[w];
@@ -176,7 +273,6 @@ namespace PluginScreenshot
 
             for (int y = 0; y < h; y++)
             {
-                // Swap error rows
                 float[] t;
                 t = errCurR; errCurR = errNxtR; errNxtR = t;
                 t = errCurG; errCurG = errNxtG; errNxtG = t;
@@ -225,13 +321,9 @@ namespace PluginScreenshot
         }
 
         // ------------------------------------------------------------------ //
-        //  No-dither quantise  (quality 1-3, faster)
+        //  No-dither quantise  (quality 1-2)
         // ------------------------------------------------------------------ //
 
-        /// <summary>
-        /// Maps each pixel to the nearest palette entry using the lookup cube only —
-        /// no error diffusion. Faster but produces more visible banding on gradients.
-        /// </summary>
         private static byte[] QuantizeNoDither(byte[] bgra, int w, int h, byte[] cube)
         {
             byte[] indices = new byte[w * h];
@@ -239,10 +331,7 @@ namespace PluginScreenshot
             for (int i = 0; i < pixels; i++)
             {
                 int bi = i * 4;
-                indices[i] = (byte)CubeLookup(cube,
-                                              bgra[bi + 2],   // R
-                                              bgra[bi + 1],   // G
-                                              bgra[bi + 0]);  // B
+                indices[i] = (byte)CubeLookup(cube, bgra[bi+2], bgra[bi+1], bgra[bi+0]);
             }
             return indices;
         }
@@ -270,54 +359,51 @@ namespace PluginScreenshot
         }
 
         /// <summary>
-        /// Writes one GIF frame with a local colour table sized to match the palette.
-        /// The table size, packed byte, and LZW minimum code size are all derived
-        /// from <c>palette.Length</c> so reduced palettes (e.g. 64 colours) produce
-        /// correctly-formed, smaller GIF blocks.
+        /// Writes one GIF frame with transparency and "do not dispose" disposal.
+        /// This is the optimised path: unchanged pixels are already set to transpIdx
+        /// by the caller; the GCE enables transparency so those pixels show through
+        /// from the previous frame, and LZW sees long runs of the same index.
         /// </summary>
-        internal static void WriteGifFrameInternal(BinaryWriter bw, byte[] indices,
-                                                   Color[] palette, int w, int h, int delayCs)
+        internal static void WriteGifFrameWithTransparency(
+            BinaryWriter bw, byte[] indices, Color[] palette,
+            int w, int h, int delayCs, int transpIdx)
         {
-            // Determine the smallest power-of-two colour table that fits the palette.
-            // GIF spec: color table size N means 2^(N+1) entries; N is 0-7 (2 to 256 entries).
-            int paletteSize  = palette.Length;          // e.g. 64, 128, 256
-            int tableN       = 0;                       // color table size field (0..7)
-            int tableEntries = 2;                       // actual entries written = 2^(tableN+1)
-            while (tableEntries < paletteSize && tableN < 7)
+            int tableN       = 0;
+            int tableEntries = 2;
+            while (tableEntries < palette.Length && tableN < 7)
             {
                 tableN++;
                 tableEntries = 1 << (tableN + 1);
             }
-            int lzwMinCode = tableN + 1;                // LZW minimum code size
-            if (lzwMinCode < 2) lzwMinCode = 2;         // GIF spec minimum
+            int lzwMinCode = Math.Max(2, tableN + 1);
 
             // Graphic Control Extension
             bw.Write((byte)0x21); bw.Write((byte)0xF9);
             bw.Write((byte)4);
-            bw.Write((byte)0x00);                       // dispose=0, no transparency
+            // Packed: disposal=1 (do not dispose), bits 3-5 = 001 → 0x04
+            // Transparency flag = bit 0 → 0x01
+            // Combined: 0x04 | 0x01 = 0x05
+            bw.Write((byte)0x05);
             WriteU16Internal(bw, (ushort)delayCs);
-            bw.Write((byte)0);                          // transparent colour index (unused)
-            bw.Write((byte)0);                          // block terminator
+            bw.Write((byte)transpIdx); // transparent colour index
+            bw.Write((byte)0);         // block terminator
 
             // Image Descriptor
             bw.Write((byte)0x2C);
             WriteU16Internal(bw, 0); WriteU16Internal(bw, 0); // left, top
             WriteU16Internal(bw, (ushort)w);
             WriteU16Internal(bw, (ushort)h);
-            // Packed byte: Local CT flag=1, not interlaced, size field = tableN
-            bw.Write((byte)(0x80 | tableN));
+            bw.Write((byte)(0x80 | tableN)); // local colour table
 
-            // Local Colour Table — exactly tableEntries × 3 bytes
+            // Local Colour Table
             for (int i = 0; i < tableEntries; i++)
             {
                 Color c = (i < palette.Length) ? palette[i] : Color.Black;
                 bw.Write(c.R); bw.Write(c.G); bw.Write(c.B);
             }
 
-            // LZW minimum code size
             bw.Write((byte)lzwMinCode);
 
-            // LZW-encode and write in 255-byte sub-blocks
             byte[] lzw = LzwEncoder.Encode(indices, lzwMinCode);
             int pos = 0;
             while (pos < lzw.Length)
@@ -327,7 +413,47 @@ namespace PluginScreenshot
                 bw.Write(lzw, pos, blockLen);
                 pos += blockLen;
             }
-            bw.Write((byte)0); // block terminator
+            bw.Write((byte)0);
+        }
+
+        /// <summary>Legacy overload for callers that don't use transparency.</summary>
+        internal static void WriteGifFrameInternal(BinaryWriter bw, byte[] indices,
+                                                   Color[] palette, int w, int h, int delayCs)
+        {
+            int tableN = 0, tableEntries = 2;
+            while (tableEntries < palette.Length && tableN < 7)
+            { tableN++; tableEntries = 1 << (tableN + 1); }
+            int lzwMinCode = Math.Max(2, tableN + 1);
+
+            bw.Write((byte)0x21); bw.Write((byte)0xF9);
+            bw.Write((byte)4);
+            bw.Write((byte)0x00); // no transparency, no disposal
+            WriteU16Internal(bw, (ushort)delayCs);
+            bw.Write((byte)0); bw.Write((byte)0);
+
+            bw.Write((byte)0x2C);
+            WriteU16Internal(bw, 0); WriteU16Internal(bw, 0);
+            WriteU16Internal(bw, (ushort)w);
+            WriteU16Internal(bw, (ushort)h);
+            bw.Write((byte)(0x80 | tableN));
+
+            for (int i = 0; i < tableEntries; i++)
+            {
+                Color c = (i < palette.Length) ? palette[i] : Color.Black;
+                bw.Write(c.R); bw.Write(c.G); bw.Write(c.B);
+            }
+
+            bw.Write((byte)lzwMinCode);
+            byte[] lzw = LzwEncoder.Encode(indices, lzwMinCode);
+            int pos = 0;
+            while (pos < lzw.Length)
+            {
+                int bl = Math.Min(255, lzw.Length - pos);
+                bw.Write((byte)bl);
+                bw.Write(lzw, pos, bl);
+                pos += bl;
+            }
+            bw.Write((byte)0);
         }
     }
 
@@ -337,12 +463,43 @@ namespace PluginScreenshot
     internal static class MediaCutQuantizer
     {
         /// <summary>
-        /// Builds an optimal palette of <paramref name="maxColors"/> colours.
+        /// Builds a global palette sampled from ALL frames combined.
+        /// This ensures the same pixel always maps to the same index across frames,
+        /// which is the prerequisite for transparent-pixel delta encoding.
         /// </summary>
-        /// <param name="bgra">Raw BGRA pixel data.</param>
-        /// <param name="pixelCount">Total number of pixels.</param>
-        /// <param name="maxColors">Palette size (should be a power of 2, 2–256).</param>
-        /// <param name="maxSamples">Maximum pixels to sample for accuracy vs speed.</param>
+        public static Color[] BuildGlobal(IList<byte[]> bgraFrames, int pixelsPerFrame,
+                                          int maxColors, int maxSamplesTotal)
+        {
+            // Distribute sampling budget evenly across frames
+            int framesCount      = bgraFrames.Count;
+            int samplesPerFrame  = Math.Max(1, maxSamplesTotal / framesCount);
+
+            // Combine samples from all frames into one flat array
+            // Rough upper bound: samplesPerFrame * framesCount * 3
+            int capacity = samplesPerFrame * framesCount * 3;
+            int[] flat   = new int[capacity];
+            int   si     = 0;
+
+            foreach (byte[] bgra in bgraFrames)
+            {
+                int sampleCount = Math.Min(pixelsPerFrame, samplesPerFrame);
+                int step        = pixelsPerFrame / sampleCount;
+                if (step < 1) step = 1;
+
+                for (int i = 0; i < pixelsPerFrame && si < capacity - 2; i += step)
+                {
+                    int bi = i * 4;
+                    flat[si++] = bgra[bi + 2]; // R
+                    flat[si++] = bgra[bi + 1]; // G
+                    flat[si++] = bgra[bi + 0]; // B
+                }
+            }
+
+            int actualSamples = si / 3;
+            return RunMedianCut(flat, actualSamples, maxColors);
+        }
+
+        /// <summary>Builds a palette from a single frame's BGRA data.</summary>
         public static Color[] Build(byte[] bgra, int pixelCount,
                                     int maxColors, int maxSamples)
         {
@@ -352,15 +509,18 @@ namespace PluginScreenshot
 
             int[] flat = new int[sampleCount * 3];
             int   si   = 0;
-            for (int i = 0; i < pixelCount && si < sampleCount * 3; i += step)
+            for (int i = 0; i < pixelCount && si < flat.Length - 2; i += step)
             {
                 int bi = i * 4;
-                flat[si++] = bgra[bi + 2]; // R
-                flat[si++] = bgra[bi + 1]; // G
-                flat[si++] = bgra[bi + 0]; // B
+                flat[si++] = bgra[bi + 2];
+                flat[si++] = bgra[bi + 1];
+                flat[si++] = bgra[bi + 0];
             }
-            int actualSamples = si / 3;
+            return RunMedianCut(flat, si / 3, maxColors);
+        }
 
+        private static Color[] RunMedianCut(int[] flat, int actualSamples, int maxColors)
+        {
             var buckets = new List<(int start, int len)> { (0, actualSamples) };
             while (buckets.Count < maxColors)
             {
@@ -373,8 +533,9 @@ namespace PluginScreenshot
 
             var palette = new Color[maxColors];
             for (int i = 0; i < maxColors; i++)
-                palette[i] = i < buckets.Count ? Mean(flat, buckets[i].start, buckets[i].len)
-                                               : Color.Black;
+                palette[i] = i < buckets.Count
+                    ? Mean(flat, buckets[i].start, buckets[i].len)
+                    : Color.Black;
             return palette;
         }
 
@@ -392,12 +553,12 @@ namespace PluginScreenshot
         private static int Range(int[] flat, int start, int len)
         {
             int minR=255,maxR=0,minG=255,maxG=0,minB=255,maxB=0;
-            for (int i = start * 3, end = (start + len) * 3; i < end; i += 3)
+            for (int i = start*3, end = (start+len)*3; i < end; i += 3)
             {
                 int r=flat[i], g=flat[i+1], b=flat[i+2];
-                if (r < minR) minR=r; if (r > maxR) maxR=r;
-                if (g < minG) minG=g; if (g > maxG) maxG=g;
-                if (b < minB) minB=b; if (b > maxB) maxB=b;
+                if (r<minR)minR=r; if (r>maxR)maxR=r;
+                if (g<minG)minG=g; if (g>maxG)maxG=g;
+                if (b<minB)minB=b; if (b>maxB)maxB=b;
             }
             return Math.Max(maxR-minR, Math.Max(maxG-minG, maxB-minB));
         }
@@ -406,45 +567,42 @@ namespace PluginScreenshot
                                         List<(int start, int len)> output)
         {
             int minR=255,maxR=0,minG=255,maxG=0,minB=255,maxB=0;
-            for (int i = start*3, end = (start+len)*3; i < end; i += 3)
+            for (int i=start*3, end=(start+len)*3; i<end; i+=3)
             {
                 int r=flat[i],g=flat[i+1],b=flat[i+2];
-                if (r<minR)minR=r; if (r>maxR)maxR=r;
-                if (g<minG)minG=g; if (g>maxG)maxG=g;
-                if (b<minB)minB=b; if (b>maxB)maxB=b;
+                if(r<minR)minR=r; if(r>maxR)maxR=r;
+                if(g<minG)minG=g; if(g>maxG)maxG=g;
+                if(b<minB)minB=b; if(b>maxB)maxB=b;
             }
             int rR=maxR-minR, rG=maxG-minG, rB=maxB-minB;
             int ch = (rG>=rR && rG>=rB) ? 1 : (rB>=rR && rB>=rG) ? 2 : 0;
-            PartialSort(flat, start*3, (start+len)*3, ch, len);
+            PartialSort(flat, start*3, (start+len)*3, ch);
             int mid = len / 2;
             output.Add((start,       mid));
             output.Add((start + mid, len - mid));
         }
 
-        private static void PartialSort(int[] flat, int s, int e, int ch, int len)
+        private static void PartialSort(int[] flat, int s, int e, int ch)
         {
-            int n   = (e - s) / 3;
+            int n = (e - s) / 3;
             int gap = 1;
             while (gap < n / 3) gap = gap * 3 + 1;
             while (gap >= 1)
             {
                 for (int i = gap; i < n; i++)
                 {
-                    int iBase = s + i * 3;
+                    int iBase = s + i*3;
                     int iVal  = flat[iBase + ch];
-                    int ir = flat[iBase], ig = flat[iBase+1], ib = flat[iBase+2];
+                    int ir=flat[iBase], ig=flat[iBase+1], ib=flat[iBase+2];
                     int j = i;
-                    while (j >= gap && flat[s + (j-gap)*3 + ch] > iVal)
+                    while (j >= gap && flat[s+(j-gap)*3+ch] > iVal)
                     {
-                        int jBase = s + j * 3;
-                        int pBase = s + (j - gap) * 3;
-                        flat[jBase]   = flat[pBase];
-                        flat[jBase+1] = flat[pBase+1];
-                        flat[jBase+2] = flat[pBase+2];
+                        int jBase=s+j*3, pBase=s+(j-gap)*3;
+                        flat[jBase]=flat[pBase]; flat[jBase+1]=flat[pBase+1]; flat[jBase+2]=flat[pBase+2];
                         j -= gap;
                     }
-                    int tBase = s + j * 3;
-                    flat[tBase] = ir; flat[tBase+1] = ig; flat[tBase+2] = ib;
+                    int tBase = s+j*3;
+                    flat[tBase]=ir; flat[tBase+1]=ig; flat[tBase+2]=ib;
                 }
                 gap /= 3;
             }
@@ -454,59 +612,85 @@ namespace PluginScreenshot
         {
             if (len == 0) return Color.Black;
             long r=0, g=0, b=0;
-            for (int i = start*3, end = (start+len)*3; i < end; i += 3)
-            { r += flat[i]; g += flat[i+1]; b += flat[i+2]; }
-            return Color.FromArgb((int)(r/len), (int)(g/len), (int)(b/len));
+            for (int i=start*3, end=(start+len)*3; i<end; i+=3)
+            { r+=flat[i]; g+=flat[i+1]; b+=flat[i+2]; }
+            return Color.FromArgb((int)(r/len),(int)(g/len),(int)(b/len));
         }
     }
 
     // ======================================================================
     //  GifStreamEncoder — streaming (encode-while-record) variant
+    //
+    //  Streaming cannot use a true global palette (all frames not available
+    //  at Open time). Strategy: buffer the first PALETTE_SAMPLE_FRAMES frames
+    //  in memory, build the global palette from those, then write the header
+    //  and begin encoding. Frames after that use the same global palette.
+    //  This adds a small latency equal to the sample window but keeps memory
+    //  bounded and avoids per-frame palette flicker.
     // ======================================================================
     internal sealed class GifStreamEncoder : IDisposable
     {
+        // Number of frames buffered before the global palette is built.
+        // At 10fps this is 0.5 seconds of buffering before the first byte is written.
+        private const int PALETTE_SAMPLE_FRAMES = 5;
+
         private FileStream        _fs;
         private BinaryWriter      _bw;
         private string            _outputPath;
         private int               _w, _h;
         private int               _frameCount;
+        private int               _skippedFrames;
         private bool              _closed;
         private bool              _cancelled;
         private GifEncoderQuality _quality;
+        private int               _compression;
+
+        // Global palette (set once after sample frames are collected)
+        private Color[] _palette;
+        private byte[]  _cube;
+        private int     _transpIdx;
+
+        // Pre-palette buffer: frames arriving before the palette is built
+        private readonly List<GifFrame> _sampleBuffer = new List<GifFrame>();
+        private bool _paletteReady = false;
+
+        // Delta state
+        private byte[] _prevIndices;
+        private int    _pendingCs;
 
         public bool IsOpen => _fs != null && !_closed && !_cancelled;
 
         public void Open(string outputPath, int width, int height,
-                         GifEncoderQuality quality)
+                         GifEncoderQuality quality, int compression = 2)
         {
             if (_fs != null) throw new InvalidOperationException("GifStreamEncoder already open.");
 
-            _outputPath = outputPath;
-            _w          = width;
-            _h          = height;
-            _quality    = quality;
-            _frameCount = 0;
-            _closed     = false;
-            _cancelled  = false;
+            _outputPath    = outputPath;
+            _w             = width;
+            _h             = height;
+            _quality       = quality;
+            _compression   = compression;
+            _frameCount    = 0;
+            _skippedFrames = 0;
+            _closed        = false;
+            _cancelled     = false;
+            _prevIndices   = null;
+            _pendingCs     = 0;
+            _paletteReady  = false;
+            _sampleBuffer.Clear();
 
             string dir = Path.GetDirectoryName(outputPath);
             if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
                 Directory.CreateDirectory(dir);
 
+            // File is opened but we don't write the header yet —
+            // we need the global palette first.
             _fs = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.Read);
             _bw = new BinaryWriter(_fs);
 
-            _bw.Write(new byte[] { 0x47, 0x49, 0x46, 0x38, 0x39, 0x61 });
-            AnimatedGifEncoder.WriteU16Internal(_bw, (ushort)_w);
-            AnimatedGifEncoder.WriteU16Internal(_bw, (ushort)_h);
-            _bw.Write((byte)0x00);
-            _bw.Write((byte)0x00);
-            _bw.Write((byte)0x00);
-            AnimatedGifEncoder.WriteNetscapeLoopInternal(_bw, 0);
-
             Logger.Log($"GifStreamEncoder.Open: {_w}x{_h}, " +
                        $"colors={quality.Colors}, samples={quality.MaxSamples}, " +
-                       $"dither={quality.Dither}, path={outputPath}");
+                       $"dither={quality.Dither}, compression={compression}, path={outputPath}");
         }
 
         public void AddFrame(GifFrame frame)
@@ -515,41 +699,158 @@ namespace PluginScreenshot
 
             try
             {
-                Bitmap  src     = frame.Bitmap;
-                byte[]  bgra    = AnimatedGifEncoder.ReadBgraInternal(src, _w, _h);
-                Color[] palette = MediaCutQuantizer.Build(bgra, _w * _h,
-                                                          _quality.Colors,
-                                                          _quality.MaxSamples);
-                byte[]  cube    = AnimatedGifEncoder.BuildLookupCubeInternal(palette);
-                byte[]  indices = _quality.Dither
-                    ? AnimatedGifEncoder.DitherInternal(bgra, _w, _h, palette, cube)
-                    : QuantizeNoDitherInternal(bgra, _w * _h, cube);
+                if (!_paletteReady)
+                {
+                    // Buffer frames until we have enough to build a good palette
+                    _sampleBuffer.Add(frame); // keep bitmap alive — dispose later
 
-                AnimatedGifEncoder.WriteGifFrameInternal(_bw, indices, palette,
-                                                         _w, _h, frame.DelayCs);
+                    if (_sampleBuffer.Count >= PALETTE_SAMPLE_FRAMES)
+                        FlushSampleBuffer();
+
+                    return; // don't dispose — stored in sample buffer
+                }
+
+                // Normal path: palette is ready, encode with delta
+                byte[] bgra    = AnimatedGifEncoder.ReadBgraInternal(frame.Bitmap, _w, _h);
+                int    delayCs = frame.DelayCs;
+
+                byte[] indices = _quality.Dither
+                    ? AnimatedGifEncoder.DitherInternal(bgra, _w, _h, _palette, _cube, _transpIdx)
+                    : QuantizeNoDitherInternal(bgra, _w * _h, _cube);
+
+                // Deduplication
+                if (_compression <= 2 && _prevIndices != null &&
+                    AnimatedGifEncoder.BytesEqual(indices, _prevIndices))
+                {
+                    _pendingCs += delayCs;
+                    _skippedFrames++;
+                    return;
+                }
+
+                int effectiveCs = delayCs + _pendingCs;
+                _pendingCs = 0;
+
+                byte[] delta = (_prevIndices != null)
+                    ? ApplyDelta(indices, _prevIndices, _transpIdx)
+                    : indices;
+
+                AnimatedGifEncoder.WriteGifFrameWithTransparency(
+                    _bw, delta, _palette, _w, _h, effectiveCs, _transpIdx);
                 _bw.Flush();
+
+                _prevIndices = indices;
                 _frameCount++;
             }
             catch (Exception ex)
             {
-                Logger.Log($"GifStreamEncoder.AddFrame: error on frame {_frameCount} — {ex.Message}");
+                Logger.Log($"GifStreamEncoder.AddFrame: error — {ex.Message}");
             }
             finally
             {
-                frame?.Bitmap?.Dispose();
+                if (_paletteReady) // only dispose if not stored in sample buffer
+                    frame?.Bitmap?.Dispose();
             }
         }
 
-        // Inline no-dither quantise used by AddFrame to avoid a static call.
+        /// <summary>
+        /// Called once PALETTE_SAMPLE_FRAMES have been buffered.
+        /// Builds the global palette, writes the GIF header, then encodes
+        /// all buffered frames before switching to streaming mode.
+        /// </summary>
+        private void FlushSampleBuffer()
+        {
+            try
+            {
+                // Read all buffered frames' BGRA data
+                var bgraList = new List<byte[]>(_sampleBuffer.Count);
+                foreach (var f in _sampleBuffer)
+                    bgraList.Add(AnimatedGifEncoder.ReadBgraInternal(f.Bitmap, _w, _h));
+
+                // Build global palette
+                int realColors = _quality.Colors;
+                _transpIdx     = realColors - 1;
+                Color[] raw    = MediaCutQuantizer.BuildGlobal(
+                                     bgraList, _w * _h,
+                                     realColors - 1,
+                                     _quality.MaxSamples);
+
+                _palette = new Color[realColors];
+                raw.CopyTo(_palette, 0);
+                _palette[_transpIdx] = Color.Black;
+
+                _cube = AnimatedGifEncoder.BuildLookupCubeInternal(_palette, _transpIdx);
+
+                Logger.Log($"GifStreamEncoder: global palette built from {_sampleBuffer.Count} " +
+                           $"sample frames, transpIdx={_transpIdx}");
+
+                // Write GIF header now that we have dimensions and palette
+                _bw.Write(new byte[] { 0x47, 0x49, 0x46, 0x38, 0x39, 0x61 });
+                AnimatedGifEncoder.WriteU16Internal(_bw, (ushort)_w);
+                AnimatedGifEncoder.WriteU16Internal(_bw, (ushort)_h);
+                _bw.Write((byte)0x00);
+                _bw.Write((byte)0x00);
+                _bw.Write((byte)0x00);
+                AnimatedGifEncoder.WriteNetscapeLoopInternal(_bw, 0);
+
+                // Encode all buffered frames
+                for (int i = 0; i < bgraList.Count; i++)
+                {
+                    byte[] bgra    = bgraList[i];
+                    int    delayCs = _sampleBuffer[i].DelayCs;
+
+                    byte[] indices = _quality.Dither
+                        ? AnimatedGifEncoder.DitherInternal(bgra, _w, _h, _palette, _cube, _transpIdx)
+                        : QuantizeNoDitherInternal(bgra, _w * _h, _cube);
+
+                    if (_compression <= 2 && _prevIndices != null &&
+                        AnimatedGifEncoder.BytesEqual(indices, _prevIndices))
+                    {
+                        _pendingCs += delayCs;
+                        _skippedFrames++;
+                        continue;
+                    }
+
+                    int effectiveCs = delayCs + _pendingCs;
+                    _pendingCs = 0;
+
+                    byte[] delta = (_prevIndices != null)
+                        ? ApplyDelta(indices, _prevIndices, _transpIdx)
+                        : indices;
+
+                    AnimatedGifEncoder.WriteGifFrameWithTransparency(
+                        _bw, delta, _palette, _w, _h, effectiveCs, _transpIdx);
+                    _bw.Flush();
+
+                    _prevIndices = indices;
+                    _frameCount++;
+                }
+
+                _paletteReady = true;
+            }
+            finally
+            {
+                foreach (var f in _sampleBuffer)
+                    f?.Bitmap?.Dispose();
+                _sampleBuffer.Clear();
+            }
+        }
+
+        private static byte[] ApplyDelta(byte[] current, byte[] previous, int transpIdx)
+        {
+            byte[] delta = new byte[current.Length];
+            byte   t     = (byte)transpIdx;
+            for (int i = 0; i < current.Length; i++)
+                delta[i] = (current[i] == previous[i]) ? t : current[i];
+            return delta;
+        }
+
         private static byte[] QuantizeNoDitherInternal(byte[] bgra, int pixels, byte[] cube)
         {
             byte[] idx = new byte[pixels];
             for (int i = 0; i < pixels; i++)
             {
                 int bi = i * 4;
-                idx[i] = (byte)(cube[((bgra[bi+2] >> 3) << 10) |
-                                     ((bgra[bi+1] >> 3) << 5)  |
-                                      (bgra[bi+0] >> 3)]);
+                idx[i] = (byte)(cube[((bgra[bi+2]>>3)<<10)|((bgra[bi+1]>>3)<<5)|(bgra[bi+0]>>3)]);
             }
             return idx;
         }
@@ -560,9 +861,14 @@ namespace PluginScreenshot
             _closed = true;
             try
             {
-                _bw.Write((byte)0x3B); // GIF trailer
+                // If recording was very short and sample buffer never flushed
+                if (!_paletteReady && _sampleBuffer.Count > 0)
+                    FlushSampleBuffer();
+
+                _bw.Write((byte)0x3B);
                 _bw.Flush();
-                Logger.Log($"GifStreamEncoder.Close: {_frameCount} frames written → {_outputPath}");
+                Logger.Log($"GifStreamEncoder.Close: {_frameCount} frames written, " +
+                           $"{_skippedFrames} skipped → {_outputPath}");
             }
             catch (Exception ex)
             {
@@ -575,7 +881,9 @@ namespace PluginScreenshot
         {
             if (_closed || _cancelled || _fs == null) return;
             _cancelled = true;
-            Logger.Log($"GifStreamEncoder.Cancel: discarding partial file ({_frameCount} frames) → {_outputPath}");
+            foreach (var f in _sampleBuffer) f?.Bitmap?.Dispose();
+            _sampleBuffer.Clear();
+            Logger.Log($"GifStreamEncoder.Cancel: discarding → {_outputPath}");
             DisposeStream();
             try
             {
@@ -598,29 +906,25 @@ namespace PluginScreenshot
         {
             try { _bw?.Dispose(); } catch { }
             try { _fs?.Dispose(); } catch { }
-            _bw = null;
-            _fs = null;
+            _bw = null; _fs = null;
         }
     }
 
     // ======================================================================
-    //  LzwEncoder — GIF-compatible LZW (LSB-first)
+    //  LzwEncoder — GIF-compatible LZW (LSB-first, unchanged)
     // ======================================================================
     internal static class LzwEncoder
     {
         public static byte[] Encode(byte[] indices, int minCodeSize)
         {
             if (minCodeSize < 2) minCodeSize = 2;
-
             int clearCode = 1 << minCodeSize;
             int eoiCode   = clearCode + 1;
-
-            var output   = new List<byte>(indices.Length / 2 + 64);
-            int bitBuf   = 0, bitLen = 0;
+            var output    = new List<byte>(indices.Length / 2 + 64);
+            int bitBuf=0, bitLen=0;
             int codeSize = minCodeSize + 1;
             int nextCode = eoiCode + 1;
             int maxCode  = 1 << codeSize;
-
             const int TABLE_SIZE = 5003;
             int[] hashKey  = new int[TABLE_SIZE];
             int[] hashCode = new int[TABLE_SIZE];
@@ -628,76 +932,42 @@ namespace PluginScreenshot
 
             void Emit(int code)
             {
-                bitBuf |= code << bitLen;
-                bitLen += codeSize;
-                while (bitLen >= 8)
-                {
-                    output.Add((byte)(bitBuf & 0xFF));
-                    bitBuf >>= 8;
-                    bitLen  -= 8;
-                }
+                bitBuf |= code << bitLen; bitLen += codeSize;
+                while (bitLen >= 8) { output.Add((byte)(bitBuf&0xFF)); bitBuf>>=8; bitLen-=8; }
             }
-
             void ResetTable()
             {
-                for (int i = 0; i < TABLE_SIZE; i++) hashKey[i] = -1;
-                codeSize = minCodeSize + 1;
-                nextCode = eoiCode + 1;
-                maxCode  = 1 << codeSize;
+                for (int i=0;i<TABLE_SIZE;i++) hashKey[i]=-1;
+                codeSize=minCodeSize+1; nextCode=eoiCode+1; maxCode=1<<codeSize;
             }
 
             Emit(clearCode);
-
-            if (indices.Length == 0)
-            {
-                Emit(eoiCode);
-                FlushBits(output, bitBuf, bitLen);
-                return output.ToArray();
-            }
+            if (indices.Length == 0) { Emit(eoiCode); FlushBits(output,bitBuf,bitLen); return output.ToArray(); }
 
             int prefix = indices[0];
             for (int i = 1; i < indices.Length; i++)
             {
                 int suffix = indices[i];
-                int key    = (prefix << 8) | suffix;
+                int key    = (prefix<<8)|suffix;
                 int slot   = key % TABLE_SIZE;
-
-                while (hashKey[slot] != -1 && hashKey[slot] != key)
-                    slot = (slot + 1) % TABLE_SIZE;
-
-                if (hashKey[slot] == key)
-                {
-                    prefix = hashCode[slot];
-                }
+                while (hashKey[slot]!=-1 && hashKey[slot]!=key) slot=(slot+1)%TABLE_SIZE;
+                if (hashKey[slot]==key) { prefix=hashCode[slot]; }
                 else
                 {
                     Emit(prefix);
-                    if (nextCode < 4096)
-                    {
-                        hashKey[slot]  = key;
-                        hashCode[slot] = nextCode++;
-                        if (nextCode > maxCode && codeSize < 12)
-                        { codeSize++; maxCode <<= 1; }
-                    }
-                    else
-                    {
-                        Emit(clearCode);
-                        ResetTable();
-                    }
-                    prefix = suffix;
+                    if (nextCode < 4096) { hashKey[slot]=key; hashCode[slot]=nextCode++; if(nextCode>maxCode&&codeSize<12){codeSize++;maxCode<<=1;} }
+                    else { Emit(clearCode); ResetTable(); }
+                    prefix=suffix;
                 }
             }
-
-            Emit(prefix);
-            Emit(eoiCode);
+            Emit(prefix); Emit(eoiCode);
             FlushBits(output, bitBuf, bitLen);
             return output.ToArray();
         }
 
         private static void FlushBits(List<byte> output, int bitBuf, int bitLen)
         {
-            while (bitLen > 0)
-            { output.Add((byte)(bitBuf & 0xFF)); bitBuf >>= 8; bitLen -= 8; }
+            while (bitLen>0) { output.Add((byte)(bitBuf&0xFF)); bitBuf>>=8; bitLen-=8; }
         }
     }
 }
