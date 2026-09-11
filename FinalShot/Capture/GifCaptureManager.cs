@@ -147,7 +147,7 @@ namespace PluginScreenshot
                 {
                     try
                     {
-                        Rectangle? region = GifSnapSelector.SelectRegion();
+                        Rectangle? region = GifSnapSelector.SelectRegion(settings);
                         if (region == null || region.Value.Width <= 0 || region.Value.Height <= 0)
                         {
                             Logger.Log("GifCaptureManager.StartRecording(Snap): selection cancelled.");
