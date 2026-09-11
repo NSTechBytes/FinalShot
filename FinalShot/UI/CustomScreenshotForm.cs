@@ -12,6 +12,9 @@ namespace PluginScreenshot
         private readonly Settings _settings;
         private readonly Action   _finishCallback;
 
+        // Desktop snapshot — shown dimmed; the hovered/selected region is shown undimmed.
+        private Bitmap _desktopSnapshot;
+
         // Drag-selection state
         private Point     _start;
         private Rectangle _selection;
@@ -61,16 +64,23 @@ namespace PluginScreenshot
             _settings       = settings;
             _finishCallback = finishCallback;
 
+            // Snapshot the desktop before the overlay appears so we can render
+            // the dimmed background and the undimmed highlighted region ourselves.
+            Rectangle screen = SystemInformation.VirtualScreen;
+            _desktopSnapshot = new Bitmap(screen.Width, screen.Height);
+            using (Graphics g = Graphics.FromImage(_desktopSnapshot))
+                g.CopyFromScreen(screen.Location, Point.Empty, screen.Size);
+
             DoubleBuffered  = true;
             FormBorderStyle = FormBorderStyle.None;
             ShowInTaskbar   = false;
-            Bounds          = SystemInformation.VirtualScreen;
-            BackColor       = Color.Black;
-            Opacity         = 0.5;
+            Bounds          = screen;
+            BackColor       = Color.FromArgb(1, 1, 1); // avoids TransparencyKey flicker
+            Opacity         = 1.0;                      // we paint everything manually
             TopMost         = true;
             Cursor          = Cursors.Cross;
             StartPosition   = FormStartPosition.Manual;
-            Location        = SystemInformation.VirtualScreen.Location;
+            Location        = screen.Location;
             KeyPreview      = true;
 
             Load      += OnFormLoad;
@@ -146,8 +156,6 @@ namespace PluginScreenshot
 
             if (_windowsLoaded && _hoveredWindow != null && _settings.DetectWindows)
             {
-                // A window is highlighted — wait for mouse-up to confirm.
-                // If the user drags more than 4 px, switch to free-select.
                 _pendingWindowCapture = true;
                 _dragging             = false;
             }
@@ -266,26 +274,30 @@ namespace PluginScreenshot
 
         private void OnPaint(object s, PaintEventArgs e)
         {
-            Graphics g = e.Graphics;
+            Graphics  g      = e.Graphics;
+            Rectangle client = ClientRectangle;
+
+            // 1. Dimmed desktop snapshot as the base layer.
+            g.DrawImage(_desktopSnapshot, 0, 0);
+            using (var dim = new SolidBrush(GifSnapSelector.DimColor))
+                g.FillRectangle(dim, client);
 
             // ---- Drag mode ----
             if (_dragging && _selection.Width > 1 && _selection.Height > 1)
             {
-                Rectangle sel    = _selection;
-                Rectangle client = new Rectangle(0, 0, Width, Height);
+                Rectangle sel = _selection;
 
-                // Semi-transparent blue fill inside the selection.
+                // Show undimmed desktop inside the selection.
+                g.DrawImage(_desktopSnapshot,
+                            new Rectangle(sel.X, sel.Y, sel.Width, sel.Height),
+                            sel, GraphicsUnit.Pixel);
+
+                // Blue fill + border + handles + label.
                 using (var fill = new SolidBrush(GifSnapSelector.SelectionFillColor))
                     g.FillRectangle(fill, sel);
-
-                // Solid blue border.
                 using (var pen = new Pen(GifSnapSelector.SelectionBorderColor, 2))
                     g.DrawRectangle(pen, sel.X, sel.Y, sel.Width - 1, sel.Height - 1);
-
-                // Corner handles.
                 GifSnapSelector.DrawCornerHandles(g, sel);
-
-                // Size label.
                 GifSnapSelector.DrawSizeLabel(g, sel, client);
                 return;
             }
@@ -300,34 +312,46 @@ namespace PluginScreenshot
                 _hoveredWindow.Rectangle.Width,
                 _hoveredWindow.Rectangle.Height);
 
-            Rectangle active = Rectangle.Intersect(formRect, new Rectangle(0, 0, Width, Height));
+            Rectangle active = Rectangle.Intersect(formRect, client);
             if (active.Width <= 0 || active.Height <= 0) return;
 
+            // Show undimmed desktop inside the hovered region.
+            g.DrawImage(_desktopSnapshot,
+                        new Rectangle(active.X, active.Y, active.Width, active.Height),
+                        active, GraphicsUnit.Pixel);
+
             // Extra dim on the four surrounding bands.
-            using (var dimBrush = new SolidBrush(GifSnapSelector.DimColor))
+            using (var band = new SolidBrush(GifSnapSelector.DimColor))
             {
-                if (active.Top    > 0)      g.FillRectangle(dimBrush, 0,            0,            Width,                   active.Top);
-                if (active.Left   > 0)      g.FillRectangle(dimBrush, 0,            active.Top,   active.Left,             active.Height);
-                if (active.Right  < Width)  g.FillRectangle(dimBrush, active.Right, active.Top,   Width - active.Right,    active.Height);
-                if (active.Bottom < Height) g.FillRectangle(dimBrush, 0,            active.Bottom, Width,                  Height - active.Bottom);
+                if (active.Top    > 0)            g.FillRectangle(band, 0,            0,             client.Width,                active.Top);
+                if (active.Left   > 0)            g.FillRectangle(band, 0,            active.Top,    active.Left,                 active.Height);
+                if (active.Right  < client.Width)  g.FillRectangle(band, active.Right, active.Top,    client.Width  - active.Right, active.Height);
+                if (active.Bottom < client.Height) g.FillRectangle(band, 0,            active.Bottom, client.Width,                client.Height - active.Bottom);
             }
 
-            // Semi-transparent blue fill inside the hovered window.
+            // Blue fill + border + handles.
             using (var fill = new SolidBrush(GifSnapSelector.SelectionFillColor))
                 g.FillRectangle(fill, active);
-
-            // Solid blue border.
-            using (var accentPen = new Pen(GifSnapSelector.SelectionBorderColor, 2))
-                g.DrawRectangle(accentPen, active.X, active.Y, active.Width - 1, active.Height - 1);
-
-            // Corner handles.
+            using (var pen = new Pen(GifSnapSelector.SelectionBorderColor, 2))
+                g.DrawRectangle(pen, active.X, active.Y, active.Width - 1, active.Height - 1);
             GifSnapSelector.DrawCornerHandles(g, active);
 
-            // Size label (uses window pixel size, not form-local size).
+            // Size label uses the actual window pixel dimensions.
             Rectangle sizeRect = new Rectangle(active.X, active.Y,
                                                _hoveredWindow.Rectangle.Width,
                                                _hoveredWindow.Rectangle.Height);
-            GifSnapSelector.DrawSizeLabel(g, sizeRect, new Rectangle(0, 0, Width, Height));
+            GifSnapSelector.DrawSizeLabel(g, sizeRect, client);
+        }
+
+        // ------------------------------------------------------------------ //
+        //  Cleanup
+        // ------------------------------------------------------------------ //
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+                _desktopSnapshot?.Dispose();
+            base.Dispose(disposing);
         }
     }
 }
