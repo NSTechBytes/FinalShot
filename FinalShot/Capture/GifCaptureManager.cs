@@ -106,7 +106,7 @@ namespace PluginScreenshot
                     // --- Streaming mode ---
                     // Open the GIF stream immediately so the encoder thread can
                     // start writing frames the moment they arrive in the buffer.
-                    var enc = new GifStreamEncoder(settings.GifMaxWidth);
+                    var enc = new GifStreamEncoder();
                     Rectangle bounds = System.Windows.Forms.SystemInformation.VirtualScreen;
                     enc.Open(settings.GifSavePath, bounds.Width, bounds.Height,
                              1000 / settings.GifFPS);
@@ -442,7 +442,6 @@ namespace PluginScreenshot
                             return;
                         }
 
-                        AnimatedGifEncoder.GifMaxWidth = settings.GifMaxWidth;
                         AnimatedGifEncoder.Encode(frames, 1000 / settings.GifFPS, settings.GifSavePath);
                         success = true;
                     }

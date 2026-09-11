@@ -37,13 +37,6 @@ namespace PluginScreenshot
         public int GifDuration { get; private set; }
 
         /// <summary>
-        /// Maximum output width in pixels. Frames wider than this are scaled down
-        /// proportionally before GIF encoding to reduce file size and encode time.
-        /// Default 800. Set to a larger value (e.g. 1920) to preserve full resolution.
-        /// </summary>
-        public int GifMaxWidth { get; private set; }
-
-        /// <summary>
         /// Bang executed the moment GIF recording starts (capture thread launched).
         /// Useful for turning a skin button red, showing a "● REC" label, etc.
         /// Example: [!SetOption GifToggle_BackGround This "Fill Color 120,30,30,200"][!UpdateMeter *][!Redraw]
@@ -107,9 +100,6 @@ namespace PluginScreenshot
             if (GifFPS > 30) GifFPS = 30;
             GifDuration = api.ReadInt("GifDuration", 0);
             if (GifDuration < 0) GifDuration = 0;
-            GifMaxWidth = api.ReadInt("GifMaxWidth", 800);
-            if (GifMaxWidth < 100)  GifMaxWidth = 100;
-            if (GifMaxWidth > 3840) GifMaxWidth = 3840;
 
             GifStartAction      = api.ReadString("GifStartAction",      "");
             GifCancelAction     = api.ReadString("GifCancelAction",     "");
