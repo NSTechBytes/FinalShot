@@ -6,15 +6,15 @@ using System.Windows.Forms;
 namespace PluginScreenshot
 {
     /// <summary>
-    /// A borderless overlay shown during GIF recording.
+    /// Borderless overlay shown during GIF recording.
     ///
     /// Layout:
-    ///   • A dashed blue border drawn *outside* the capture region so no overlay
-    ///     pixel ever falls inside the area being recorded.
-    ///   • The interior of the capture region is a transparent hole — fully
-    ///     click-through and invisible so recording is unaffected.
-    ///   • A dark toolbar anchored below the region with Stop, Pause/Resume,
-    ///     Abort buttons and a live elapsed timer that pauses when recording pauses.
+    ///   • Dashed blue border drawn OUTSIDE the capture region (no pixel inside).
+    ///   • Transparent hole over the capture area — fully click-through.
+    ///   • Full-width flat toolbar flush below the border:
+    ///       [  Stop  |  Pause  |  Abort  |  00:00:00  ]
+    ///     Each column is equal width, separated by 1px dividers.
+    ///     A thin blue accent line runs across the top of the toolbar.
     /// </summary>
     internal static class GifRecordingOverlay
     {
@@ -65,7 +65,7 @@ namespace PluginScreenshot
             finally { _form = null; }
         }
 
-        /// <summary>Syncs the pause state (button label + timer) from any thread.</summary>
+        /// <summary>Syncs pause state (button label + timer freeze) from any thread.</summary>
         public static void SetPaused(bool paused)
         {
             try
@@ -88,58 +88,50 @@ namespace PluginScreenshot
 
         internal sealed class OverlayForm : Form
         {
-            // ---- style ----
-            private static readonly Color BorderColor   = Color.FromArgb(255,  0, 120, 212);
-            private static readonly Color ToolbarBg     = Color.FromArgb(230, 18,  18,  18);
-            private static readonly Color BtnNormal     = Color.FromArgb(255, 55,  55,  55);
-            private static readonly Color BtnHover      = Color.FromArgb(255, 85,  85,  85);
-            private static readonly Color BtnStop       = Color.FromArgb(255,180,  40,  40);
-            private static readonly Color BtnStopHover  = Color.FromArgb(255,210,  60,  60);
-            private static readonly Color BtnAbort      = Color.FromArgb(255,120,  38,  38);
-            private static readonly Color BtnAbortHover = Color.FromArgb(255,155,  55,  55);
-            private static readonly Color TextColor     = Color.White;
-            private static readonly Color TimerColor    = Color.FromArgb(255,180, 220, 255);
+            // ---------------------------------------------------------------- //
+            //  Style — matches the screenshot exactly
+            // ---------------------------------------------------------------- //
 
-            // Border drawn OUTSIDE the capture rect — these pixels are never captured.
-            private const int BorderW    = 2;   // pen width
-            private const int BorderGap  = 1;   // gap between capture edge and border pen centre
-                                                 // total outside offset = BorderGap + BorderW/2
+            // Border
+            private static readonly Color BorderColor  = Color.FromArgb(255,  0, 120, 212); // #0078D4
+            private const int BorderW   = 2;
+            private const int BorderGap = 1; // pixels between capture edge and innermost border pixel
 
             // Toolbar
-            private const int ToolbarH   = 36;
-            private const int ToolbarGap  = 4;   // gap between border bottom and toolbar top
-            private const int BtnW        = 72;
-            private const int BtnH        = 26;
-            private const int BtnSpacing  = 8;
-            private const int TimerW      = 94;
+            private static readonly Color ToolbarBg      = Color.FromArgb(255, 16,  18,  22);  // near-black
+            private static readonly Color AccentLine      = Color.FromArgb(255,  0, 120, 212);  // blue top line
+            private static readonly Color DividerColor    = Color.FromArgb(255, 40,  42,  48);  // column divider
+            private static readonly Color TextNormal      = Color.FromArgb(255, 220, 220, 220); // off-white
+            private static readonly Color TextHover       = Color.White;
+            private static readonly Color ColHoverBg      = Color.FromArgb(255, 35,  38,  45);  // subtle highlight
+            private static readonly Color TimerText       = Color.FromArgb(255, 180, 215, 255); // light blue
 
-            // ---- capture region (screen coords) ----
+            private const int ToolbarH    = 32;  // height of the toolbar
+            private const int AccentLineH = 2;   // blue line at top of toolbar
+            private const int Cols        = 4;   // Stop | Pause | Abort | Timer
+
+            // ---------------------------------------------------------------- //
+            //  State
+            // ---------------------------------------------------------------- //
+
             private readonly Rectangle _region;
+            private readonly Action    _onStop, _onPause, _onAbort;
 
-            // ---- callbacks ----
-            private readonly Action _onStop;
-            private readonly Action _onPause;
-            private readonly Action _onAbort;
-
-            // ---- timer / pause state ----
             private readonly Timer    _ticker;
-            private readonly DateTime _startUtc = DateTime.UtcNow;
-            private TimeSpan          _pausedTotal = TimeSpan.Zero;   // accumulated paused duration
-            private DateTime?         _pauseStartUtc = null;          // when current pause began
-            private bool              _paused = false;
+            private readonly DateTime _startUtc      = DateTime.UtcNow;
+            private TimeSpan          _pausedTotal    = TimeSpan.Zero;
+            private DateTime?         _pauseStartUtc  = null;
+            private bool              _paused         = false;
 
-            // ---- hit-areas (form-local) ----
-            private Rectangle _btnStopR;
-            private Rectangle _btnPauseR;
-            private Rectangle _btnAbortR;
-            private Rectangle _timerR;
-            private int       _hovered = -1;
+            // ---- geometry (form-local) ----
+            private int       _offsetX, _offsetY;   // where the capture hole starts in form coords
+            private int       _tbY;                 // toolbar top Y
+            private int       _colW;                // width of each column
+            private int       _hovered = -1;        // 0=Stop 1=Pause 2=Abort 3=Timer(no action)
 
-            // ---- geometry ----
-            // How far the form origin is offset from the capture region origin.
-            // The capture region maps to form-local rect (offsetX, offsetY, W, H).
-            private int _offsetX;
-            private int _offsetY;
+            // ---------------------------------------------------------------- //
+            //  Constructor
+            // ---------------------------------------------------------------- //
 
             public OverlayForm(Rectangle region, Action onStop, Action onPause, Action onAbort)
             {
@@ -154,75 +146,59 @@ namespace PluginScreenshot
                 DoubleBuffered  = true;
 
                 // ---- geometry ----
-                // We need the form to extend outside the capture region by enough to
-                // draw the border without any pixel landing inside the region.
-                //
-                // Border pen is centred on its path. For a pen of width BorderW drawn
-                // at distance BorderGap outside the region edge:
-                //   outermost pixel = BorderGap + BorderW/2  pixels outside region edge
-                //   innermost pixel = BorderGap - BorderW/2  pixels outside region edge
-                //                   = BorderGap - 1          (for BorderW=2)
-                //
-                // With BorderGap=1, BorderW=2: innermost = 0 — border just touches the
-                // edge of the capture region but NEVER enters it.
-                //
-                // Form padding (how many pixels outside the region the form extends on each side):
-                int formPad = BorderGap + BorderW + 2; // 5px — enough for border + antialiasing
+                // Form extends outside the region by formPad on top/left/right.
+                // Bottom extends to include the toolbar.
+                // formPad must be large enough to contain the border without
+                // any pixel falling inside the capture rect.
+                int formPad = BorderGap + BorderW + 2; // = 5px
 
                 _offsetX = formPad;
                 _offsetY = formPad;
 
+                // Toolbar sits flush below the border — no gap.
+                // The border's outermost bottom pixel is at:
+                //   _offsetY + region.Height + BorderGap + BorderW/2 - 1
+                // We place the toolbar immediately after.
+                _tbY = _offsetY + region.Height + BorderGap + BorderW;
+
                 int formW = region.Width  + formPad * 2;
-                int formH = region.Height + formPad * 2 + ToolbarGap + ToolbarH;
+                int formH = _tbY + ToolbarH;
 
                 Bounds        = new Rectangle(region.X - formPad, region.Y - formPad, formW, formH);
                 StartPosition = FormStartPosition.Manual;
 
-                // Transparent background via TransparencyKey.
                 BackColor       = Color.Lime;
                 TransparencyKey = Color.Lime;
 
-                // Build the Region that punches a hole exactly over the capture area.
-                // The hole is EXACTLY region.Width × region.Height so not one pixel of
-                // the overlay form overlaps the capture rect.
+                // Punch a transparent hole exactly over the capture region.
                 using (var outerPath = new GraphicsPath())
                 using (var holePath  = new GraphicsPath())
                 {
                     outerPath.AddRectangle(new Rectangle(0, 0, formW, formH));
-
-                    // Hole in form-local coords = exactly the capture region footprint.
                     holePath.AddRectangle(new Rectangle(_offsetX, _offsetY,
                                                         region.Width, region.Height));
-
                     var rgn = new System.Drawing.Region(outerPath);
                     rgn.Exclude(holePath);
                     Region = rgn;
                 }
 
-                LayoutToolbar(formW);
+                // Column width = toolbar spans exactly region.Width, starting at _offsetX.
+                _colW = region.Width / Cols;
 
-                _ticker         = new Timer { Interval = 100 };
-                _ticker.Tick   += (s, e) => Invalidate(_timerR);
+                // Timer redraws every 100 ms.
+                _ticker       = new Timer { Interval = 100 };
+                _ticker.Tick += (s, e) => InvalidateToolbar();
                 _ticker.Start();
 
                 MouseMove  += OnMouseMove;
                 MouseDown  += OnMouseDown;
-                MouseLeave += (s, e) => { _hovered = -1; Invalidate(); };
+                MouseLeave += (s, e) => { _hovered = -1; InvalidateToolbar(); };
             }
 
-            private void LayoutToolbar(int formW)
+            private void InvalidateToolbar()
             {
-                int totalBtnW = BtnW * 3 + BtnSpacing * 2 + BtnSpacing + TimerW;
-                int startX    = (formW - totalBtnW) / 2;
-
-                // Toolbar Y in form-local coords = below the capture region hole + gap.
-                int tbY  = _offsetY + _region.Height + ToolbarGap;
-                int btnY = tbY + (ToolbarH - BtnH) / 2;
-
-                _btnStopR  = new Rectangle(startX,                              btnY, BtnW,   BtnH);
-                _btnPauseR = new Rectangle(startX + BtnW + BtnSpacing,          btnY, BtnW,   BtnH);
-                _btnAbortR = new Rectangle(startX + (BtnW + BtnSpacing) * 2,    btnY, BtnW,   BtnH);
-                _timerR    = new Rectangle(_btnAbortR.Right + BtnSpacing,        btnY, TimerW, BtnH);
+                if (!IsDisposed)
+                    Invalidate(new Rectangle(0, _tbY, Width, ToolbarH));
             }
 
             // ---------------------------------------------------------------- //
@@ -232,26 +208,21 @@ namespace PluginScreenshot
             public void UpdatePauseState(bool paused)
             {
                 _paused = paused;
-
                 if (paused)
                 {
-                    // Record when this pause started.
                     _pauseStartUtc = DateTime.UtcNow;
-                    _ticker.Stop();   // freeze timer display
+                    _ticker.Stop();
                 }
                 else
                 {
-                    // Accumulate the pause duration we just completed.
                     if (_pauseStartUtc.HasValue)
                     {
                         _pausedTotal  += DateTime.UtcNow - _pauseStartUtc.Value;
                         _pauseStartUtc = null;
                     }
-                    _ticker.Start();  // resume timer display
+                    _ticker.Start();
                 }
-
-                Invalidate(_btnPauseR);
-                Invalidate(_timerR);
+                InvalidateToolbar();
             }
 
             // ---------------------------------------------------------------- //
@@ -261,10 +232,10 @@ namespace PluginScreenshot
             protected override void OnPaint(PaintEventArgs e)
             {
                 Graphics g = e.Graphics;
+                g.SmoothingMode = SmoothingMode.None; // crisp pixel-aligned rendering
 
-                // ---- Dashed border ----
-                // Draw the pen centred at (BorderGap) pixels outside the capture edge.
-                // With _offsetX = formPad and pen centred at BorderGap outside the hole:
+                // ---- Dashed border outside the capture region ----
+                // Pen centre is BorderGap px outside the hole edge.
                 float bx = _offsetX - BorderGap - BorderW / 2f;
                 float by = _offsetY - BorderGap - BorderW / 2f;
                 float bw = _region.Width  + (BorderGap + BorderW / 2f) * 2;
@@ -277,93 +248,107 @@ namespace PluginScreenshot
                     g.DrawRectangle(pen, bx, by, bw, bh);
                 }
 
-                // ---- Toolbar background ----
-                int tbTop = _offsetY + _region.Height + ToolbarGap;
+                // ---- Toolbar ----
+                PaintToolbar(g);
+            }
+
+            private void PaintToolbar(Graphics g)
+            {
+                int tbX = _offsetX;               // toolbar left = same as capture region left
+                int tbW = _region.Width;           // toolbar width = exactly capture region width
+
+                // Background
                 using (var bg = new SolidBrush(ToolbarBg))
-                    g.FillRectangle(bg, 0, tbTop, Width, ToolbarH);
+                    g.FillRectangle(bg, tbX, _tbY, tbW, ToolbarH);
 
-                // ---- Buttons ----
-                DrawButton(g, _btnStopR,  "Stop",
-                    _hovered == 0 ? BtnStopHover  : BtnStop,  TextColor);
-                DrawButton(g, _btnPauseR, _paused ? "Resume" : "Pause",
-                    _hovered == 1 ? BtnHover       : BtnNormal, TextColor);
-                DrawButton(g, _btnAbortR, "Abort",
-                    _hovered == 2 ? BtnAbortHover : BtnAbort, TextColor);
+                // Blue accent line at top
+                using (var accent = new SolidBrush(AccentLine))
+                    g.FillRectangle(accent, tbX, _tbY, tbW, AccentLineH);
 
-                // ---- Timer — only counts time actually recording (excludes paused duration) ----
-                TimeSpan recorded = (DateTime.UtcNow - _startUtc) - _pausedTotal;
-                if (recorded < TimeSpan.Zero) recorded = TimeSpan.Zero;
+                // Column labels
+                string[] labels = { "Stop", _paused ? "Resume" : "Pause", "Abort", GetTimerText() };
 
-                string time = $"{(int)recorded.TotalMinutes:D2}:{recorded.Seconds:D2}:{recorded.Milliseconds / 10:D2}";
-
-                using (var font = new Font("Consolas", 10f, FontStyle.Bold))
-                using (var fg   = new SolidBrush(TimerColor))
+                for (int i = 0; i < Cols; i++)
                 {
-                    var sf = new StringFormat
+                    int cx = tbX + i * _colW;
+                    int cw = (i == Cols - 1)
+                        ? tbW - i * _colW   // last column takes remaining width
+                        : _colW;
+
+                    var colRect = new Rectangle(cx, _tbY + AccentLineH, cw, ToolbarH - AccentLineH);
+
+                    // Hover highlight (not on timer column)
+                    if (i == _hovered && i < 3)
                     {
-                        Alignment     = StringAlignment.Center,
-                        LineAlignment = StringAlignment.Center
-                    };
-                    g.DrawString(time, font, fg, _timerR, sf);
+                        using (var hov = new SolidBrush(ColHoverBg))
+                            g.FillRectangle(hov, colRect);
+                    }
+
+                    // Divider (1px right edge of each column except last)
+                    if (i < Cols - 1)
+                    {
+                        using (var div = new Pen(DividerColor, 1))
+                            g.DrawLine(div, cx + cw, _tbY + AccentLineH + 4,
+                                            cx + cw, _tbY + ToolbarH - 4);
+                    }
+
+                    // Text
+                    Color tc = (i == 3) ? TimerText
+                             : (_hovered == i) ? TextHover
+                             : TextNormal;
+
+                    using (var font = new Font(i == 3 ? "Consolas" : "Segoe UI", 9.5f,
+                                               i == 3 ? FontStyle.Bold : FontStyle.Regular))
+                    using (var brush = new SolidBrush(tc))
+                    {
+                        var sf = new StringFormat
+                        {
+                            Alignment     = StringAlignment.Center,
+                            LineAlignment = StringAlignment.Center,
+                            FormatFlags   = StringFormatFlags.NoWrap
+                        };
+                        g.DrawString(labels[i], font, brush, colRect, sf);
+                    }
                 }
             }
 
-            private void DrawButton(Graphics g, Rectangle r, string text, Color bg, Color fg)
+            private string GetTimerText()
             {
-                using (var bgBrush = new SolidBrush(bg))
-                using (var path    = RoundedRect(r.X, r.Y, r.Width, r.Height, 4))
-                    g.FillPath(bgBrush, path);
-
-                using (var font    = new Font("Segoe UI", 9f))
-                using (var fgBrush = new SolidBrush(fg))
-                {
-                    var sf = new StringFormat
-                    {
-                        Alignment     = StringAlignment.Center,
-                        LineAlignment = StringAlignment.Center
-                    };
-                    g.DrawString(text, font, fgBrush, r, sf);
-                }
-            }
-
-            private static GraphicsPath RoundedRect(int x, int y, int w, int h, int r)
-            {
-                var p = new GraphicsPath();
-                p.AddArc(x,             y,             r * 2, r * 2, 180, 90);
-                p.AddArc(x + w - r * 2, y,             r * 2, r * 2, 270, 90);
-                p.AddArc(x + w - r * 2, y + h - r * 2, r * 2, r * 2,   0, 90);
-                p.AddArc(x,             y + h - r * 2, r * 2, r * 2,  90, 90);
-                p.CloseFigure();
-                return p;
+                TimeSpan rec = (DateTime.UtcNow - _startUtc) - _pausedTotal;
+                if (rec < TimeSpan.Zero) rec = TimeSpan.Zero;
+                return $"{(int)rec.TotalMinutes:D2}:{rec.Seconds:D2}:{rec.Milliseconds / 10:D2}";
             }
 
             // ---------------------------------------------------------------- //
             //  Mouse
             // ---------------------------------------------------------------- //
 
+            private int HitTestToolbar(Point p)
+            {
+                if (p.Y < _tbY || p.Y >= _tbY + ToolbarH) return -1;
+                int tbX = _offsetX;
+                int rel = p.X - tbX;
+                if (rel < 0 || rel >= _region.Width) return -1;
+                int col = rel / _colW;
+                if (col >= Cols) col = Cols - 1;
+                return col < 3 ? col : -1; // timer column has no action
+            }
+
             private void OnMouseMove(object s, MouseEventArgs e)
             {
-                int hit = HitTest(e.Location);
-                if (hit != _hovered) { _hovered = hit; Invalidate(); }
+                int hit = HitTestToolbar(e.Location);
+                if (hit != _hovered) { _hovered = hit; InvalidateToolbar(); }
             }
 
             private void OnMouseDown(object s, MouseEventArgs e)
             {
                 if (e.Button != MouseButtons.Left) return;
-                switch (HitTest(e.Location))
+                switch (HitTestToolbar(e.Location))
                 {
                     case 0: _onStop?.Invoke();  break;
                     case 1: _onPause?.Invoke(); break;
                     case 2: _onAbort?.Invoke(); break;
                 }
-            }
-
-            private int HitTest(Point p)
-            {
-                if (_btnStopR.Contains(p))  return 0;
-                if (_btnPauseR.Contains(p)) return 1;
-                if (_btnAbortR.Contains(p)) return 2;
-                return -1;
             }
 
             // ---------------------------------------------------------------- //
