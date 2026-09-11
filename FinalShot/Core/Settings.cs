@@ -3,6 +3,52 @@ using Rainmeter;
 
 namespace PluginScreenshot
 {
+    /// <summary>
+    /// Resolved encoder parameters derived from the GifQuality level (1–5).
+    /// Passed through the encoding pipeline so every call site uses consistent values.
+    /// </summary>
+    public sealed class GifEncoderQuality
+    {
+        /// <summary>Number of palette entries (must be a power of 2, 2–256).</summary>
+        public int Colors { get; }
+
+        /// <summary>Maximum pixels sampled by MediaCutQuantizer per frame.</summary>
+        public int MaxSamples { get; }
+
+        /// <summary>When true, Floyd-Steinberg error diffusion is applied after quantisation.</summary>
+        public bool Dither { get; }
+
+        public GifEncoderQuality(int colors, int maxSamples, bool dither)
+        {
+            Colors     = colors;
+            MaxSamples = maxSamples;
+            Dither     = dither;
+        }
+
+        /// <summary>
+        /// Maps a quality level (1–5) to concrete encoder parameters.
+        ///
+        /// | Level | Name         | Colors | MaxSamples | Dither |
+        /// |-------|--------------|--------|------------|--------|
+        /// |   1   | Low          |    64  |   5,000    | false  |
+        /// |   2   | Medium-Low   |   128  |  15,000    | false  |
+        /// |   3   | Medium (def) |   256  |  40,000    | true   |
+        /// |   4   | High         |   256  |  80,000    | true   |
+        /// |   5   | Ultra        |   256  | 150,000    | true   |
+        /// </summary>
+        public static GifEncoderQuality FromLevel(int level)
+        {
+            switch (level)
+            {
+                case 1:  return new GifEncoderQuality( 64,   5_000, false);
+                case 2:  return new GifEncoderQuality(128,  15_000, false);
+                case 4:  return new GifEncoderQuality(256,  80_000, true);
+                case 5:  return new GifEncoderQuality(256, 150_000, true);
+                default: return new GifEncoderQuality(256,  40_000, true); // 3 = default
+            }
+        }
+    }
+
     public class Settings
     {
         public API Api { get; }
@@ -15,10 +61,25 @@ namespace PluginScreenshot
         public bool UsePrintWindow { get; private set; }
         public bool DetectWindows { get; private set; }
         public bool DetectControls { get; private set; }
+
         public string GifSavePath { get; private set; }
         public int GifFPS { get; private set; }
         public int GifDuration { get; private set; }
         public Rectangle GifPredefinedRegion { get; private set; }
+
+        /// <summary>
+        /// GIF encoding quality level, 1–5. Default 3.
+        ///   1 = Low      (64 colors, fast, no dither)
+        ///   2 = Med-Low  (128 colors, no dither)
+        ///   3 = Medium   (256 colors, 40K samples, no dither)  ← default
+        ///   4 = High     (256 colors, 80K samples, dither)
+        ///   5 = Ultra    (256 colors, 150K samples, dither)
+        /// </summary>
+        public int GifQuality { get; private set; }
+
+        /// <summary>Resolved encoder parameters for the current GifQuality level.</summary>
+        public GifEncoderQuality EncoderQuality { get; private set; }
+
         public string GifStartAction { get; private set; }
         public string GifCancelAction { get; private set; }
         public string OnGifEncodingAction { get; private set; }
@@ -59,11 +120,16 @@ namespace PluginScreenshot
             int gh = api.ReadInt("GifPredefHeight", h);
             GifPredefinedRegion = new Rectangle(gx, gy, gw, gh);
 
-            GifStartAction      = api.ReadString("GifStartAction",      "");
-            GifCancelAction     = api.ReadString("GifCancelAction",     "");
-            GifPauseAction      = api.ReadString("GifPauseAction",      "");
-            GifResumeAction     = api.ReadString("GifResumeAction",     "");
-            OnGifEncodingAction = api.ReadString("OnGifEncodingAction", "");
+            GifQuality     = api.ReadInt("GifQuality", 3);
+            if (GifQuality < 1) GifQuality = 1;
+            if (GifQuality > 5) GifQuality = 5;
+            EncoderQuality = GifEncoderQuality.FromLevel(GifQuality);
+
+            GifStartAction       = api.ReadString("GifStartAction",      "");
+            GifCancelAction      = api.ReadString("GifCancelAction",     "");
+            GifPauseAction       = api.ReadString("GifPauseAction",      "");
+            GifResumeAction      = api.ReadString("GifResumeAction",     "");
+            OnGifEncodingAction  = api.ReadString("OnGifEncodingAction", "");
             GifEncodeWhileRecord = api.ReadInt("GifEncodeWhileRecord", 0) > 0;
             GifShowOverlay       = api.ReadInt("GifShowOverlay",       1) > 0;
 
@@ -78,12 +144,16 @@ namespace PluginScreenshot
                 + "  GifSavePath=" + GifSavePath
                 + "  GifFPS=" + GifFPS
                 + "  GifDuration=" + GifDuration
+                + "  GifQuality=" + GifQuality
+                    + " (colors=" + EncoderQuality.Colors
+                    + " samples=" + EncoderQuality.MaxSamples
+                    + " dither="  + EncoderQuality.Dither + ")"
                 + "  GifPredefinedRegion=" + GifPredefinedRegion
                 + "  GifEncodeWhileRecord=" + GifEncodeWhileRecord
-                + "  GifStartAction=" + (string.IsNullOrEmpty(GifStartAction)      ? "(none)" : "(set)")
-                + "  GifCancelAction=" + (string.IsNullOrEmpty(GifCancelAction)    ? "(none)" : "(set)")
-                + "  GifPauseAction=" + (string.IsNullOrEmpty(GifPauseAction)      ? "(none)" : "(set)")
-                + "  GifResumeAction=" + (string.IsNullOrEmpty(GifResumeAction)    ? "(none)" : "(set)")
+                + "  GifStartAction="      + (string.IsNullOrEmpty(GifStartAction)      ? "(none)" : "(set)")
+                + "  GifCancelAction="     + (string.IsNullOrEmpty(GifCancelAction)     ? "(none)" : "(set)")
+                + "  GifPauseAction="      + (string.IsNullOrEmpty(GifPauseAction)      ? "(none)" : "(set)")
+                + "  GifResumeAction="     + (string.IsNullOrEmpty(GifResumeAction)     ? "(none)" : "(set)")
                 + "  OnGifEncodingAction=" + (string.IsNullOrEmpty(OnGifEncodingAction) ? "(none)" : "(set)"));
         }
     }
