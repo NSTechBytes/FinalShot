@@ -46,11 +46,17 @@ namespace PluginScreenshot
         private static readonly object _stateLock = new object();
         private static volatile State  _state      = State.Idle;
 
-        private static Thread         _captureThread;
-        private static GifFrameBuffer _buffer;
+        private static Thread          _captureThread;
+        private static GifFrameBuffer  _buffer;
 
         // Signals the capture loop to exit when set to true.
-        private static volatile bool _stopRequested;
+        private static volatile bool   _stopRequested;
+
+        // Streaming-mode fields (only used when GifEncodeWhileRecord = true).
+        // _streamEncoder is opened in StartRecording and closed/cancelled on stop/cancel.
+        // _encoderThread runs concurrently with _captureThread, draining _buffer live.
+        private static GifStreamEncoder _streamEncoder;
+        private static Thread           _encoderThread;
 
         // ------------------------------------------------------------------ //
         //  Public API
@@ -61,6 +67,10 @@ namespace PluginScreenshot
         /// Captures the full virtual screen at <c>settings.GifFPS</c> frames per second.
         /// If <c>settings.GifDuration &gt; 0</c> the recording stops automatically
         /// after that many seconds; otherwise it runs until <see cref="StopAndSave"/>.
+        ///
+        /// When <c>settings.GifEncodeWhileRecord</c> is true, frames are encoded
+        /// and written to disk as they are captured (streaming mode).  This keeps
+        /// memory usage flat but uses more CPU during recording.
         ///
         /// Does nothing if a recording is already in progress.
         /// </summary>
@@ -83,10 +93,33 @@ namespace PluginScreenshot
                 _state         = State.Recording;
                 _stopRequested = false;
                 _buffer        = new GifFrameBuffer();
+                _streamEncoder = null;
+                _encoderThread = null;
 
                 Logger.Log($"GifCaptureManager.StartRecording: fps={settings.GifFPS}, " +
-                           $"duration={settings.GifDuration}s, path={settings.GifSavePath}");
+                           $"duration={settings.GifDuration}s, " +
+                           $"encodeWhileRecord={settings.GifEncodeWhileRecord}, " +
+                           $"path={settings.GifSavePath}");
 
+                if (settings.GifEncodeWhileRecord)
+                {
+                    // --- Streaming mode ---
+                    // Open the GIF stream immediately so the encoder thread can
+                    // start writing frames the moment they arrive in the buffer.
+                    var enc = new GifStreamEncoder(settings.GifMaxWidth);
+                    Rectangle bounds = System.Windows.Forms.SystemInformation.VirtualScreen;
+                    enc.Open(settings.GifSavePath, bounds.Width, bounds.Height,
+                             1000 / settings.GifFPS);
+                    _streamEncoder = enc;
+
+                    // Encoder thread: drain buffer → AddFrame live during recording.
+                    _encoderThread = new Thread(() => StreamEncodeLoop(enc, _buffer));
+                    _encoderThread.IsBackground = true;
+                    _encoderThread.Name = "FinalShot-GifStreamEncode";
+                    _encoderThread.Start();
+                }
+
+                // Capture thread — same for both modes.
                 _captureThread = new Thread(() => CaptureLoop(settings));
                 _captureThread.IsBackground = true;
                 _captureThread.Name = "FinalShot-GifCapture";
@@ -101,15 +134,19 @@ namespace PluginScreenshot
         /// <summary>
         /// Stop the active recording session and save the result as an animated GIF.
         ///
-        /// The method returns immediately; encoding runs on a separate background
-        /// thread.  <c>settings.FinishAction</c> is executed once encoding is done.
+        /// In batch mode: encoding runs on a background thread after capture stops.
+        /// In streaming mode: the encoder thread has been writing frames live; this
+        /// just waits for it to finish draining the last frames and calls Close().
         ///
+        /// The method returns immediately in both modes.
         /// Does nothing if no recording is in progress.
         /// </summary>
         public static void StopAndSave(Settings settings)
         {
-            Thread captureThreadSnapshot;
-            GifFrameBuffer bufferSnapshot;
+            Thread          captureThreadSnapshot;
+            Thread          encoderThreadSnapshot;
+            GifFrameBuffer  bufferSnapshot;
+            GifStreamEncoder streamEncSnapshot;
 
             lock (_stateLock)
             {
@@ -123,18 +160,19 @@ namespace PluginScreenshot
                 _stopRequested = true;
 
                 captureThreadSnapshot = _captureThread;
+                encoderThreadSnapshot = _encoderThread;
                 bufferSnapshot        = _buffer;
+                streamEncSnapshot     = _streamEncoder;
             }
 
             Logger.Log("GifCaptureManager.StopAndSave: signalled capture thread to stop.");
 
-            // Run the encode on a separate thread so the Rainmeter plugin call
-            // returns quickly (encoding a long GIF can take several seconds).
-            var encodeThread = new Thread(() =>
-                EncodeAndFinish(settings, captureThreadSnapshot, bufferSnapshot));
-            encodeThread.IsBackground = true;
-            encodeThread.Name = "FinalShot-GifEncode";
-            encodeThread.Start();
+            var finishThread = new Thread(() =>
+                EncodeAndFinish(settings, captureThreadSnapshot, encoderThreadSnapshot,
+                                bufferSnapshot, streamEncSnapshot));
+            finishThread.IsBackground = true;
+            finishThread.Name = "FinalShot-GifEncode";
+            finishThread.Start();
         }
 
         /// <summary>
@@ -179,16 +217,19 @@ namespace PluginScreenshot
         /// No file is written and <c>FinishAction</c> is NOT executed.
         /// <c>GifCancelAction</c> IS executed once the frames have been discarded.
         ///
+        /// In streaming mode the partially-written GIF file is deleted.
+        ///
         /// Safe to call at any time:
         ///   • Idle      → ignored.
         ///   • Recording → capture thread is stopped, all frames are discarded.
-        ///   • Encoding  → ignored (encoding is already running; cannot interrupt
-        ///                 safely without file corruption).
+        ///   • Encoding  → ignored (cannot interrupt safely).
         /// </summary>
         public static void CancelRecording(Settings settings)
         {
-            Thread captureThreadSnapshot;
-            GifFrameBuffer bufferSnapshot;
+            Thread           captureThreadSnapshot;
+            Thread           encoderThreadSnapshot;
+            GifFrameBuffer   bufferSnapshot;
+            GifStreamEncoder streamEncSnapshot;
 
             lock (_stateLock)
             {
@@ -198,39 +239,54 @@ namespace PluginScreenshot
                     return;
                 }
 
-                // Move directly back to Idle — EncodeAndFinish will never be called.
                 _state         = State.Idle;
                 _stopRequested = true;
 
                 captureThreadSnapshot = _captureThread;
+                encoderThreadSnapshot = _encoderThread;
                 bufferSnapshot        = _buffer;
+                streamEncSnapshot     = _streamEncoder;
 
                 _captureThread = null;
+                _encoderThread = null;
                 _buffer        = null;
+                _streamEncoder = null;
             }
 
-            Logger.Log("GifCaptureManager.CancelRecording: signalled capture thread to stop, discarding frames.");
+            Logger.Log("GifCaptureManager.CancelRecording: signalled stop, discarding frames.");
 
-            // Clean up on a background thread so we don't block the Rainmeter call
-            // while waiting for the capture thread to exit its current sleep.
             var cleanupThread = new Thread(() =>
             {
                 try
                 {
+                    // Stop capture first
                     captureThreadSnapshot?.Join();
                     Logger.Log("GifCaptureManager.CancelRecording: capture thread joined.");
+
+                    if (streamEncSnapshot != null)
+                    {
+                        // Streaming mode: the encoder thread is blocked on Drain().
+                        // The capture thread already called buffer.Complete() in its
+                        // finally block, so the encoder thread will exit naturally.
+                        encoderThreadSnapshot?.Join();
+                        Logger.Log("GifCaptureManager.CancelRecording: encoder thread joined.");
+                        // Cancel deletes the partial file.
+                        streamEncSnapshot.Cancel();
+                    }
+                    else
+                    {
+                        // Batch mode: just discard all buffered frames.
+                        bufferSnapshot?.Dispose();
+                    }
+
+                    Logger.Log("GifCaptureManager.CancelRecording: done, state is Idle.");
                 }
                 catch (Exception ex)
                 {
-                    Logger.Log($"GifCaptureManager.CancelRecording: join error — {ex.Message}");
+                    Logger.Log($"GifCaptureManager.CancelRecording: error — {ex.Message}");
                 }
                 finally
                 {
-                    // Dispose all buffered frames — no file is written.
-                    bufferSnapshot?.Dispose();
-                    Logger.Log("GifCaptureManager.CancelRecording: frames discarded, state is Idle.");
-
-                    // Notify the skin that the recording was cancelled.
                     ExecuteAction(settings, settings.GifCancelAction, "GifCancelAction");
                 }
             });
@@ -307,52 +363,105 @@ namespace PluginScreenshot
         }
 
         // ------------------------------------------------------------------ //
-        //  Encode + finish (runs on encodeThread)
+        //  Streaming encoder loop (runs on _encoderThread, streaming mode only)
+        // ------------------------------------------------------------------ //
+
+        /// <summary>
+        /// Drains the frame buffer and feeds each frame to the stream encoder
+        /// as it arrives.  Blocks until <see cref="GifFrameBuffer.Complete"/>
+        /// has been called and the queue is empty, then returns — the caller
+        /// (<see cref="EncodeAndFinish"/>) is responsible for calling Close().
+        /// </summary>
+        private static void StreamEncodeLoop(GifStreamEncoder enc, GifFrameBuffer buffer)
+        {
+            Logger.Log("GifCaptureManager.StreamEncodeLoop: starting.");
+            try
+            {
+                foreach (Bitmap frame in buffer.Drain())
+                {
+                    // AddFrame encodes+writes the frame and disposes the Bitmap.
+                    enc.AddFrame(frame);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"GifCaptureManager.StreamEncodeLoop: error — {ex.Message}");
+            }
+            finally
+            {
+                buffer.Dispose();
+                Logger.Log("GifCaptureManager.StreamEncodeLoop: finished.");
+            }
+        }
+
+        // ------------------------------------------------------------------ //
+        //  Encode + finish (runs on finishThread)
         // ------------------------------------------------------------------ //
 
         private static void EncodeAndFinish(
-            Settings       settings,
-            Thread         captureThread,
-            GifFrameBuffer buffer)
+            Settings         settings,
+            Thread           captureThread,
+            Thread           encoderThread,
+            GifFrameBuffer   buffer,
+            GifStreamEncoder streamEncoder)
         {
-            // Wait for the capture thread to finish draining the frame buffer.
+            // 1. Wait for capture to finish.
             captureThread?.Join();
-            Logger.Log("GifCaptureManager.EncodeAndFinish: capture thread joined, starting encode.");
+            Logger.Log("GifCaptureManager.EncodeAndFinish: capture thread joined.");
 
-            // Notify the skin that encoding is now beginning.
+            // Notify the skin that encoding phase is beginning.
             ExecuteAction(settings, settings.OnGifEncodingAction, "OnGifEncodingAction");
 
-            var frames = new List<Bitmap>();
+            bool success = false;
             try
             {
-                // Drain the buffer — this returns immediately because capture
-                // thread already called Complete() in its finally block.
-                foreach (Bitmap frame in buffer.Drain())
-                    frames.Add(frame);
-
-                Logger.Log($"GifCaptureManager.EncodeAndFinish: {frames.Count} frames collected.");
-
-                if (frames.Count == 0)
+                if (streamEncoder != null)
                 {
-                    Logger.Log("GifCaptureManager.EncodeAndFinish: no frames captured, skipping save.");
-                    return;
+                    // --- Streaming mode ---
+                    // The encoder thread has been writing frames live.
+                    // Wait for it to drain the last frames, then close the stream.
+                    encoderThread?.Join();
+                    Logger.Log("GifCaptureManager.EncodeAndFinish: stream encoder thread joined.");
+                    streamEncoder.Close();
+                    success = File.Exists(settings.GifSavePath);
+                }
+                else
+                {
+                    // --- Batch mode ---
+                    var frames = new List<Bitmap>();
+                    try
+                    {
+                        foreach (Bitmap frame in buffer.Drain())
+                            frames.Add(frame);
+
+                        Logger.Log($"GifCaptureManager.EncodeAndFinish: {frames.Count} frames collected.");
+
+                        if (frames.Count == 0)
+                        {
+                            Logger.Log("GifCaptureManager.EncodeAndFinish: no frames, skipping save.");
+                            return;
+                        }
+
+                        AnimatedGifEncoder.GifMaxWidth = settings.GifMaxWidth;
+                        AnimatedGifEncoder.Encode(frames, 1000 / settings.GifFPS, settings.GifSavePath);
+                        success = true;
+                    }
+                    finally
+                    {
+                        foreach (Bitmap f in frames) f?.Dispose();
+                        buffer.Dispose();
+                    }
                 }
 
-                int frameDelayMs = 1000 / settings.GifFPS;
-                AnimatedGifEncoder.GifMaxWidth = settings.GifMaxWidth;
-                AnimatedGifEncoder.Encode(frames, frameDelayMs, settings.GifSavePath);
-
-                Logger.Log($"GifCaptureManager.EncodeAndFinish: GIF saved to {settings.GifSavePath}");
-
-                // Show notification (reuse existing notification system).
-                if (settings.ShowNotification && File.Exists(settings.GifSavePath))
+                if (success)
                 {
-                    // NotificationForm expects an image path; GIF is a valid image.
-                    ShowGifNotification(settings.GifSavePath);
-                }
+                    Logger.Log($"GifCaptureManager.EncodeAndFinish: GIF saved → {settings.GifSavePath}");
 
-                // Execute the configured finish action bang.
-                ScreenshotManager.ExecuteFinishAction(settings);
+                    if (settings.ShowNotification && File.Exists(settings.GifSavePath))
+                        ShowGifNotification(settings.GifSavePath);
+
+                    ScreenshotManager.ExecuteFinishAction(settings);
+                }
             }
             catch (Exception ex)
             {
@@ -360,17 +469,15 @@ namespace PluginScreenshot
             }
             finally
             {
-                // Dispose all frames regardless of success/failure.
-                foreach (Bitmap f in frames)
-                    f?.Dispose();
-
-                buffer.Dispose();
+                streamEncoder?.Dispose(); // no-op if already closed/cancelled
 
                 lock (_stateLock)
                 {
                     _state         = State.Idle;
                     _captureThread = null;
+                    _encoderThread = null;
                     _buffer        = null;
+                    _streamEncoder = null;
                 }
 
                 Logger.Log("GifCaptureManager.EncodeAndFinish: state reset to Idle.");

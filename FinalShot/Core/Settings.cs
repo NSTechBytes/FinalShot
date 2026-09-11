@@ -64,6 +64,23 @@ namespace PluginScreenshot
         /// </summary>
         public string OnGifEncodingAction { get; private set; }
 
+        /// <summary>
+        /// When true, each frame is quantised and written to the GIF file as it is
+        /// captured, instead of buffering all raw frames and encoding after stop.
+        ///
+        /// Benefits:
+        ///   • RAM usage stays low (only ~2 frames in memory at a time).
+        ///   • StopAndSave() / -gif-stop returns almost immediately — no post-encode wait.
+        ///
+        /// Trade-off:
+        ///   • CPU is higher during recording (quantise + dither + LZW per frame).
+        ///   • -gif-cancel deletes the partial file that was already being written.
+        ///
+        /// Set GifEncodeWhileRecord=1 in the skin INI to enable.
+        /// Default: 0 (batch mode — encode after stop, same as before).
+        /// </summary>
+        public bool GifEncodeWhileRecord { get; private set; }
+
         public Settings(API api)
         {
             Api              = api;
@@ -97,6 +114,7 @@ namespace PluginScreenshot
             GifStartAction      = api.ReadString("GifStartAction",      "");
             GifCancelAction     = api.ReadString("GifCancelAction",     "");
             OnGifEncodingAction = api.ReadString("OnGifEncodingAction", "");
+            GifEncodeWhileRecord = api.ReadInt("GifEncodeWhileRecord", 0) > 0;
 
             Logger.DebugEnabled = api.ReadInt("DebugLog", 0) == 1;
             string dbg = api.ReadString("DebugLogPath", "");
@@ -109,6 +127,7 @@ namespace PluginScreenshot
                 + "  GifSavePath=" + GifSavePath
                 + "  GifFPS=" + GifFPS
                 + "  GifDuration=" + GifDuration
+                + "  GifEncodeWhileRecord=" + GifEncodeWhileRecord
                 + "  GifStartAction=" + (string.IsNullOrEmpty(GifStartAction) ? "(none)" : "(set)")
                 + "  GifCancelAction=" + (string.IsNullOrEmpty(GifCancelAction) ? "(none)" : "(set)")
                 + "  OnGifEncodingAction=" + (string.IsNullOrEmpty(OnGifEncodingAction) ? "(none)" : "(set)"));

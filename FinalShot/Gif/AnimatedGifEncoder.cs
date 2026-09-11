@@ -72,21 +72,20 @@ namespace PluginScreenshot
                 bw.Write(new byte[] { 0x47,0x49,0x46,0x38,0x39,0x61 }); // "GIF89a"
 
                 // Logical Screen Descriptor — no global colour table
-                WriteU16(bw, (ushort)outW);
-                WriteU16(bw, (ushort)outH);
+                WriteU16Internal(bw, (ushort)outW);
+                WriteU16Internal(bw, (ushort)outH);
                 bw.Write((byte)0x00); // packed: no GCT
                 bw.Write((byte)0x00); // background colour index
                 bw.Write((byte)0x00); // pixel aspect ratio
 
                 // Netscape loop extension (loop = 0 → infinite)
-                WriteNetscapeLoop(bw, 0);
+                WriteNetscapeLoopInternal(bw, 0);
 
                 for (int i = 0; i < frames.Count; i++)
                 {
                     Logger.Log($"AnimatedGifEncoder: encoding frame {i + 1}/{frames.Count}");
                     EncodeFrame(bw, frames[i], outW, outH, delayCs);
                 }
-
                 bw.Write((byte)0x3B); // GIF trailer
             }
 
@@ -100,24 +99,24 @@ namespace PluginScreenshot
         private static void EncodeFrame(BinaryWriter bw, Bitmap src, int outW, int outH, int delayCs)
         {
             // 1. Scale (or use as-is if already the right size)
-            Bitmap scaled = ScaleFrame(src, outW, outH);
+            Bitmap scaled = ScaleFrameInternal(src, outW, outH);
             try
             {
                 // 2. Read pixels — GDI+ Format32bppArgb is stored in memory
                 //    as [B, G, R, A] per 4-byte pixel (little-endian DWORD).
-                byte[] bgra = ReadBgra(scaled, outW, outH);
+                byte[] bgra = ReadBgraInternal(scaled, outW, outH);
 
                 // 3. Build optimal 256-colour palette via median-cut
                 Color[] palette = MediaCutQuantizer.Build(bgra, outW * outH, 256);
 
                 // 4. Build 32³ lookup cube for fast nearest-colour queries
-                byte[] cube = BuildLookupCube(palette);
+                byte[] cube = BuildLookupCubeInternal(palette);
 
                 // 5. Floyd-Steinberg dither → palette indices
-                byte[] indices = Dither(bgra, outW, outH, palette, cube);
+                byte[] indices = DitherInternal(bgra, outW, outH, palette, cube);
 
                 // 6. Write GIF frame
-                WriteGifFrame(bw, indices, palette, outW, outH, delayCs);
+                WriteGifFrameInternal(bw, indices, palette, outW, outH, delayCs);
             }
             finally
             {
@@ -130,7 +129,7 @@ namespace PluginScreenshot
         //  Frame scaling
         // ------------------------------------------------------------------ //
 
-        private static Bitmap ScaleFrame(Bitmap src, int w, int h)
+        internal static Bitmap ScaleFrameInternal(Bitmap src, int w, int h)
         {
             if (src.Width == w && src.Height == h)
                 return src; // no scaling needed
@@ -150,7 +149,7 @@ namespace PluginScreenshot
         //  Read raw BGRA bytes from bitmap
         // ------------------------------------------------------------------ //
 
-        private static byte[] ReadBgra(Bitmap bmp, int w, int h)
+        internal static byte[] ReadBgraInternal(Bitmap bmp, int w, int h)
         {
             var bd = bmp.LockBits(new Rectangle(0, 0, w, h),
                                   ImageLockMode.ReadOnly,
@@ -185,7 +184,7 @@ namespace PluginScreenshot
         //  index.  Built once per frame; lookups are O(1).
         // ------------------------------------------------------------------ //
 
-        private static byte[] BuildLookupCube(Color[] palette)
+        internal static byte[] BuildLookupCubeInternal(Color[] palette)
         {
             const int BITS = 5;           // 32 levels per channel
             const int SIZE = 32;
@@ -230,7 +229,7 @@ namespace PluginScreenshot
         //  Floyd-Steinberg dithering
         // ------------------------------------------------------------------ //
 
-        private static byte[] Dither(byte[] bgra, int w, int h, Color[] palette, byte[] cube)
+        internal static byte[] DitherInternal(byte[] bgra, int w, int h, Color[] palette, byte[] cube)
         {
             // Two-row error buffers — only need current and next row in memory.
             // Indexed [channel * rowLen + x], channel: 0=R 1=G 2=B
@@ -305,38 +304,38 @@ namespace PluginScreenshot
         //  GIF binary output
         // ------------------------------------------------------------------ //
 
-        private static void WriteU16(BinaryWriter bw, ushort v)
+        internal static void WriteU16Internal(BinaryWriter bw, ushort v)
         {
             bw.Write((byte)(v & 0xFF));
             bw.Write((byte)(v >> 8));
         }
 
-        private static void WriteNetscapeLoop(BinaryWriter bw, ushort loopCount)
+        internal static void WriteNetscapeLoopInternal(BinaryWriter bw, ushort loopCount)
         {
             bw.Write((byte)0x21); bw.Write((byte)0xFF); // Ext introducer + App label
             bw.Write((byte)11);                         // Block size
             bw.Write(System.Text.Encoding.ASCII.GetBytes("NETSCAPE2.0"));
             bw.Write((byte)3); bw.Write((byte)1);       // Sub-block ID
-            WriteU16(bw, loopCount);
+            WriteU16Internal(bw, loopCount);
             bw.Write((byte)0);                          // Block terminator
         }
 
-        private static void WriteGifFrame(BinaryWriter bw, byte[] indices,
+        internal static void WriteGifFrameInternal(BinaryWriter bw, byte[] indices,
                                           Color[] palette, int w, int h, int delayCs)
         {
             // Graphic Control Extension
             bw.Write((byte)0x21); bw.Write((byte)0xF9);
             bw.Write((byte)4);
             bw.Write((byte)0x00);          // packed: dispose=0, no transparency
-            WriteU16(bw, (ushort)delayCs);
+            WriteU16Internal(bw, (ushort)delayCs);
             bw.Write((byte)0);             // transparent colour index (unused)
             bw.Write((byte)0);             // block terminator
 
             // Image Descriptor
             bw.Write((byte)0x2C);
-            WriteU16(bw, 0); WriteU16(bw, 0);   // left, top
-            WriteU16(bw, (ushort)w);
-            WriteU16(bw, (ushort)h);
+            WriteU16Internal(bw, 0); WriteU16Internal(bw, 0);   // left, top
+            WriteU16Internal(bw, (ushort)w);
+            WriteU16Internal(bw, (ushort)h);
             // Packed byte: Local CT flag=1, not interlaced, size field=7 → 2^(7+1)=256 entries
             bw.Write((byte)0x87);
 
@@ -523,6 +522,208 @@ namespace PluginScreenshot
             for (int i=start*3, end=(start+len)*3; i<end; i+=3)
             { r+=flat[i]; g+=flat[i+1]; b+=flat[i+2]; }
             return Color.FromArgb((int)(r/len),(int)(g/len),(int)(b/len));
+        }
+    }
+
+    // ======================================================================
+    //  GifStreamEncoder
+    //  Streaming (encode-while-record) variant.
+    //
+    //  Usage pattern:
+    //    1. var enc = new GifStreamEncoder(maxWidth);
+    //    2. enc.Open(outputPath, sourceWidth, sourceHeight, frameDelayMs);
+    //    3. foreach frame: enc.AddFrame(bitmap);        ← called from encoder thread
+    //    4a. enc.Close();    ← normal finish, writes GIF trailer
+    //    4b. enc.Cancel();   ← discard, deletes the partial file
+    //
+    //  Thread safety:
+    //    Open/Close/Cancel are called from the encoder/cancel thread.
+    //    AddFrame is called from the same encoder thread (never concurrently).
+    //    The object is not shared across threads simultaneously.
+    // ======================================================================
+    internal sealed class GifStreamEncoder : IDisposable
+    {
+        private readonly int     _maxWidth;
+        private FileStream       _fs;
+        private BinaryWriter     _bw;
+        private string           _outputPath;
+        private int              _outW, _outH, _delayCs;
+        private int              _frameCount;
+        private bool             _closed;
+        private bool             _cancelled;
+
+        public bool IsOpen => _fs != null && !_closed && !_cancelled;
+
+        public GifStreamEncoder(int maxWidth)
+        {
+            _maxWidth = maxWidth > 0 ? maxWidth : 800;
+        }
+
+        // ------------------------------------------------------------------ //
+        //  Open — write GIF89a header and Netscape loop extension
+        // ------------------------------------------------------------------ //
+
+        /// <summary>
+        /// Opens the output file and writes the GIF89a header.
+        /// Must be called once before any <see cref="AddFrame"/> calls.
+        /// </summary>
+        public void Open(string outputPath, int sourceWidth, int sourceHeight, int frameDelayMs)
+        {
+            if (_fs != null) throw new InvalidOperationException("GifStreamEncoder already open.");
+
+            if (frameDelayMs < 20) frameDelayMs = 20;
+            _delayCs    = frameDelayMs / 10;
+            _outputPath = outputPath;
+            _frameCount = 0;
+            _closed     = false;
+            _cancelled  = false;
+
+            // Compute scaled output dimensions
+            _outW = sourceWidth;
+            _outH = sourceHeight;
+            if (_outW > _maxWidth)
+            {
+                _outH = (int)Math.Round(_outH * ((double)_maxWidth / _outW));
+                if (_outH < 1) _outH = 1;
+                _outW = _maxWidth;
+            }
+
+            // Ensure output directory exists
+            string dir = Path.GetDirectoryName(outputPath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
+
+            _fs = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.Read);
+            _bw = new BinaryWriter(_fs);
+
+            // GIF89a header
+            _bw.Write(new byte[] { 0x47, 0x49, 0x46, 0x38, 0x39, 0x61 }); // "GIF89a"
+
+            // Logical Screen Descriptor — no global colour table
+            AnimatedGifEncoder.WriteU16Internal(_bw, (ushort)_outW);
+            AnimatedGifEncoder.WriteU16Internal(_bw, (ushort)_outH);
+            _bw.Write((byte)0x00); // packed: no GCT
+            _bw.Write((byte)0x00); // background colour index
+            _bw.Write((byte)0x00); // pixel aspect ratio
+
+            // Netscape loop extension (loop = 0 → infinite)
+            AnimatedGifEncoder.WriteNetscapeLoopInternal(_bw, 0);
+
+            Logger.Log($"GifStreamEncoder.Open: {sourceWidth}x{sourceHeight} → {_outW}x{_outH}, " +
+                       $"delay={frameDelayMs}ms, path={outputPath}");
+        }
+
+        // ------------------------------------------------------------------ //
+        //  AddFrame — quantise, dither, LZW-encode, and write one frame
+        // ------------------------------------------------------------------ //
+
+        /// <summary>
+        /// Encodes one captured frame and appends it to the open GIF stream.
+        /// Disposes the source bitmap when done.
+        /// </summary>
+        public void AddFrame(Bitmap src)
+        {
+            if (!IsOpen)
+            {
+                src?.Dispose();
+                return;
+            }
+
+            Bitmap scaled = AnimatedGifEncoder.ScaleFrameInternal(src, _outW, _outH);
+            try
+            {
+                byte[]  bgra    = AnimatedGifEncoder.ReadBgraInternal(scaled, _outW, _outH);
+                Color[] palette = MediaCutQuantizer.Build(bgra, _outW * _outH, 256);
+                byte[]  cube    = AnimatedGifEncoder.BuildLookupCubeInternal(palette);
+                byte[]  indices = AnimatedGifEncoder.DitherInternal(bgra, _outW, _outH, palette, cube);
+                AnimatedGifEncoder.WriteGifFrameInternal(_bw, indices, palette, _outW, _outH, _delayCs);
+                _bw.Flush();
+                _frameCount++;
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"GifStreamEncoder.AddFrame: error on frame {_frameCount} — {ex.Message}");
+            }
+            finally
+            {
+                if (!ReferenceEquals(scaled, src)) scaled.Dispose();
+                src.Dispose();
+            }
+        }
+
+        // ------------------------------------------------------------------ //
+        //  Close — write GIF trailer and flush
+        // ------------------------------------------------------------------ //
+
+        /// <summary>
+        /// Finalises the GIF file by writing the trailer byte and closing
+        /// the stream.  The file is now a valid animated GIF.
+        /// </summary>
+        public void Close()
+        {
+            if (_closed || _cancelled || _fs == null) return;
+            _closed = true;
+            try
+            {
+                _bw.Write((byte)0x3B); // GIF trailer
+                _bw.Flush();
+                Logger.Log($"GifStreamEncoder.Close: {_frameCount} frames written → {_outputPath}");
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"GifStreamEncoder.Close: error — {ex.Message}");
+            }
+            finally
+            {
+                DisposeStream();
+            }
+        }
+
+        // ------------------------------------------------------------------ //
+        //  Cancel — close and delete the partial file
+        // ------------------------------------------------------------------ //
+
+        /// <summary>
+        /// Aborts the recording.  The partial GIF file is closed and deleted.
+        /// </summary>
+        public void Cancel()
+        {
+            if (_closed || _cancelled || _fs == null) return;
+            _cancelled = true;
+            Logger.Log($"GifStreamEncoder.Cancel: discarding partial file ({_frameCount} frames) → {_outputPath}");
+            DisposeStream();
+            try
+            {
+                if (File.Exists(_outputPath))
+                    File.Delete(_outputPath);
+                Logger.Log("GifStreamEncoder.Cancel: partial file deleted.");
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"GifStreamEncoder.Cancel: delete failed — {ex.Message}");
+            }
+        }
+
+        // ------------------------------------------------------------------ //
+        //  Dispose
+        // ------------------------------------------------------------------ //
+
+        public void Dispose()
+        {
+            // If neither Close() nor Cancel() was called, treat as cancel
+            // to avoid leaving an unfinished (untrailered) file on disk.
+            if (!_closed && !_cancelled)
+                Cancel();
+            else
+                DisposeStream();
+        }
+
+        private void DisposeStream()
+        {
+            try { _bw?.Dispose(); } catch { }
+            try { _fs?.Dispose(); } catch { }
+            _bw = null;
+            _fs = null;
         }
     }
 
