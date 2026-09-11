@@ -174,19 +174,7 @@ namespace PluginScreenshot
                     // 6. Size label.
                     DrawSizeLabel(g, sel, ClientRectangle);
                 }
-                else
-                {
-                    // Instruction text before any drag.
-                    string hint = "Drag to select region  •  Right-click or Esc to cancel";
-                    using (var font = new Font("Segoe UI", 12f))
-                    using (var fg   = new SolidBrush(Color.White))
-                    {
-                        SizeF ts = g.MeasureString(hint, font);
-                        g.DrawString(hint, font, fg,
-                            (ClientRectangle.Width  - ts.Width)  / 2f,
-                            (ClientRectangle.Height - ts.Height) / 2f);
-                    }
-                }
+                // No instruction text — overlay speaks for itself.
             }
 
             private Rectangle GetSelectionRect()
