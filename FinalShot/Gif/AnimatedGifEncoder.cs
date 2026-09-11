@@ -25,25 +25,21 @@ namespace PluginScreenshot
         //  Public entry point
         // ------------------------------------------------------------------ //
 
-        public static void Encode(IList<Bitmap> frames, int frameDelayMs, string outputPath)
+        public static void Encode(IList<GifFrame> frames, string outputPath)
         {
             if (frames == null || frames.Count == 0)
                 throw new ArgumentException("No frames to encode.");
             if (string.IsNullOrWhiteSpace(outputPath))
                 throw new ArgumentNullException("outputPath");
 
-            if (frameDelayMs < 20) frameDelayMs = 20;
-            int delayCs = frameDelayMs / 10; // GIF delay unit = centiseconds
-
             string dir = Path.GetDirectoryName(outputPath);
             if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
                 Directory.CreateDirectory(dir);
 
-            int w = frames[0].Width;
-            int h = frames[0].Height;
+            int w = frames[0].Bitmap.Width;
+            int h = frames[0].Bitmap.Height;
 
-            Logger.Log($"AnimatedGifEncoder: {frames.Count} frames, {w}x{h}, " +
-                       $"delay={frameDelayMs}ms, out={outputPath}");
+            Logger.Log($"AnimatedGifEncoder: {frames.Count} frames, {w}x{h}, out={outputPath}");
 
             using (var fs = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None))
             using (var bw = new BinaryWriter(fs))
@@ -64,7 +60,7 @@ namespace PluginScreenshot
                 for (int i = 0; i < frames.Count; i++)
                 {
                     Logger.Log($"AnimatedGifEncoder: encoding frame {i + 1}/{frames.Count}");
-                    EncodeFrame(bw, frames[i], delayCs);
+                    EncodeFrame(bw, frames[i].Bitmap, frames[i].DelayCs);
                 }
                 bw.Write((byte)0x3B); // GIF trailer
             }
@@ -506,7 +502,7 @@ namespace PluginScreenshot
         private FileStream   _fs;
         private BinaryWriter _bw;
         private string       _outputPath;
-        private int          _w, _h, _delayCs;
+        private int          _w, _h;
         private int          _frameCount;
         private bool         _closed;
         private bool         _cancelled;
@@ -521,12 +517,10 @@ namespace PluginScreenshot
         /// Opens the output file and writes the GIF89a header.
         /// Must be called once before any <see cref="AddFrame"/> calls.
         /// </summary>
-        public void Open(string outputPath, int width, int height, int frameDelayMs)
+        public void Open(string outputPath, int width, int height)
         {
             if (_fs != null) throw new InvalidOperationException("GifStreamEncoder already open.");
 
-            if (frameDelayMs < 20) frameDelayMs = 20;
-            _delayCs    = frameDelayMs / 10;
             _outputPath = outputPath;
             _w          = width;
             _h          = height;
@@ -555,7 +549,7 @@ namespace PluginScreenshot
             // Netscape loop extension (loop = 0 → infinite)
             AnimatedGifEncoder.WriteNetscapeLoopInternal(_bw, 0);
 
-            Logger.Log($"GifStreamEncoder.Open: {_w}x{_h}, delay={frameDelayMs}ms, path={outputPath}");
+            Logger.Log($"GifStreamEncoder.Open: {_w}x{_h}, path={outputPath}");
         }
 
         // ------------------------------------------------------------------ //
@@ -564,23 +558,26 @@ namespace PluginScreenshot
 
         /// <summary>
         /// Encodes one captured frame and appends it to the open GIF stream.
+        /// Uses the frame's own DelayCs (measured at capture time) so playback
+        /// speed exactly matches the recording speed.
         /// Disposes the source bitmap when done.
         /// </summary>
-        public void AddFrame(Bitmap src)
+        public void AddFrame(GifFrame frame)
         {
             if (!IsOpen)
             {
-                src?.Dispose();
+                frame?.Bitmap?.Dispose();
                 return;
             }
 
             try
             {
+                Bitmap src = frame.Bitmap;
                 byte[]  bgra    = AnimatedGifEncoder.ReadBgraInternal(src, _w, _h);
                 Color[] palette = MediaCutQuantizer.Build(bgra, _w * _h, 256);
                 byte[]  cube    = AnimatedGifEncoder.BuildLookupCubeInternal(palette);
                 byte[]  indices = AnimatedGifEncoder.DitherInternal(bgra, _w, _h, palette, cube);
-                AnimatedGifEncoder.WriteGifFrameInternal(_bw, indices, palette, _w, _h, _delayCs);
+                AnimatedGifEncoder.WriteGifFrameInternal(_bw, indices, palette, _w, _h, frame.DelayCs);
                 _bw.Flush();
                 _frameCount++;
             }
@@ -590,7 +587,7 @@ namespace PluginScreenshot
             }
             finally
             {
-                src?.Dispose();
+                frame?.Bitmap?.Dispose();
             }
         }
 

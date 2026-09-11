@@ -108,8 +108,7 @@ namespace PluginScreenshot
                     // start writing frames the moment they arrive in the buffer.
                     var enc = new GifStreamEncoder();
                     Rectangle bounds = System.Windows.Forms.SystemInformation.VirtualScreen;
-                    enc.Open(settings.GifSavePath, bounds.Width, bounds.Height,
-                             1000 / settings.GifFPS);
+                    enc.Open(settings.GifSavePath, bounds.Width, bounds.Height);
                     _streamEncoder = enc;
 
                     // Encoder thread: drain buffer → AddFrame live during recording.
@@ -303,11 +302,11 @@ namespace PluginScreenshot
         {
             int fps         = settings.GifFPS;
             int maxSeconds  = settings.GifDuration;   // 0 = unlimited
-            int delayMs     = 1000 / fps;
+            int targetMs    = 1000 / fps;              // target interval between frames
             int maxFrames   = maxSeconds > 0 ? fps * maxSeconds : int.MaxValue;
 
             Logger.Log($"GifCaptureManager.CaptureLoop: starting, fps={fps}, " +
-                       $"maxFrames={maxFrames}, delayMs={delayMs}");
+                       $"maxFrames={maxFrames}, targetMs={targetMs}");
 
             // Elevate DPI awareness so CopyFromScreen captures physical pixels
             // rather than logical ones on high-DPI displays.
@@ -315,23 +314,38 @@ namespace PluginScreenshot
                                 NativeMethods.DPI_PER_MONITOR_AWARE_V2);
             try
             {
+                var frameClock = Stopwatch.StartNew();
+
                 for (int i = 0; !_stopRequested && i < maxFrames; i++)
                 {
-                    var sw = Stopwatch.StartNew();
+                    var captureSw = Stopwatch.StartNew();
 
                     try
                     {
-                        Bitmap frame = CaptureVirtualScreen(settings.ShowCursor);
-                        _buffer.Add(frame);
+                        Bitmap bmp = CaptureVirtualScreen(settings.ShowCursor);
+
+                        // Measure the real elapsed time since the last frame was
+                        // queued. This is what gets stamped into the GIF so playback
+                        // speed exactly matches the recorded speed, regardless of
+                        // FPS setting or timing jitter.
+                        int elapsedMs = (int)frameClock.ElapsedMilliseconds;
+                        frameClock.Restart();
+
+                        // GIF delay unit is centiseconds. Round to nearest, min 2cs.
+                        int delayCs = (int)Math.Round(elapsedMs / 10.0);
+                        if (delayCs < 2) delayCs = 2;
+
+                        _buffer.Add(new GifFrame(bmp, delayCs));
                     }
                     catch (Exception ex)
                     {
                         Logger.Log($"GifCaptureManager.CaptureLoop: frame {i} error — {ex.Message}");
+                        frameClock.Restart(); // keep clock in sync even on error
                     }
 
                     // Sleep for the remainder of this frame's time budget.
-                    int elapsed = (int)sw.ElapsedMilliseconds;
-                    int sleep   = delayMs - elapsed;
+                    int captureMs = (int)captureSw.ElapsedMilliseconds;
+                    int sleep     = targetMs - captureMs;
                     if (sleep > 0)
                         Thread.Sleep(sleep);
                     // If we're behind schedule we just proceed immediately.
@@ -377,9 +391,9 @@ namespace PluginScreenshot
             Logger.Log("GifCaptureManager.StreamEncodeLoop: starting.");
             try
             {
-                foreach (Bitmap frame in buffer.Drain())
+                foreach (GifFrame frame in buffer.Drain())
                 {
-                    // AddFrame encodes+writes the frame and disposes the Bitmap.
+                    // AddFrame encodes+writes the frame using its real delay and disposes the Bitmap.
                     enc.AddFrame(frame);
                 }
             }
@@ -428,10 +442,10 @@ namespace PluginScreenshot
                 else
                 {
                     // --- Batch mode ---
-                    var frames = new List<Bitmap>();
+                    var frames = new List<GifFrame>();
                     try
                     {
-                        foreach (Bitmap frame in buffer.Drain())
+                        foreach (GifFrame frame in buffer.Drain())
                             frames.Add(frame);
 
                         Logger.Log($"GifCaptureManager.EncodeAndFinish: {frames.Count} frames collected.");
@@ -442,12 +456,12 @@ namespace PluginScreenshot
                             return;
                         }
 
-                        AnimatedGifEncoder.Encode(frames, 1000 / settings.GifFPS, settings.GifSavePath);
+                        AnimatedGifEncoder.Encode(frames, settings.GifSavePath);
                         success = true;
                     }
                     finally
                     {
-                        foreach (Bitmap f in frames) f?.Dispose();
+                        foreach (GifFrame f in frames) f?.Bitmap?.Dispose();
                         buffer.Dispose();
                     }
                 }
