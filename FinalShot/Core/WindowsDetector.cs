@@ -6,33 +6,18 @@ using System.Text;
 
 namespace PluginScreenshot
 {
-    // Enumerates visible windows and child controls using EnumWindows / EnumChildWindows.
-    // Exact port of ShareX's WindowsRectangleList for FinalShot (.NET 4.8 / WinForms).
     internal class WindowsDetector
     {
-        // Configuration
-
-        // Window class names to skip entirely (e.g. NVIDIA GeForce Overlay)
         public List<string> IgnoreClassNames { get; } = new List<string>
         {
             "CEF-OSC-WIDGET"
         };
 
-        // Handles to skip — add the overlay form's own handle before calling GetWindowList
         public List<IntPtr> IgnoreHandles { get; } = new List<IntPtr>();
-
-        // When true, child controls inside each top-level window are included
         public bool IncludeChildWindows { get; set; }
-
-        // Private state — reset on each GetWindowList call
-
         private List<WindowInfo> _results;
         private HashSet<IntPtr>  _parentHandles;
 
-        // Public API
-
-        // Returns a z-ordered list of visible window and control rectangles in screen coords.
-        // Safe to call on a background thread.
         public List<WindowInfo> GetWindowList()
         {
             _results       = new List<WindowInfo>();
@@ -48,10 +33,6 @@ namespace PluginScreenshot
                 Logger.Log("WindowsDetector.GetWindowList exception: " + ex.Message);
             }
 
-            // Post-filter: children appear before their parent in _results (guaranteed by
-            // CheckHandle ordering), so when a child is evaluated its parent top-level is
-            // not yet in result — children are only blocked by earlier children, never by
-            // their own parent. Top-level entries are always kept.
             var result = new List<WindowInfo>(_results.Count);
 
             foreach (WindowInfo w in _results)
@@ -93,9 +74,6 @@ namespace PluginScreenshot
 
             bool isTopLevel = clipRect == null;
 
-            // Only call IsWindowVisible for top-level windows.
-            // Many valid child controls (Explorer sidebar, DirectUIHWND panels) fail
-            // IsWindowVisible because it walks the parent chain — skip this for children.
             if (isTopLevel && !NativeMethods.IsWindowVisible(hWnd))
                 return true;
 
@@ -139,9 +117,6 @@ namespace PluginScreenshot
 
             if (rect.Width <= 0 || rect.Height <= 0)
                 return true;
-
-            // Add children before self so they precede the parent in _results.
-            // This is required by the post-filter (children must be seen before parent).
 
             if (isTopLevel)
             {
