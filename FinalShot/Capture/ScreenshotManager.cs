@@ -7,13 +7,10 @@ using System.Linq;
 using System.Media;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
-
 namespace PluginScreenshot
 {
     public static class ScreenshotManager
     {
-        // Cursor Drawing
-
         public static void DrawCursor(Graphics g, Rectangle bounds)
         {
             var ci = new NativeMethods.CURSORINFO { cbSize = Marshal.SizeOf(typeof(NativeMethods.CURSORINFO)) };
@@ -29,22 +26,15 @@ namespace PluginScreenshot
                 }
             }
         }
-
-        // DPI Context Helper
-
         private static void WithHighDpiContext(Action action)
         {
             IntPtr old = NativeMethods.SetThreadDpiAwarenessContext(NativeMethods.DPI_PER_MONITOR_AWARE_V2);
             try { action(); }
             finally { NativeMethods.SetThreadDpiAwarenessContext(old); }
         }
-
-        // Full-Screen Capture
-
         public static void TakeFullScreen(Settings settings)
         {
             if (string.IsNullOrEmpty(settings.SavePath)) return;
-
             WithHighDpiContext(() =>
             {
                 Rectangle bounds = SystemInformation.VirtualScreen;
@@ -57,24 +47,18 @@ namespace PluginScreenshot
                     SaveImageSafely(bmp, settings);
                 }
             });
-
             if (settings.ShowNotification)
             {
                 Logger.Log("TakeFullScreen: ShowNotification is enabled");
                 ShowNotificationWithImage(settings.SavePath, "Full Screen");
             }
-
             ExecuteFinishAction(settings);
         }
-
-        // Predefined Region Capture
-
         public static void TakePredefined(Settings settings)
         {
             var r = settings.PredefinedRegion;
             if (string.IsNullOrEmpty(settings.SavePath) || r.Width <= 0 || r.Height <= 0)
                 return;
-
             WithHighDpiContext(() =>
             {
                 using (var bmp = new Bitmap(r.Width, r.Height))
@@ -86,18 +70,13 @@ namespace PluginScreenshot
                     SaveImageSafely(bmp, settings);
                 }
             });
-
             if (settings.ShowNotification)
             {
                 Logger.Log("TakePredefined: ShowNotification is enabled");
                 ShowNotificationWithImage(settings.SavePath, "Predefined Region");
             }
-
             ExecuteFinishAction(settings);
         }
-
-        // Custom Selection Capture
-
         public static void TakeCustom(Settings settings, Action finishCallback)
         {
             Logger.Log($"TakeCustom() called. SavePath='{settings.SavePath}'  ShowCursor={settings.ShowCursor}");
@@ -106,13 +85,8 @@ namespace PluginScreenshot
                 Logger.Log("TakeCustom: SavePath is empty, aborting custom capture.");
                 return;
             }
-            // Use RunModal: spawns a fresh STA thread each time so Rainmeter never
-            // crashes on the second call (Application.Run on a reused thread fails).
             CustomScreenshotForm.RunModal(settings, finishCallback);
         }
-
-        // Window Capture
-
         public static void TakeWindowScreenshot(Settings settings, string windowTitle)
         {
             Logger.Log($"TakeWindowScreenshot() called. WindowTitle='{windowTitle}', UsePrintWindow={settings.UsePrintWindow}");
@@ -121,13 +95,11 @@ namespace PluginScreenshot
                 Logger.Log("TakeWindowScreenshot: SavePath is empty, aborting.");
                 return;
             }
-
             if (string.IsNullOrWhiteSpace(windowTitle))
             {
                 Logger.Log("TakeWindowScreenshot: WindowTitle is empty, aborting.");
                 return;
             }
-
             WithHighDpiContext(() =>
             {
                 IntPtr hWnd = NativeMethods.FindWindow(null, windowTitle);
@@ -136,21 +108,17 @@ namespace PluginScreenshot
                     Logger.Log($"TakeWindowScreenshot: Window '{windowTitle}' not found.");
                     return;
                 }
-
                 if (NativeMethods.GetWindowRect(hWnd, out NativeMethods.RECT rect))
                 {
                     int width = rect.Right - rect.Left;
                     int height = rect.Bottom - rect.Top;
-
                     if (width <= 0 || height <= 0)
                     {
                         Logger.Log($"TakeWindowScreenshot: Invalid window dimensions {width}x{height}");
                         return;
                     }
-
                     Rectangle bounds = new Rectangle(rect.Left, rect.Top, width, height);
                     Logger.Log($"TakeWindowScreenshot: Capturing window at {bounds}");
-
                     using (var bmp = new Bitmap(width, height))
                     using (var g = Graphics.FromImage(bmp))
                     {
@@ -185,7 +153,6 @@ namespace PluginScreenshot
                             Logger.Log("TakeWindowScreenshot: Using CopyFromScreen");
                             g.CopyFromScreen(bounds.Location, Point.Empty, bounds.Size);
                         }
-
                         if (settings.ShowCursor)
                             DrawCursor(g, bounds);
                         SaveImageSafely(bmp, settings);
@@ -196,18 +163,13 @@ namespace PluginScreenshot
                     Logger.Log($"TakeWindowScreenshot: Failed to get window rect for '{windowTitle}'");
                 }
             });
-
             if (settings.ShowNotification)
             {
                 Logger.Log("TakeWindowScreenshot: ShowNotification is enabled");
                 ShowNotificationWithImage(settings.SavePath, $"Window: {windowTitle}");
             }
-
             ExecuteFinishAction(settings);
         }
-
-        // Composite (Multi-Monitor) Capture
-
         public static void CompositeCapture(Rectangle rect, Settings settings)
         {
             if (settings == null || string.IsNullOrWhiteSpace(settings.SavePath))
@@ -215,7 +177,6 @@ namespace PluginScreenshot
                 Logger.Log("CompositeCapture: no SavePath, skipping.");
                 return;
             }
-
             using (var finalBmp = new Bitmap(rect.Width, rect.Height))
             using (var finalG = Graphics.FromImage(finalBmp))
             {
@@ -224,7 +185,6 @@ namespace PluginScreenshot
                     var inter = Rectangle.Intersect(rect, scr.Bounds);
                     if (inter.Width <= 0 || inter.Height <= 0)
                         continue;
-
                     using (var part = new Bitmap(inter.Width, inter.Height))
                     using (var g = Graphics.FromImage(part))
                     {
@@ -236,26 +196,20 @@ namespace PluginScreenshot
                                          inter.Top - rect.Top);
                     }
                 }
-
                 SaveImageSafely(finalBmp, settings);
             }
-
             if (settings.ShowNotification)
             {
                 Logger.Log("CompositeCapture: ShowNotification is enabled");
                 ShowNotificationWithImage(settings.SavePath, "Custom Region");
             }
         }
-
-        // Image Saving
-
         private static void SaveImageSafely(Bitmap source, Settings settings)
         {
             try
             {
                 if (source == null) { Logger.Log("SaveImageSafely: source bitmap is null"); return; }
                 if (settings == null) { Logger.Log("SaveImageSafely: settings is null"); return; }
-
                 string path = settings.SavePath;
                 if (string.IsNullOrWhiteSpace(path))
                 {
@@ -265,15 +219,12 @@ namespace PluginScreenshot
                 string dir = Path.GetDirectoryName(path);
                 if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
                     Directory.CreateDirectory(dir);
-
                 using (var clone = new Bitmap(source.Width, source.Height, source.PixelFormat))
                 using (var g = Graphics.FromImage(clone))
                 {
                     g.DrawImageUnscaled(source, 0, 0);
-
                     var fmt = GetImageFormat(path);
                     using var fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
-
                     if (fmt.Guid == ImageFormat.Jpeg.Guid)
                     {
                         var enc = ImageCodecInfo
@@ -302,7 +253,6 @@ namespace PluginScreenshot
                 Logger.Log("Error saving screenshot: " + ex.ToString());
             }
         }
-
         private static ImageFormat GetImageFormat(string path)
         {
             string ext = Path.GetExtension(path).ToLowerInvariant();
@@ -311,9 +261,6 @@ namespace PluginScreenshot
             if (ext == ".tiff" || ext == ".tif") return ImageFormat.Tiff;
             return ImageFormat.Png;
         }
-
-        // Finish Action
-
         public static void ExecuteFinishAction(Settings settings)
         {
             if (string.IsNullOrEmpty(settings.FinishAction)) return;
@@ -326,9 +273,6 @@ namespace PluginScreenshot
                 Logger.Log("Error running finish action: " + ex.Message);
             }
         }
-
-        // Notification
-
         private static void ShowNotificationWithImage(string imagePath, string captureType)
         {
             try
@@ -338,9 +282,7 @@ namespace PluginScreenshot
                     Logger.Log($"ShowNotificationWithImage: Image file not found at '{imagePath}'");
                     return;
                 }
-
                 Logger.Log($"ShowNotificationWithImage: Creating notification for '{captureType}'");
-
                 try
                 {
                     SystemSounds.Asterisk.Play();
@@ -350,7 +292,6 @@ namespace PluginScreenshot
                 {
                     Logger.Log($"Failed to play notification sound: {ex.Message}");
                 }
-
                 var notificationThread = new System.Threading.Thread(() =>
                 {
                     try
@@ -366,7 +307,6 @@ namespace PluginScreenshot
                 notificationThread.SetApartmentState(System.Threading.ApartmentState.STA);
                 notificationThread.IsBackground = true;
                 notificationThread.Start();
-
                 Logger.Log($"Notification thread started for '{captureType}' capture.");
             }
             catch (Exception ex)
