@@ -345,6 +345,11 @@ namespace PluginScreenshot
                 Logger.Log($"GifCaptureManager.PauseRecording: paused={_pauseRequested}");
             }
             GifRecordingOverlay.SetPaused(_pauseRequested);
+
+            if (_pauseRequested)
+                ExecuteAction(_activeSettings, _activeSettings.GifPauseAction,  "GifPauseAction");
+            else
+                ExecuteAction(_activeSettings, _activeSettings.GifResumeAction, "GifResumeAction");
         }
 
         /// <summary>

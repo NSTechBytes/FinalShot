@@ -65,8 +65,14 @@ namespace PluginScreenshot
         public string OnGifEncodingAction { get; private set; }
 
         /// <summary>
-        /// When true, each frame is quantised and written to the GIF file as it is
-        /// captured, instead of buffering all raw frames and encoding after stop.
+        /// Bang executed when recording is paused via -gif-pause or the overlay Pause button.
+        /// </summary>
+        public string GifPauseAction { get; private set; }
+
+        /// <summary>
+        /// Bang executed when recording is resumed after a pause.
+        /// </summary>
+        public string GifResumeAction { get; private set; }
         ///
         /// Benefits:
         ///   • RAM usage stays low (only ~2 frames in memory at a time).
@@ -126,6 +132,8 @@ namespace PluginScreenshot
 
             GifStartAction      = api.ReadString("GifStartAction",      "");
             GifCancelAction     = api.ReadString("GifCancelAction",     "");
+            GifPauseAction      = api.ReadString("GifPauseAction",      "");
+            GifResumeAction     = api.ReadString("GifResumeAction",     "");
             OnGifEncodingAction = api.ReadString("OnGifEncodingAction", "");
             GifEncodeWhileRecord = api.ReadInt("GifEncodeWhileRecord", 0) > 0;
             GifShowOverlay       = api.ReadInt("GifShowOverlay",       1) > 0;
@@ -143,8 +151,10 @@ namespace PluginScreenshot
                 + "  GifDuration=" + GifDuration
                 + "  GifPredefinedRegion=" + GifPredefinedRegion
                 + "  GifEncodeWhileRecord=" + GifEncodeWhileRecord
-                + "  GifStartAction=" + (string.IsNullOrEmpty(GifStartAction) ? "(none)" : "(set)")
-                + "  GifCancelAction=" + (string.IsNullOrEmpty(GifCancelAction) ? "(none)" : "(set)")
+                + "  GifStartAction=" + (string.IsNullOrEmpty(GifStartAction)      ? "(none)" : "(set)")
+                + "  GifCancelAction=" + (string.IsNullOrEmpty(GifCancelAction)    ? "(none)" : "(set)")
+                + "  GifPauseAction=" + (string.IsNullOrEmpty(GifPauseAction)      ? "(none)" : "(set)")
+                + "  GifResumeAction=" + (string.IsNullOrEmpty(GifResumeAction)    ? "(none)" : "(set)")
                 + "  OnGifEncodingAction=" + (string.IsNullOrEmpty(OnGifEncodingAction) ? "(none)" : "(set)"));
         }
     }
