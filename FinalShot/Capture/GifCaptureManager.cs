@@ -277,9 +277,9 @@ namespace PluginScreenshot
             {
                 GifRecordingOverlay.Show(
                     captureRegion,
-                    onStop:  () => StopAndSave(_activeSettings),
-                    onPause: () => PauseRecording(),
-                    onAbort: () => CancelRecording(_activeSettings));
+                    onStop:  () => ThreadPool.QueueUserWorkItem(_ => StopAndSave(_activeSettings)),
+                    onPause: () => ThreadPool.QueueUserWorkItem(_ => PauseRecording()),
+                    onAbort: () => ThreadPool.QueueUserWorkItem(_ => CancelRecording(_activeSettings)));
             }
 
             // Fire outside the lock to avoid holding _stateLock while calling into Rainmeter.
@@ -463,8 +463,19 @@ namespace PluginScreenshot
             int targetMs   = 1000 / fps;
             int maxFrames  = maxSeconds > 0 ? fps * maxSeconds : int.MaxValue;
 
+            // Snapshot the buffer reference at start-of-loop.
+            // CancelRecording() may null _buffer mid-loop; using a local reference
+            // ensures we never get a NullReferenceException on _buffer.Add().
+            GifFrameBuffer localBuffer = _buffer;
+
             Logger.Log($"GifCaptureManager.CaptureLoop: starting, mode={_captureMode}, fps={fps}, " +
                        $"maxFrames={maxFrames}, targetMs={targetMs}");
+
+            if (localBuffer == null)
+            {
+                Logger.Log("GifCaptureManager.CaptureLoop: buffer is null at start, aborting.");
+                return;
+            }
 
             IntPtr oldCtx = NativeMethods.SetThreadDpiAwarenessContext(
                                 NativeMethods.DPI_PER_MONITOR_AWARE_V2);
@@ -499,7 +510,7 @@ namespace PluginScreenshot
                         int delayCs = (int)Math.Round(elapsedMs / 10.0);
                         if (delayCs < 2) delayCs = 2;
 
-                        _buffer.Add(new GifFrame(bmp, delayCs));
+                        localBuffer.Add(new GifFrame(bmp, delayCs));
                     }
                     catch (Exception ex)
                     {
@@ -515,7 +526,7 @@ namespace PluginScreenshot
             finally
             {
                 NativeMethods.SetThreadDpiAwarenessContext(oldCtx);
-                _buffer.Complete();
+                localBuffer.Complete();   // signal: no more frames will be added
                 Logger.Log("GifCaptureManager.CaptureLoop: finished.");
             }
         }
