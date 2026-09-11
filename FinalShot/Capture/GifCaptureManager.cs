@@ -82,9 +82,15 @@ namespace PluginScreenshot
         // Signals the capture loop to exit.
         private static volatile bool   _stopRequested;
 
+        // Pause support — capture loop spins-waits while this is true.
+        private static volatile bool   _pauseRequested;
+
         // Streaming-mode fields (only used when GifEncodeWhileRecord = true).
         private static GifStreamEncoder _streamEncoder;
         private static Thread           _encoderThread;
+
+        // Settings snapshot kept so overlay callbacks can call Stop/Cancel.
+        private static Settings _activeSettings;
 
         // ------------------------------------------------------------------ //
         //  Capture-mode state (set once in StartRecording, read by CaptureLoop)
@@ -232,6 +238,7 @@ namespace PluginScreenshot
             lock (_stateLock)
             {
                 _stopRequested      = false;
+                _pauseRequested     = false;
                 _buffer             = new GifFrameBuffer();
                 _streamEncoder      = null;
                 _encoderThread      = null;
@@ -239,6 +246,7 @@ namespace PluginScreenshot
                 _captureRegion      = captureRegion;
                 _captureHwnd        = captureHwnd;
                 _captureWindowTitle = windowTitle;
+                _activeSettings     = settings;
 
                 Logger.Log($"GifCaptureManager.StartRecordingInternal: mode={mode}, " +
                            $"region={captureRegion}, fps={settings.GifFPS}, " +
@@ -262,6 +270,16 @@ namespace PluginScreenshot
                 _captureThread.IsBackground = true;
                 _captureThread.Name = "FinalShot-GifCapture";
                 _captureThread.Start();
+            }
+
+            // Show overlay if enabled.
+            if (settings.GifShowOverlay)
+            {
+                GifRecordingOverlay.Show(
+                    captureRegion,
+                    onStop:  () => StopAndSave(_activeSettings),
+                    onPause: () => PauseRecording(),
+                    onAbort: () => CancelRecording(_activeSettings));
             }
 
             // Fire outside the lock to avoid holding _stateLock while calling into Rainmeter.
@@ -299,6 +317,9 @@ namespace PluginScreenshot
 
             Logger.Log("GifCaptureManager.StopAndSave: signalled capture thread to stop.");
 
+            // Close the overlay immediately so it disappears when the user clicks Stop.
+            GifRecordingOverlay.CloseOverlay();
+
             var finishThread = new Thread(() =>
                 EncodeAndFinish(settings, captureThreadSnapshot, encoderThreadSnapshot,
                                 bufferSnapshot, streamEncSnapshot));
@@ -309,6 +330,22 @@ namespace PluginScreenshot
 
         /// <summary>Returns true while a recording or encoding session is active.</summary>
         public static bool IsActive => _state != State.Idle;
+
+        /// <summary>
+        /// Pauses or resumes the capture loop.
+        /// While paused, no frames are captured; the overlay timer continues running.
+        /// Does nothing when Idle or Encoding.
+        /// </summary>
+        public static void PauseRecording()
+        {
+            lock (_stateLock)
+            {
+                if (_state != State.Recording) return;
+                _pauseRequested = !_pauseRequested;
+                Logger.Log($"GifCaptureManager.PauseRecording: paused={_pauseRequested}");
+            }
+            GifRecordingOverlay.SetPaused(_pauseRequested);
+        }
 
         /// <summary>
         /// Toggles recording:
@@ -373,6 +410,9 @@ namespace PluginScreenshot
 
             Logger.Log("GifCaptureManager.CancelRecording: signalled stop, discarding frames.");
 
+            // Close the overlay immediately.
+            GifRecordingOverlay.CloseOverlay();
+
             var cleanupThread = new Thread(() =>
             {
                 try
@@ -429,6 +469,17 @@ namespace PluginScreenshot
 
                 for (int i = 0; !_stopRequested && i < maxFrames; i++)
                 {
+                    // If paused, wait until resumed or stopped.
+                    if (_pauseRequested)
+                    {
+                        while (_pauseRequested && !_stopRequested)
+                            Thread.Sleep(50);
+                        // Restart the frame clock so the pause gap isn't stamped
+                        // as a huge delay on the next frame.
+                        frameClock.Restart();
+                        if (_stopRequested) break;
+                    }
+
                     var captureSw = Stopwatch.StartNew();
 
                     try

@@ -81,6 +81,14 @@ namespace PluginScreenshot
         /// </summary>
         public bool GifEncodeWhileRecord { get; private set; }
 
+        /// <summary>
+        /// When true (default), shows a floating overlay during GIF recording that
+        /// draws a dashed border around the capture region and provides a toolbar
+        /// with Stop, Pause, and Abort buttons plus a live elapsed timer.
+        /// Set GifShowOverlay=0 in the skin INI to disable.
+        /// </summary>
+        public bool GifShowOverlay { get; private set; }
+
         public Settings(API api)
         {
             Api              = api;
@@ -120,6 +128,7 @@ namespace PluginScreenshot
             GifCancelAction     = api.ReadString("GifCancelAction",     "");
             OnGifEncodingAction = api.ReadString("OnGifEncodingAction", "");
             GifEncodeWhileRecord = api.ReadInt("GifEncodeWhileRecord", 0) > 0;
+            GifShowOverlay       = api.ReadInt("GifShowOverlay",       1) > 0;
 
             Logger.DebugEnabled = api.ReadInt("DebugLog", 0) == 1;
             string dbg = api.ReadString("DebugLogPath", "");

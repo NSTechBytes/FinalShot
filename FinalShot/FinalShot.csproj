@@ -96,6 +96,7 @@
     <Compile Include="Gif\GifFrameBuffer.cs" />
     <Compile Include="Gif\AnimatedGifEncoder.cs" />
     <Compile Include="UI\CustomScreenshotForm.cs" />
+    <Compile Include="UI\GifRecordingOverlay.cs" />
     <Compile Include="UI\GifSnapSelector.cs" />
     <Compile Include="UI\NotificationForm.cs" />
     <Compile Include="$(SolutionDir).\API\RainmeterAPI.cs" />

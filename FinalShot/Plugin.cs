@@ -114,6 +114,11 @@ namespace PluginScreenshot
                 Logger.Log("ExecuteBang: -gif-cancel received.");
                 GifCaptureManager.CancelRecording(settings);
             }
+            else if (string.Equals(cmd, "-gif-pause", StringComparison.OrdinalIgnoreCase))
+            {
+                Logger.Log("ExecuteBang: -gif-pause received.");
+                GifCaptureManager.PauseRecording();
+            }
             else if (cmd.StartsWith("ExecuteBatch ", StringComparison.OrdinalIgnoreCase))
             {
                 if (int.TryParse(cmd.Split(' ')[1], out int code))
