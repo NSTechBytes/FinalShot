@@ -99,7 +99,6 @@ namespace PluginScreenshot
         public string OnGifEncodingAction { get; private set; }
         public string GifPauseAction { get; private set; }
         public string GifResumeAction { get; private set; }
-        public bool GifEncodeWhileRecord { get; private set; }
         public bool GifShowOverlay { get; private set; }
 
         public Settings(API api)
@@ -148,7 +147,6 @@ namespace PluginScreenshot
             GifPauseAction       = api.ReadString("GifPauseAction",      "");
             GifResumeAction      = api.ReadString("GifResumeAction",     "");
             OnGifEncodingAction  = api.ReadString("OnGifEncodingAction", "");
-            GifEncodeWhileRecord = api.ReadInt("GifEncodeWhileRecord", 0) > 0;
             GifShowOverlay       = api.ReadInt("GifShowOverlay",       1) > 0;
 
             Logger.DebugEnabled = api.ReadInt("DebugLog", 0) == 1;
@@ -168,7 +166,6 @@ namespace PluginScreenshot
                     + " dither="  + EncoderQuality.Dither + ")"
                 + "  GifCompression=" + GifCompression
                 + "  GifPredefinedRegion=" + GifPredefinedRegion
-                + "  GifEncodeWhileRecord=" + GifEncodeWhileRecord
                 + "  GifStartAction="      + (string.IsNullOrEmpty(GifStartAction)      ? "(none)" : "(set)")
                 + "  GifCancelAction="     + (string.IsNullOrEmpty(GifCancelAction)     ? "(none)" : "(set)")
                 + "  GifPauseAction="      + (string.IsNullOrEmpty(GifPauseAction)      ? "(none)" : "(set)")
