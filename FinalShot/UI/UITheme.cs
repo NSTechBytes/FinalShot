@@ -1,51 +1,54 @@
+/*
+ * Copyright (c) 2025 nstechbytes
+ *
+ * Licensed under the MIT License.
+ * You may obtain a copy of the License at:
+ * https://opensource.org/licenses/MIT
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 using System;
 using System.Drawing;
 using Microsoft.Win32;
 
 namespace PluginScreenshot
 {
-    // ======================================================================
-    //  UITheme  —  shared palette for Notification, EncodingWindow, Dialog
-    // ======================================================================
+    //  UITheme  --  shared palette for Notification, EncodingWindow, Dialog
 
-    /// <summary>
-    /// Three theme modes the user can choose in Main.ini / GIF.ini.
-    ///   0 = Dark   — always dark (default, matches the plugin's design)
-    ///   1 = Light  — always light
-    ///   2 = System — follows the Windows "Apps use light theme" setting
-    /// </summary>
+    // Three theme modes the user can choose in Main.ini / GIF.ini.
+    //   0 = Dark   -- always dark (default, matches the plugin's design)
+    //   1 = Light  -- always light
+    //   2 = System -- follows the Windows "Apps use light theme" setting
     public enum UITheme { Dark = 0, Light = 1, System = 2 }
 
-    /// <summary>
-    /// Resolved colour palette for a given UITheme.
-    /// All UI windows obtain colours from here so a single theme change
-    /// propagates everywhere.
-    /// </summary>
+    // Resolved colour palette for a given UITheme.
+    // All UI windows obtain colours from here so a single theme change
+    // propagates everywhere.
     internal sealed class ThemeColors
     {
-        // ---- Backgrounds ----
         public Color Background  { get; }   // main window background
         public Color CardBg      { get; }   // card / panel background
         public Color BtnBg       { get; }   // button background
         public Color BtnHover    { get; }   // button hover
         public Color BarTrack    { get; }   // progress bar track
 
-        // ---- Borders ----
         public Color Border      { get; }   // outer window border
         public Color BtnBorder   { get; }   // button border
         public Color Divider     { get; }   // internal divider lines
 
-        // ---- Text ----
         public Color TextPrimary   { get; }
         public Color TextSecondary { get; }
         public Color BtnText       { get; }
 
-        // ---- Accents (fixed regardless of theme) ----
         public Color AccentBlue   { get; } = Color.FromArgb(0, 120, 212);
         public Color AccentGreen  { get; } = Color.FromArgb(0, 200, 100);
         public Color AccentAmber  { get; } = Color.FromArgb(255, 160, 30);
 
-        // ---- Close button ----
         public Color CloseNormal  { get; }
         public Color CloseHover   { get; }
 
@@ -85,9 +88,7 @@ namespace PluginScreenshot
             }
         }
 
-        // ------------------------------------------------------------------
         //  Factory
-        // ------------------------------------------------------------------
 
         public static ThemeColors Resolve(UITheme theme)
         {

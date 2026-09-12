@@ -1,3 +1,17 @@
+/*
+ * Copyright (c) 2025 nstechbytes
+ *
+ * Licensed under the MIT License.
+ * You may obtain a copy of the License at:
+ * https://opensource.org/licenses/MIT
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -8,27 +22,19 @@ using WinTimer = System.Windows.Forms.Timer;
 
 namespace PluginScreenshot
 {
-    /// <summary>
-    /// Borderless toast notification shown after a screenshot or GIF is saved.
-    ///
-    /// Layout (400 × 100):
-    ///   ┌───────────────────────────────────────────────────┐  ← 3px accent bar
-    ///   │ ┌──────┐  FinalShot                           ✕  │
-    ///   │ │cover │  Screenshot Captured!                    │
-    ///   │ │image │  Full Screen                             │
-    ///   │ └──────┘                                          │
-    ///   └───────────────────────────────────────────────────┘
-    ///
-    ///  • Cover image fills the left 80×80 box with object-fit:cover crop.
-    ///  • Themed: Dark / Light / System.
-    ///  • Clicking the body (not ✕) executes OnNotificationClickAction.
-    ///  • Fades in, auto-closes after 4 s, fades out.
-    /// </summary>
+    // Borderless toast notification shown after a screenshot or GIF is saved.
+    //
+    // Layout (400 x 100):
+    //   3px accent bar at top.
+    //   Left: 80x80 cover image (object-fit:cover crop).
+    //   Right: App name, title, subtitle, close button.
+    //
+    // Themed: Dark / Light / System.
+    // Clicking the body (not close button) executes OnNotificationClickAction.
+    // Fades in, auto-closes after 4s, fades out.
     public sealed class NotificationForm : Form
     {
-        // ------------------------------------------------------------------ //
         //  Layout constants
-        // ------------------------------------------------------------------ //
         private const int W           = 400;
         private const int H           = 100;
         private const int AccentH     = 3;
@@ -40,9 +46,7 @@ namespace PluginScreenshot
         private const int CloseSize   = 18;
         private const int DisplayMs   = 4000;
 
-        // ------------------------------------------------------------------ //
         //  State
-        // ------------------------------------------------------------------ //
         private readonly ThemeColors  _t;
         private readonly string       _imagePath;
         private readonly string       _captureType;
@@ -56,9 +60,7 @@ namespace PluginScreenshot
         private readonly WinTimer _holdTimer;
         private readonly WinTimer _fadeOutTimer;
 
-        // ------------------------------------------------------------------ //
         //  Construction
-        // ------------------------------------------------------------------ //
 
         public NotificationForm(string imagePath, string captureType,
                                 Settings settings)
@@ -105,9 +107,7 @@ namespace PluginScreenshot
             Load += (s, e) => { _fadeInTimer.Start(); };
         }
 
-        // ------------------------------------------------------------------ //
-        //  Cover image — crop to fill CoverSize × CoverSize
-        // ------------------------------------------------------------------ //
+        //  Cover image -- crop to fill CoverSize x CoverSize
 
         private void LoadCover()
         {
@@ -122,7 +122,7 @@ namespace PluginScreenshot
                         g.SmoothingMode      = SmoothingMode.HighQuality;
                         g.PixelOffsetMode    = PixelOffsetMode.HighQuality;
 
-                        // Object-fit: cover — scale to fill, crop excess
+                        // Object-fit: cover -- scale to fill, crop excess
                         float scale = Math.Max(
                             (float)CoverSize / src.Width,
                             (float)CoverSize / src.Height);
@@ -138,13 +138,11 @@ namespace PluginScreenshot
             }
             catch
             {
-                // No image — cover stays null, placeholder is drawn in OnPaint
+                // No image -- cover stays null, placeholder is drawn in OnPaint
             }
         }
 
-        // ------------------------------------------------------------------ //
         //  Geometry helpers
-        // ------------------------------------------------------------------ //
 
         private Rectangle CloseRect =>
             new Rectangle(W - 28, AccentH + 6, CloseSize, CloseSize);
@@ -152,9 +150,7 @@ namespace PluginScreenshot
         private Rectangle BodyRect =>
             new Rectangle(0, AccentH, W - CloseSize - 8, H - AccentH);
 
-        // ------------------------------------------------------------------ //
         //  Fade in / out
-        // ------------------------------------------------------------------ //
 
         private void FadeInTick(object s, EventArgs e)
         {
@@ -178,9 +174,7 @@ namespace PluginScreenshot
                 _fadeOutTimer.Start();
         }
 
-        // ------------------------------------------------------------------ //
         //  Mouse
-        // ------------------------------------------------------------------ //
 
         private void OnMouseMove(object s, MouseEventArgs e)
         {
@@ -199,18 +193,16 @@ namespace PluginScreenshot
                 return;
             }
 
-            // Click anywhere else → execute action then close
+            // Click anywhere else -> execute action then close
             if (!string.IsNullOrEmpty(_clickAction))
             {
                 try { _settings?.Api?.Execute(_clickAction); }
-                catch (Exception ex) { Logger.Log($"NotificationForm: click action error — {ex.Message}"); }
+                catch (Exception ex) { Logger.Log($"NotificationForm: click action error -- {ex.Message}"); }
             }
             StartClose();
         }
 
-        // ------------------------------------------------------------------ //
         //  Paint
-        // ------------------------------------------------------------------ //
 
         protected override void OnPaint(PaintEventArgs e)
         {
@@ -229,7 +221,6 @@ namespace PluginScreenshot
             using (var p = new Pen(_t.Border, 1))
                 g.DrawRectangle(p, 0, 0, W - 1, H - 1);
 
-            // ---- Cover image ----
             var coverRect = new Rectangle(CoverX, CoverY, CoverSize, CoverSize);
             if (_cover != null)
             {
@@ -253,13 +244,11 @@ namespace PluginScreenshot
                 }
             }
 
-            // ---- App name ----
             int ty = AccentH + 10;
             using (var f = new Font("Segoe UI", 9f, FontStyle.Bold))
             using (var b = new SolidBrush(_t.AccentBlue))
                 g.DrawString("FinalShot", f, b, TextX, ty);
 
-            // ---- Title ----
             ty += 18;
             using (var f = new Font("Segoe UI", 10.5f, FontStyle.Bold))
             using (var b = new SolidBrush(_t.TextPrimary))
@@ -268,7 +257,6 @@ namespace PluginScreenshot
                 g.DrawString("Saved!", f, b, r);
             }
 
-            // ---- Subtitle (capture type) ----
             ty += 22;
             using (var f = new Font("Segoe UI", 8.5f))
             using (var b = new SolidBrush(_t.TextSecondary))
@@ -279,7 +267,6 @@ namespace PluginScreenshot
                 g.DrawString(_captureType, f, b, r, sf);
             }
 
-            // ---- Close button ----
             var cr = CloseRect;
             using (var f = new Font("Segoe UI", 9f, FontStyle.Bold))
             using (var b = new SolidBrush(_closeHover ? _t.CloseHover : _t.CloseNormal))
@@ -290,9 +277,7 @@ namespace PluginScreenshot
             }
         }
 
-        // ------------------------------------------------------------------ //
         //  No-activate topmost + WS_EX_NOACTIVATE
-        // ------------------------------------------------------------------ //
 
         protected override CreateParams CreateParams
         {
@@ -310,9 +295,7 @@ namespace PluginScreenshot
             NativeMethods.MakeTopMostNoActivate(Handle);
         }
 
-        // ------------------------------------------------------------------ //
         //  Cleanup
-        // ------------------------------------------------------------------ //
 
         protected override void Dispose(bool disposing)
         {

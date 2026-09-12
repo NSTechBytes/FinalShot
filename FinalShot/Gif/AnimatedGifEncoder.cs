@@ -1,4 +1,18 @@
-﻿using System;
+/*
+ * Copyright (c) 2025 nstechbytes
+ *
+ * Licensed under the MIT License.
+ * You may obtain a copy of the License at:
+ * https://opensource.org/licenses/MIT
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
@@ -7,17 +21,15 @@ using System.Runtime.InteropServices;
 
 namespace PluginScreenshot
 {
-    // ======================================================================
-    //  AnimatedGifEncoder  —  Pure .NET 4.8 animated GIF encoder.
+    //  AnimatedGifEncoder  --  Pure .NET 4.8 animated GIF encoder.
     //
     //  Key optimisations (file-size reduction, same resolution):
-    //    • Global palette sampled evenly across ALL frames (FFmpeg palettegen-style).
-    //    • Bayer ordered dither on every pixel (smooth gradients; frame-stable for deltas).
-    //    • Dirty horizontal bands instead of one huge AABB when updates are distant.
-    //    • Exact + near-duplicate frame coalesce (sub-pixel shimmer).
-    //    • Capture-time still-frame merge (identical bitmaps fold into next delay).
-    //    • Disposal=1 + transparent index for unchanged pixels (gifsicle-style).
-    // ======================================================================
+    //    - Global palette sampled evenly across ALL frames (FFmpeg palettegen-style).
+    //    - Bayer ordered dither on every pixel (smooth gradients; frame-stable for deltas).
+    //    - Dirty horizontal bands instead of one huge AABB when updates are distant.
+    //    - Exact + near-duplicate frame coalesce (sub-pixel shimmer).
+    //    - Capture-time still-frame merge (identical bitmaps fold into next delay).
+    //    - Disposal=1 + transparent index for unchanged pixels (gifsicle-style).
     internal static class AnimatedGifEncoder
     {
         // The last palette entry is always the transparent index.
@@ -26,8 +38,6 @@ namespace PluginScreenshot
         // one is designated transparent.
         private const int TRANSPARENT_IDX_OFFSET = 1; // last slot = Colors - 1
 
-        // ------------------------------------------------------------------ //
-        // ------------------------------------------------------------------ //
         //  Public entry point - two-pass streaming encode from disk cache
         //
         //  Pass 1 - palette sampling:
@@ -43,7 +53,6 @@ namespace PluginScreenshot
         //
         //  Total memory at any point ~= 2 x frameBytes regardless of recording
         //  length - identical to ShareX HardDiskCache approach.
-        // ------------------------------------------------------------------ //
 
         public static void Encode(GifDiskCache cache, string outputPath)
         {
@@ -71,7 +80,7 @@ namespace PluginScreenshot
             const int  REAL_COLORS = 256;
             const int  MAX_SAMPLES = 500_000;
             // Near-duplicate: skip frames that change fewer than this fraction of pixels
-            // (ClearType / cursor anti-alias shimmer) — visually identical at GIF scale.
+            // (ClearType / cursor anti-alias shimmer) -- visually identical at GIF scale.
             const double NearDupeFraction = 0.0002; // 0.02%
 
             Logger.Log($"AnimatedGifEncoder: {cache.Count} frames, {w}x{h}, " +
@@ -143,7 +152,7 @@ namespace PluginScreenshot
                     byte[] bgra = ReadBgraInternal(frame.Bitmap, w, h);
                     frame.Bitmap.Dispose();
 
-                    // Full Bayer ordered dither — required for smooth gradients
+                    // Full Bayer ordered dither -- required for smooth gradients
                     // (wallpaper, shadows). Selective/nearest-only dither bands them.
                     byte[] indices = DitherInternal(bgra, w, h, palette, cube, transpIdx);
                     bgra = null;
@@ -176,7 +185,7 @@ namespace PluginScreenshot
                         List<Rectangle> bands = ComputeDirtyBands(indices, prevIndices, w, h);
                         if (bands == null || bands.Count == 0)
                         {
-                            // Nothing changed — fold delay (should be rare after near-dupe check)
+                            // Nothing changed -- fold delay (should be rare after near-dupe check)
                             pendingCs += effectiveCs;
                             continue;
                         }
@@ -220,9 +229,7 @@ namespace PluginScreenshot
             }
         }
 
-        // ------------------------------------------------------------------ //
         //  Delta: replace unchanged pixels with transparent index
-        // ------------------------------------------------------------------ //
 
         private static byte[] ApplyDelta(byte[] current, byte[] previous, int transpIdx)
         {
@@ -233,16 +240,11 @@ namespace PluginScreenshot
             return delta;
         }
 
-        // ------------------------------------------------------------------ //
         //  Changed-rect: bounding box of differing pixels between two frames
-        // ------------------------------------------------------------------ //
 
-        /// <summary>
-        /// Returns the minimal axis-aligned bounding box of pixels whose palette
-        /// index differs between <paramref name="current"/> and
-        /// <paramref name="previous"/>, or <c>null</c> when every pixel is
-        /// identical (the frame should be skipped entirely).
-        /// </summary>
+        // Returns the minimal axis-aligned bounding box of pixels whose palette
+        // index differs between current and previous, or null when every pixel
+        // is identical (the frame should be skipped entirely).
         private static Rectangle? ComputeChangedRect(byte[] current, byte[] previous,
                                                       int w, int h)
         {
@@ -272,11 +274,9 @@ namespace PluginScreenshot
             return n;
         }
 
-        /// <summary>
-        /// Splits dirty pixels into horizontal bands so distant updates (e.g. cursor
-        /// + toast) do not force one huge AABB. Returns null/empty if nothing changed.
-        /// Falls back to a single AABB when banding would not shrink encoded area.
-        /// </summary>
+        // Splits dirty pixels into horizontal bands so distant updates (e.g. cursor
+        // + toast) do not force one huge AABB. Returns null/empty if nothing changed.
+        // Falls back to a single AABB when banding would not shrink encoded area.
         private static List<Rectangle> ComputeDirtyBands(byte[] current, byte[] previous,
                                                          int w, int h)
         {
@@ -301,7 +301,7 @@ namespace PluginScreenshot
             if (dirtyRowCount == 0)
                 return null;
 
-            // Build row-run bands, merging runs separated by ≤ MergeGapRows
+            // Build row-run bands, merging runs separated by <= MergeGapRows
             var rawBands = new List<(int y0, int y1)>();
             int i = 0;
             while (i < h)
@@ -367,11 +367,8 @@ namespace PluginScreenshot
             return bands;
         }
 
-        /// <summary>
-        /// Copies the pixels inside <paramref name="rect"/> from the flat
-        /// (stride = <paramref name="fullW"/>) index array into a compact
-        /// row-major array of size <c>rect.Width × rect.Height</c>.
-        /// </summary>
+        // Copies the pixels inside rect from the flat (stride = fullW) index array
+        // into a compact row-major array of size rect.Width x rect.Height.
         private static byte[] ExtractSubRect(byte[] indices, int fullW, Rectangle rect)
         {
             byte[] sub = new byte[rect.Width * rect.Height];
@@ -384,9 +381,7 @@ namespace PluginScreenshot
             return sub;
         }
 
-        // ------------------------------------------------------------------ //
         //  Fast byte-array equality check
-        // ------------------------------------------------------------------ //
 
         internal static bool BytesEqual(byte[] a, byte[] b)
         {
@@ -408,9 +403,7 @@ namespace PluginScreenshot
             return true;
         }
 
-        // ------------------------------------------------------------------ //
         //  Read raw BGRA bytes from bitmap
-        // ------------------------------------------------------------------ //
 
         internal static byte[] ReadBgraInternal(Bitmap bmp, int w, int h)
         {
@@ -437,9 +430,7 @@ namespace PluginScreenshot
             finally { bmp.UnlockBits(bd); }
         }
 
-        // ------------------------------------------------------------------ //
-        //  Colour-lookup cube  (32×32×32, skips the transparent slot)
-        // ------------------------------------------------------------------ //
+        //  Colour-lookup cube  (32x32x32, skips the transparent slot)
 
         internal static byte[] BuildLookupCubeInternal(Color[] palette)
             => BuildLookupCubeInternal(palette, -1);
@@ -482,17 +473,16 @@ namespace PluginScreenshot
         private static int CubeLookup(byte[] cube, byte r, byte g, byte b)
             => cube[((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3)];
 
-        // ------------------------------------------------------------------ //
         //  Bayer ordered dithering (quality 3-5)
         //
-        //  Uses an 8×8 Bayer threshold matrix.  The threshold for pixel (x,y)
+        //  Uses an 8x8 Bayer threshold matrix.  The threshold for pixel (x,y)
         //  depends only on its position, NOT on the values of adjacent pixels.
         //  This makes the dither pattern completely deterministic and
         //  frame-independent:  the same source pixel at position (x,y) always
         //  produces the same palette index across every frame.
         //
         //  Why this matters for GIF compression
-        //  ─────────────────────────────────────
+        //  
         //  Sierra-2-4A (error diffusion) propagates quantisation error forward
         //  through the scan line.  A tiny difference in one pixel's colour
         //  (e.g. due to animation, anti-aliasing, or video noise) cascades into
@@ -506,12 +496,11 @@ namespace PluginScreenshot
         //  the delta encoder marks it transparent.  LZW then sees long runs of
         //  the same transparent index, compressing dramatically better.
         //
-        //  Strength is scaled to ±strength/2 around 0.  Typical value: 24
-        //  (≈ ±12 out of 255, noticeable but not harsh).  The transparent
+        //  Strength is scaled to +/-strength/2 around 0.  Typical value: 24
+        //  (~ +/-12 out of 255, noticeable but not harsh).  The transparent
         //  index is excluded from the nearest-colour search.
-        // ------------------------------------------------------------------ //
 
-        // 8×8 Bayer matrix — values 0..63, row-major
+        // 8x8 Bayer matrix -- values 0..63, row-major
         private static readonly int[] _bayer8x8 =
         {
              0, 32,  8, 40,  2, 34, 10, 42,
@@ -553,9 +542,7 @@ namespace PluginScreenshot
             return indices;
         }
 
-        // ------------------------------------------------------------------ //
         //  No-dither quantise  (quality 1-2)
-        // ------------------------------------------------------------------ //
 
         private static byte[] QuantizeNoDither(byte[] bgra, int w, int h, byte[] cube)
         {
@@ -569,9 +556,7 @@ namespace PluginScreenshot
             return indices;
         }
 
-        // ------------------------------------------------------------------ //
         //  GIF binary output
-        // ------------------------------------------------------------------ //
 
         internal static void WriteU16Internal(BinaryWriter bw, ushort v)
         {
@@ -589,15 +574,13 @@ namespace PluginScreenshot
             bw.Write((byte)0);
         }
 
-        /// <summary>
-        /// Writes one GIF frame referencing the file-level Global Color Table.
-        /// <paramref name="left"/>/<paramref name="top"/> position the patch within
-        /// the logical screen (used for the changed-rect optimisation).
-        /// No local colour table is written — saving palette.Length×3 bytes per frame.
-        /// Unchanged pixels are already set to transpIdx by the caller; the GCE
-        /// enables transparency so those pixels show through from the previous frame,
-        /// and LZW sees long runs of the same index.
-        /// </summary>
+        // Writes one GIF frame referencing the file-level Global Color Table.
+        // left/top position the patch within the logical screen (used for the
+        // changed-rect optimisation). No local colour table is written, saving
+        // palette.Length*3 bytes per frame. Unchanged pixels are already set to
+        // transpIdx by the caller; the GCE enables transparency so those pixels
+        // show through from the previous frame, and LZW sees long runs of the
+        // same index.
         internal static void WriteGifFrameWithTransparency(
             BinaryWriter bw, byte[] indices,
             int left, int top, int w, int h,
@@ -606,14 +589,14 @@ namespace PluginScreenshot
             // Graphic Control Extension
             bw.Write((byte)0x21); bw.Write((byte)0xF9);
             bw.Write((byte)4);
-            // Packed: disposal=1 (do not dispose) = bits3-5 → 0x04
-            // Transparency flag = bit0 → 0x01   Combined: 0x05
+            // Packed: disposal=1 (do not dispose) = bits3-5 -> 0x04
+            // Transparency flag = bit0 -> 0x01   Combined: 0x05
             bw.Write((byte)0x05);
             WriteU16Internal(bw, (ushort)delayCs);
             bw.Write((byte)transpIdx);
             bw.Write((byte)0); // block terminator
 
-            // Image Descriptor — no local colour table (bit7 = 0)
+            // Image Descriptor -- no local colour table (bit7 = 0)
             bw.Write((byte)0x2C);
             WriteU16Internal(bw, (ushort)left);
             WriteU16Internal(bw, (ushort)top);
@@ -635,17 +618,15 @@ namespace PluginScreenshot
             bw.Write((byte)0);
         }
 
-        /// <summary>Convenience overload — full canvas frame at (0,0).</summary>
+        // Convenience overload: full canvas frame at (0,0).
         internal static void WriteGifFrameWithTransparency(
             BinaryWriter bw, byte[] indices,
             int w, int h, int delayCs, int transpIdx, int lzwMinCode)
             => WriteGifFrameWithTransparency(bw, indices, 0, 0, w, h, delayCs, transpIdx, lzwMinCode);
 
-        /// <summary>
-        /// Overload kept for call sites that still pass palette + per-frame sizing
-        /// (used by legacy WriteGifFrameInternal path). Computes lzwMinCode from
-        /// the palette length and delegates to the primary overload.
-        /// </summary>
+        // Overload kept for call sites that still pass palette + per-frame sizing
+        // (used by legacy WriteGifFrameInternal path). Computes lzwMinCode from
+        // the palette length and delegates to the primary overload.
         internal static void WriteGifFrameWithTransparency(
             BinaryWriter bw, byte[] indices, Color[] palette,
             int w, int h, int delayCs, int transpIdx)
@@ -658,7 +639,7 @@ namespace PluginScreenshot
                                           Math.Max(2, tableN + 1));
         }
 
-        /// <summary>Legacy overload for callers that don't use transparency.</summary>
+        // Legacy overload for callers that don't use transparency.
         internal static void WriteGifFrameInternal(BinaryWriter bw, byte[] indices,
                                                    Color[] palette, int w, int h, int delayCs)
         {
@@ -699,16 +680,12 @@ namespace PluginScreenshot
         }
     }
 
-    // ======================================================================
-    //  MediaCutQuantizer — median-cut colour quantisation
-    // ======================================================================
+    //  MediaCutQuantizer -- median-cut colour quantisation
     internal static class MediaCutQuantizer
     {
-        /// <summary>
-        /// Streaming palette builder — samples evenly across all frames (like
-        /// FFmpeg palettegen=stats_mode=full) so late frames are not starved.
-        /// Never holds more than one frame's pixels in memory at once.
-        /// </summary>
+        // Streaming palette builder: samples evenly across all frames (like
+        // FFmpeg palettegen=stats_mode=full) so late frames are not starved.
+        // Never holds more than one frame's pixels in memory at once.
         public static Color[] BuildGlobalStreaming(IEnumerable<GifFrame> frames,
                                                    int w, int h,
                                                    int maxColors, int maxSamplesTotal,
@@ -756,20 +733,18 @@ namespace PluginScreenshot
             return RunMedianCut(flat, actualSamples, maxColors);
         }
 
-        /// <summary>
-        /// Builds a global palette sampled from ALL frames combined using a single
-        /// uniform stride across the entire pixel population.
-        /// </summary>
+        // Builds a global palette sampled from ALL frames combined using a single
+        // uniform stride across the entire pixel population.
         public static Color[] BuildGlobal(IList<byte[]> bgraFrames, int pixelsPerFrame,
                                           int maxColors, int maxSamplesTotal)
         {
             int framesCount  = bgraFrames.Count;
             int totalPixels  = pixelsPerFrame * framesCount;
 
-            // One global step across all frames combined — never drops below 1
+            // One global step across all frames combined -- never drops below 1
             int globalStep   = Math.Max(1, totalPixels / maxSamplesTotal);
 
-            // Upper bound on samples we can actually collect — capped at totalPixels
+            // Upper bound on samples we can actually collect -- capped at totalPixels
             // to guard against overflow when maxSamplesTotal is very large.
             int capacity     = (int)Math.Min((long)maxSamplesTotal, (long)(totalPixels / globalStep) + 1);
             int[] flat       = new int[capacity * 3];
@@ -798,7 +773,7 @@ namespace PluginScreenshot
             return RunMedianCut(flat, actualSamples, maxColors);
         }
 
-        /// <summary>Builds a palette from a single frame's BGRA data.</summary>
+        // Builds a palette from a single frame's BGRA data.
         public static Color[] Build(byte[] bgra, int pixelCount,
                                     int maxColors, int maxSamples)
         {
@@ -917,9 +892,7 @@ namespace PluginScreenshot
         }
     }
 
-    // ======================================================================
-    //  LzwEncoder — GIF-compatible LZW (LSB-first, unchanged)
-    // ======================================================================
+    //  LzwEncoder -- GIF-compatible LZW (LSB-first, unchanged)
     internal static class LzwEncoder
     {
         public static byte[] Encode(byte[] indices, int minCodeSize)

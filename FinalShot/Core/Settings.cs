@@ -1,3 +1,17 @@
+/*
+ * Copyright (c) 2025 nstechbytes
+ *
+ * Licensed under the MIT License.
+ * You may obtain a copy of the License at:
+ * https://opensource.org/licenses/MIT
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 using System;
 using System.Drawing;
 using Rainmeter;
@@ -17,25 +31,19 @@ namespace PluginScreenshot
         public bool DetectWindows { get; private set; }
         public bool DetectControls { get; private set; }
 
-        /// <summary>
-        /// When true, mask Windows 11 rounded corners on top-level window captures
-        /// so desktop pixels in the sharp rectangle corners are removed.
-        /// Default false for backward compatibility.
-        /// </summary>
+        // When true, mask Windows 11 rounded corners on top-level window captures
+        // so desktop pixels in the sharp rectangle corners are removed.
+        // Default false for backward compatibility.
         public bool RoundWindowCorners { get; private set; }
 
-        /// <summary>
-        /// Theme for all FinalShot popup windows (Notification, Encoding, Dialog).
-        ///   0 = Dark (default)
-        ///   1 = Light
-        ///   2 = System (follows Windows app theme setting)
-        /// </summary>
+        // Theme for all FinalShot popup windows (Notification, Encoding, Dialog).
+        //   0 = Dark (default)
+        //   1 = Light
+        //   2 = System (follows Windows app theme setting)
         public UITheme UITheme { get; private set; }
 
-        /// <summary>
-        /// Bang executed when the user clicks the notification toast.
-        /// Leave empty for no action.
-        /// </summary>
+        // Bang executed when the user clicks the notification toast.
+        // Leave empty for no action.
         public string OnNotificationClickAction { get; private set; }
 
         public string GifSavePath { get; private set; }
@@ -43,11 +51,9 @@ namespace PluginScreenshot
         public int GifDuration { get; private set; }
         public Rectangle GifPredefinedRegion { get; private set; }
 
-        /// <summary>
-        /// When true, a dialog is shown when the user tries to start a recording
-        /// while one is already active, or tries to stop/cancel when not recording.
-        /// Default true.
-        /// </summary>
+        // When true, a dialog is shown when the user tries to start a recording
+        // while one is already active, or tries to stop/cancel when not recording.
+        // Default true.
         public bool GifShowStateDialogs { get; private set; }
 
         public string GifStartAction { get; private set; }
@@ -57,31 +63,27 @@ namespace PluginScreenshot
         public string GifResumeAction { get; private set; }
         public bool GifShowOverlay { get; private set; }
 
-        /// <summary>
-        /// When true, a small encoding-progress window is shown while the GIF
-        /// is being written to disk after recording stops. Default true.
-        /// </summary>
+        // When true, a small encoding-progress window is shown while the GIF
+        // is being written to disk after recording stops. Default true.
         public bool GifShowEncodingWindow { get; private set; }
 
-        /// <summary>OCR language tag (e.g. en, en-US). Requires installed Windows OCR pack.</summary>
+        // OCR language tag (e.g. en, en-US). Requires installed Windows OCR pack.
         public string OcrLanguage { get; private set; }
 
-        /// <summary>Upscale factor before OCR (1–4). Default 2.</summary>
+        // Upscale factor before OCR (1-4). Default 2.
         public float OcrScaleFactor { get; private set; }
 
-        /// <summary>When true, OCR lines are joined with spaces instead of newlines.</summary>
+        // When true, OCR lines are joined with spaces instead of newlines.
         public bool OcrSingleLine { get; private set; }
 
-        /// <summary>Bang executed after successful OCR (not on cancel).</summary>
+        // Bang executed after successful OCR (not on cancel).
         public string OcrFinishAction { get; private set; }
 
-        /// <summary>
-        /// When true, show an OCR result window after recognition (edit / copy / close).
-        /// Default false (silent clipboard mode).
-        /// </summary>
+        // When true, show an OCR result window after recognition (edit / copy / close).
+        // Default false (silent clipboard mode).
         public bool ShowOcrWindow { get; private set; }
 
-        /// <summary>Master switch for global hotkeys. Default true (chords still must be set).</summary>
+        // Master switch for global hotkeys. Default true (chords still must be set).
         public bool HotkeysEnabled { get; private set; }
 
         public string HotkeyFullscreen { get; private set; }

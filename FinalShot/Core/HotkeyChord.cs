@@ -1,3 +1,17 @@
+/*
+ * Copyright (c) 2025 nstechbytes
+ *
+ * Licensed under the MIT License.
+ * You may obtain a copy of the License at:
+ * https://opensource.org/licenses/MIT
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -5,9 +19,7 @@ using System.Windows.Forms;
 
 namespace PluginScreenshot
 {
-    /// <summary>
-    /// Parsed hotkey chord, e.g. Ctrl+Shift+PrintScreen.
-    /// </summary>
+    // Parsed hotkey chord, e.g. Ctrl+Shift+PrintScreen.
     internal sealed class HotkeyChord : IEquatable<HotkeyChord>
     {
         public bool Ctrl { get; }
@@ -56,9 +68,7 @@ namespace PluginScreenshot
             }
         }
 
-        /// <summary>
-        /// Parses a chord string. Returns null if empty or invalid.
-        /// </summary>
+        // Parses a chord string. Returns null if empty or invalid.
         public static HotkeyChord TryParse(string text, out string error)
         {
             error = null;
@@ -168,7 +178,7 @@ namespace PluginScreenshot
             if (aliases.TryGetValue(lower, out key))
                 return true;
 
-            // F1–F24
+            // F1-F24
             if (lower.Length >= 2 && lower[0] == 'f'
                 && int.TryParse(lower.Substring(1), NumberStyles.Integer, CultureInfo.InvariantCulture, out int f)
                 && f >= 1 && f <= 24)

@@ -1,4 +1,18 @@
-﻿using System;
+/*
+ * Copyright (c) 2025 nstechbytes
+ *
+ * Licensed under the MIT License.
+ * You may obtain a copy of the License at:
+ * https://opensource.org/licenses/MIT
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Threading;
@@ -8,36 +22,26 @@ using WinTimer = System.Windows.Forms.Timer;
 
 namespace PluginScreenshot
 {
-    /// <summary>
-    /// Borderless toast-style window shown while GIF encoding is in progress.
-    ///
-    /// Appearance (matches the existing dark FinalShot theme):
-    ///   ┌─────────────────────────────────────────┐
-    ///   │  ●  Encoding GIF…                    ✕  │
-    ///   │     Frame 12 / 43                        │
-    ///   │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
-    ///   └─────────────────────────────────────────┘
-    ///
-    ///  • Animated blue spinner on the left.
-    ///  • Indeterminate progress bar that marches right until Close() is called,
-    ///    then snaps to 100 % briefly before the window fades out.
-    ///  • Updates frame count via UpdateProgress(current, total).
-    ///  • Thread-safe: Show/Close/UpdateProgress may be called from any thread.
-    /// </summary>
+    // Borderless toast-style window shown while GIF encoding is in progress.
+    //
+    // Features:
+    //   Animated blue spinner on the left.
+    //   Indeterminate progress bar that marches right until Close() is called,
+    //   then snaps to 100% briefly before the window fades out.
+    //   Updates frame count via UpdateProgress(current, total).
+    //   Thread-safe: Show/Close/UpdateProgress may be called from any thread.
     internal static class GifEncodingWindow
     {
         private static EncodingForm _form;
         private static Thread       _thread;
         private static UITheme      _theme = UITheme.Dark;
 
-        /// <summary>Call from Settings load to keep the window themed.</summary>
+        // Call from Settings load to keep the window themed.
         public static void SetTheme(UITheme theme) => _theme = theme;
 
-        // ------------------------------------------------------------------ //
         //  Public API
-        // ------------------------------------------------------------------ //
 
-        /// <summary>Shows the encoding window (non-blocking). Call from any thread.</summary>
+        // Shows the encoding window (non-blocking). Call from any thread.
         public static void Show(int totalFrames)
         {
             var theme = _theme;
@@ -50,7 +54,7 @@ namespace PluginScreenshot
                 }
                 catch (Exception ex)
                 {
-                    Logger.Log($"GifEncodingWindow: thread error — {ex.Message}");
+                    Logger.Log($"GifEncodingWindow: thread error -- {ex.Message}");
                 }
             });
             _thread.SetApartmentState(ApartmentState.STA);
@@ -59,9 +63,7 @@ namespace PluginScreenshot
             _thread.Start();
         }
 
-        /// <summary>
-        /// Updates the "Frame X / Y" label. Call from the encoding thread.
-        /// </summary>
+        // Updates the "Frame X / Y" label. Call from the encoding thread.
         public static void UpdateProgress(int current, int total)
         {
             try
@@ -78,9 +80,7 @@ namespace PluginScreenshot
             catch { }
         }
 
-        /// <summary>
-        /// Marks encoding complete: fills the progress bar then fades the window out.
-        /// </summary>
+        // Marks encoding complete: fills the progress bar then fades the window out.
         public static void Close()
         {
             try
@@ -98,16 +98,12 @@ namespace PluginScreenshot
             finally { _form = null; }
         }
 
-        // ================================================================== //
         //  EncodingForm
-        // ================================================================== //
 
         internal sealed class EncodingForm : Form
         {
-            // ---- colours resolved from theme ----
             private readonly ThemeColors _t;
 
-            // ---- layout ----
             private const int W            = 340;
             private const int H            = 88;
             private const int Pad          = 14;
@@ -116,7 +112,6 @@ namespace PluginScreenshot
             private const int BarY         = H - Pad - BarH;
             private const int AccentH      = 2;
 
-            // ---- state ----
             private int      _current;
             private int      _total;
             private bool     _done;
@@ -190,9 +185,7 @@ namespace PluginScreenshot
                 }
             }
 
-            // ---------------------------------------------------------------- //
             //  Public update methods (called on UI thread via BeginInvoke)
-            // ---------------------------------------------------------------- //
 
             public void SetProgress(int current, int total)
             {
@@ -212,9 +205,7 @@ namespace PluginScreenshot
                 holdTimer.Start();
             }
 
-            // ---------------------------------------------------------------- //
             //  Fade
-            // ---------------------------------------------------------------- //
 
             private void FadeInTick(object s, EventArgs e)
             {
@@ -230,9 +221,7 @@ namespace PluginScreenshot
                 else Opacity = _opacity;
             }
 
-            // ---------------------------------------------------------------- //
             //  Paint
-            // ---------------------------------------------------------------- //
 
             protected override void OnPaint(PaintEventArgs e)
             {
@@ -248,7 +237,6 @@ namespace PluginScreenshot
                 using (var p = new Pen(_t.Border, 1))
                     g.DrawRectangle(p, 0, 0, W - 1, H - 1);
 
-                // ---- Spinner ----
                 int sx = Pad;
                 int sy = Pad + 2;
                 var spinRect = new RectangleF(sx, sy, SpinnerSize, SpinnerSize);
@@ -257,19 +245,16 @@ namespace PluginScreenshot
                 using (var p = new Pen(_t.AccentBlue, 2.5f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
                     g.DrawArc(p, spinRect, _spinAngle, 260);
 
-                // ---- Primary label ----
                 int textX = Pad + SpinnerSize + 10;
                 using (var font = new Font("Segoe UI", 10f, FontStyle.Bold))
                 using (var brush = new SolidBrush(_t.TextPrimary))
                     g.DrawString("Encoding GIF\u2026", font, brush, textX, Pad + 1);
 
-                // ---- Frame count ----
                 string sub = _total > 0 ? $"Frame {_current} / {_total}" : "Preparing\u2026";
                 using (var font = new Font("Segoe UI", 8.5f))
                 using (var brush = new SolidBrush(_t.TextSecondary))
                     g.DrawString(sub, font, brush, textX, Pad + 22);
 
-                // ---- Progress bar track ----
                 var trackRect = new Rectangle(Pad, BarY, W - Pad * 2, BarH);
                 using (var b = new SolidBrush(_t.BarTrack))
                     g.FillRectangle(b, trackRect);
@@ -289,15 +274,12 @@ namespace PluginScreenshot
                         g.FillRectangle(b, segLeft, BarY, segW, BarH);
                 }
 
-                // ---- Close button ----
                 using (var font = new Font("Segoe UI", 9f, FontStyle.Bold))
                 using (var brush = new SolidBrush(_closeHover ? _t.CloseHover : _t.CloseNormal))
                     g.DrawString("\u2715", font, brush, CloseRect.Left, CloseRect.Top);
             }
 
-            // ---------------------------------------------------------------- //
             //  No-activate topmost
-            // ---------------------------------------------------------------- //
 
             protected override System.Windows.Forms.CreateParams CreateParams
             {
@@ -315,9 +297,7 @@ namespace PluginScreenshot
                 NativeMethods.MakeTopMostNoActivate(Handle);
             }
 
-            // ---------------------------------------------------------------- //
             //  Cleanup
-            // ---------------------------------------------------------------- //
 
             protected override void Dispose(bool disposing)
             {

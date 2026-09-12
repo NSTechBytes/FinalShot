@@ -1,3 +1,17 @@
+/*
+ * Copyright (c) 2025 nstechbytes
+ *
+ * Licensed under the MIT License.
+ * You may obtain a copy of the License at:
+ * https://opensource.org/licenses/MIT
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -19,12 +33,11 @@ namespace PluginScreenshot
             DelayCs = delayCs;
         }
     }
-    // ======================================================================
-    //  GifDiskCache  —  ShareX-style disk-backed frame store.
+    //  GifDiskCache  --  ShareX-style disk-backed frame store.
     //
     //  During recording each captured Bitmap is serialised as a raw BMP into
     //  a single temporary file on disk and then immediately disposed.  Memory
-    //  consumption is therefore constant regardless of recording length — only
+    //  consumption is therefore constant regardless of recording length -- only
     //  one frame is ever in RAM at a time.
     //
     //  During encoding the caller iterates GetFrameEnumerator() which opens
@@ -33,12 +46,9 @@ namespace PluginScreenshot
     //  can be called twice; it simply seeks back to the start of the file.
     //
     //  The temp file is deleted when Dispose() is called.
-    // ======================================================================
     internal sealed class GifDiskCache : IDisposable
     {
-        // ------------------------------------------------------------------ //
         //  Index entry: byte offset + length of one BMP frame in the cache file
-        // ------------------------------------------------------------------ //
         private struct FrameEntry
         {
             public readonly long   Offset;
@@ -53,16 +63,14 @@ namespace PluginScreenshot
             }
         }
 
-        // ------------------------------------------------------------------ //
         //  Fields
-        // ------------------------------------------------------------------ //
 
         private readonly string             _cachePath;
         private readonly FileStream         _writeStream;
         private readonly List<FrameEntry>   _index = new List<FrameEntry>();
         private readonly object             _lock  = new object();
 
-        // Background consumer — receives bitmaps from the capture thread and
+        // Background consumer -- receives bitmaps from the capture thread and
         // writes them to disk so the capture loop is never blocked by I/O.
         private readonly System.Collections.Concurrent.BlockingCollection<GifFrame>
                                             _queue
@@ -72,9 +80,7 @@ namespace PluginScreenshot
 
         public int Count { get { lock (_lock) { return _index.Count; } } }
 
-        // ------------------------------------------------------------------ //
-        //  Construction — opens the cache file and starts the writer thread
-        // ------------------------------------------------------------------ //
+        //  Construction -- opens the cache file and starts the writer thread
 
         public GifDiskCache()
         {
@@ -92,11 +98,9 @@ namespace PluginScreenshot
             _writerThread.Start();
         }
 
-        // ------------------------------------------------------------------ //
-        //  Add — called from capture thread (non-blocking)
+        //  Add -- called from capture thread (non-blocking)
         //  The bitmap is owned by the queue from this point; the writer thread
         //  disposes it after writing.
-        // ------------------------------------------------------------------ //
 
         public void Add(GifFrame frame)
         {
@@ -105,10 +109,8 @@ namespace PluginScreenshot
             _queue.Add(frame);
         }
 
-        // ------------------------------------------------------------------ //
-        //  Complete — signals end of capture; blocks until all queued frames
+        //  Complete -- signals end of capture; blocks until all queued frames
         //  have been written to disk and the write stream is flushed/closed.
-        // ------------------------------------------------------------------ //
 
         public void Complete()
         {
@@ -118,11 +120,9 @@ namespace PluginScreenshot
             _writeStream.Dispose();
         }
 
-        // ------------------------------------------------------------------ //
-        //  GetFrameEnumerator — streams frames back from disk one at a time.
+        //  GetFrameEnumerator -- streams frames back from disk one at a time.
         //  Safe to call multiple times (each call opens a fresh read handle).
         //  Must only be called after Complete().
-        // ------------------------------------------------------------------ //
 
         public IEnumerable<GifFrame> GetFrameEnumerator()
         {
@@ -146,7 +146,7 @@ namespace PluginScreenshot
                         read += n;
                     }
 
-                    // Decode BMP → Bitmap, yield, then dispose immediately
+                    // Decode BMP -> Bitmap, yield, then dispose immediately
                     Bitmap bmp;
                     using (var ms = new MemoryStream(buf))
                         bmp = new Bitmap(ms);
@@ -157,9 +157,7 @@ namespace PluginScreenshot
             }
         }
 
-        // ------------------------------------------------------------------ //
         //  Writer loop (background thread)
-        // ------------------------------------------------------------------ //
 
         private void WriterLoop()
         {
@@ -179,7 +177,7 @@ namespace PluginScreenshot
             }
             catch (Exception ex)
             {
-                Logger.Log($"GifDiskCache.WriterLoop: error — {ex.Message}");
+                Logger.Log($"GifDiskCache.WriterLoop: error -- {ex.Message}");
             }
         }
 
@@ -187,7 +185,7 @@ namespace PluginScreenshot
         {
             using (var ms = new MemoryStream())
             {
-                // Save as BMP — lossless and very fast to encode/decode
+                // Save as BMP -- lossless and very fast to encode/decode
                 frame.Bitmap.Save(ms, ImageFormat.Bmp);
                 long offset = _writeStream.Position;
                 byte[] buf  = ms.ToArray();
@@ -197,9 +195,7 @@ namespace PluginScreenshot
             }
         }
 
-        // ------------------------------------------------------------------ //
-        //  Dispose — deletes the temp file
-        // ------------------------------------------------------------------ //
+        //  Dispose -- deletes the temp file
 
         public void Dispose()
         {
@@ -218,7 +214,7 @@ namespace PluginScreenshot
             {
                 try { File.Delete(_cachePath); }
                 catch (Exception ex)
-                { Logger.Log($"GifDiskCache.Dispose: could not delete temp file — {ex.Message}"); }
+                { Logger.Log($"GifDiskCache.Dispose: could not delete temp file -- {ex.Message}"); }
             }
         }
     }

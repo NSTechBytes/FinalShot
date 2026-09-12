@@ -1,3 +1,17 @@
+/*
+ * Copyright (c) 2025 nstechbytes
+ *
+ * Licensed under the MIT License.
+ * You may obtain a copy of the License at:
+ * https://opensource.org/licenses/MIT
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -14,10 +28,8 @@ using Windows.Storage.Streams;
 
 namespace PluginScreenshot
 {
-    /// <summary>
-    /// Windows.Media.Ocr wrapper (ShareX-compatible pipeline) for .NET Framework 4.8.
-    /// Requires Windows 10 1903+ and an installed OCR language pack.
-    /// </summary>
+    // Windows.Media.Ocr wrapper (ShareX-compatible pipeline) for .NET Framework 4.8.
+    // Requires Windows 10 1903+ and an installed OCR language pack.
     internal static class OcrHelper
     {
         private static readonly Version SupportedVersion = new Version(10, 0, 18362, 0);
@@ -28,7 +40,7 @@ namespace PluginScreenshot
             {
                 try
                 {
-                    // Prefer probing the WinRT API — Environment.OSVersion is often capped at 6.2
+                    // Prefer probing the WinRT API -- Environment.OSVersion is often capped at 6.2
                     // without an app compatibility manifest.
                     var languages = OcrEngine.AvailableRecognizerLanguages;
                     return languages != null;

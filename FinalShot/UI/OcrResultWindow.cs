@@ -1,13 +1,25 @@
+/*
+ * Copyright (c) 2025 nstechbytes
+ *
+ * Licensed under the MIT License.
+ * You may obtain a copy of the License at:
+ * https://opensource.org/licenses/MIT
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 using System;
 using System.Drawing;
 using System.Windows.Forms;
 
 namespace PluginScreenshot
 {
-    /// <summary>
-    /// Themed OCR result window (ShareX-style): preview + editable text + Copy / Close.
-    /// Must be shown on an STA thread. Returns the final text from the editor on close.
-    /// </summary>
+    // Themed OCR result window (ShareX-style): preview + editable text + Copy / Close.
+    // Must be shown on an STA thread. Returns the final text from the editor on close.
     internal sealed class OcrResultWindow : Form
     {
         private readonly ThemeColors _t;
@@ -18,10 +30,8 @@ namespace PluginScreenshot
 
         public string ResultText => _resultText ?? "";
 
-        /// <summary>
-        /// Shows a modal OCR result dialog. Caller owns <paramref name="preview"/> lifetime
-        /// after this returns (a clone is used for display).
-        /// </summary>
+        // Shows a modal OCR result dialog. Caller owns preview lifetime
+        // after this returns (a clone is used for display).
         public static string ShowDialog(string text, Bitmap preview, UITheme theme)
         {
             using (var form = new OcrResultWindow(text, preview, theme))
@@ -36,7 +46,7 @@ namespace PluginScreenshot
             _t = ThemeColors.Resolve(theme);
             _resultText = text ?? "";
 
-            Text = "FinalShot — OCR";
+            Text = "FinalShot -- OCR";
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;

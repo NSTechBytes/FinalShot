@@ -1,3 +1,17 @@
+/*
+ * Copyright (c) 2025 nstechbytes
+ *
+ * Licensed under the MIT License.
+ * You may obtain a copy of the License at:
+ * https://opensource.org/licenses/MIT
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 using System;
 using System.Runtime.InteropServices;
 
@@ -41,7 +55,7 @@ namespace PluginScreenshot
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool IsWindowVisible(IntPtr hWnd);
 
-        // Window style and class — runtime branch handles x86 vs x64
+        // Window style and class -- runtime branch handles x86 vs x64
 
         [DllImport("user32.dll", EntryPoint = "GetWindowLong")]
         private static extern int GetWindowLong32(IntPtr hWnd, int nIndex);
@@ -69,7 +83,7 @@ namespace PluginScreenshot
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool ClientToScreen(IntPtr hWnd, ref POINT lpPoint);
 
-        // DWM attributes — cloaked check and extended frame bounds
+        // DWM attributes -- cloaked check and extended frame bounds
 
         [DllImport("dwmapi.dll")]
         public static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out int pvAttribute, int cbAttribute);
@@ -96,7 +110,7 @@ namespace PluginScreenshot
         // PrintWindow flag
         public const uint PW_RENDERFULLCONTENT = 0x00000002;
 
-        // SetWindowPos — Z-order and position control
+        // SetWindowPos -- Z-order and position control
         [DllImport("user32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter,
@@ -116,10 +130,8 @@ namespace PluginScreenshot
         public const uint SWP_SHOWWINDOW   = 0x0040;
         public const uint SWP_NOOWNERZORDER= 0x0200;
 
-        /// <summary>
-        /// Makes <paramref name="hWnd"/> topmost without activating it or
-        /// stealing focus from the currently active window (e.g. Rainmeter skin).
-        /// </summary>
+        // Makes hWnd topmost without activating it or stealing focus from the
+        // currently active window (e.g. Rainmeter skin).
         public static void MakeTopMostNoActivate(IntPtr hWnd)
         {
             SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0,

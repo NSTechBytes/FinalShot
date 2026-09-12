@@ -1,3 +1,17 @@
+/*
+ * Copyright (c) 2025 nstechbytes
+ *
+ * Licensed under the MIT License.
+ * You may obtain a copy of the License at:
+ * https://opensource.org/licenses/MIT
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -5,24 +19,20 @@ using System.Windows.Forms;
 
 namespace PluginScreenshot
 {
-    /// <summary>
-    /// Borderless overlay shown during GIF recording.
-    ///
-    /// Layout:
-    ///   • Dashed blue border drawn OUTSIDE the capture region (no pixel inside).
-    ///   • Transparent hole over the capture area — fully click-through.
-    ///   • Full-width flat toolbar flush below the border:
-    ///       [  Stop  |  Pause  |  Abort  |  00:00:00  ]
-    ///     Each column is equal width, separated by 1px dividers.
-    ///     A thin blue accent line runs across the top of the toolbar.
-    /// </summary>
+    // Borderless overlay shown during GIF recording.
+    //
+    // Layout:
+    //   Dashed blue border drawn OUTSIDE the capture region (no pixel inside).
+    //   Transparent hole over the capture area, fully click-through.
+    //   Full-width flat toolbar flush below the border:
+    //       [  Stop  |  Pause  |  Abort  |  00:00:00  ]
+    //     Each column is equal width, separated by 1px dividers.
+    //     A thin blue accent line runs across the top of the toolbar.
     internal static class GifRecordingOverlay
     {
         private static OverlayForm _form;
 
-        // ------------------------------------------------------------------ //
         //  Public API
-        // ------------------------------------------------------------------ //
 
         public static void Show(Rectangle region,
                                 Action onStop,
@@ -38,7 +48,7 @@ namespace PluginScreenshot
                 }
                 catch (Exception ex)
                 {
-                    Logger.Log($"GifRecordingOverlay: thread error — {ex.Message}");
+                    Logger.Log($"GifRecordingOverlay: thread error -- {ex.Message}");
                 }
             });
             thread.SetApartmentState(System.Threading.ApartmentState.STA);
@@ -47,7 +57,7 @@ namespace PluginScreenshot
             thread.Start();
         }
 
-        /// <summary>Closes the overlay from any thread.</summary>
+        // Closes the overlay from any thread.
         public static void CloseOverlay()
         {
             try
@@ -65,7 +75,7 @@ namespace PluginScreenshot
             finally { _form = null; }
         }
 
-        /// <summary>Syncs pause state (button label + timer freeze) from any thread.</summary>
+        // Syncs pause state (button label + timer freeze) from any thread.
         public static void SetPaused(bool paused)
         {
             try
@@ -82,15 +92,11 @@ namespace PluginScreenshot
             catch { }
         }
 
-        // ================================================================== //
         //  OverlayForm
-        // ================================================================== //
 
         internal sealed class OverlayForm : Form
         {
-            // ---------------------------------------------------------------- //
-            //  Style — matches the screenshot exactly
-            // ---------------------------------------------------------------- //
+            //  Style -- matches the screenshot exactly
 
             // Border
             private static readonly Color BorderColor  = Color.FromArgb(255,  0, 120, 212); // #0078D4
@@ -110,9 +116,7 @@ namespace PluginScreenshot
             private const int AccentLineH = 2;   // blue line at top of toolbar
             private const int Cols        = 4;   // Stop | Pause | Abort | Timer
 
-            // ---------------------------------------------------------------- //
             //  State
-            // ---------------------------------------------------------------- //
 
             private readonly Rectangle _region;
             private readonly Action    _onStop, _onPause, _onAbort;
@@ -123,15 +127,12 @@ namespace PluginScreenshot
             private DateTime?         _pauseStartUtc  = null;
             private bool              _paused         = false;
 
-            // ---- geometry (form-local) ----
             private int       _offsetX, _offsetY;   // where the capture hole starts in form coords
             private int       _tbY;                 // toolbar top Y
             private int       _colW;                // width of each column
             private int       _hovered = -1;        // 0=Stop 1=Pause 2=Abort 3=Timer(no action)
 
-            // ---------------------------------------------------------------- //
             //  Constructor
-            // ---------------------------------------------------------------- //
 
             public OverlayForm(Rectangle region, Action onStop, Action onPause, Action onAbort)
             {
@@ -150,7 +151,6 @@ namespace PluginScreenshot
                 // MakeTopMostNoActivate() in OnHandleCreated sets HWND_TOPMOST without
                 // sending WM_ACTIVATE to any other window, so Rainmeter's Z-pos is safe.
 
-                // ---- geometry ----
                 // Form extends outside the region by formPad on top/left/right.
                 // Bottom extends to include the toolbar.
                 // formPad must be large enough to contain the border without
@@ -160,7 +160,7 @@ namespace PluginScreenshot
                 _offsetX = formPad;
                 _offsetY = formPad;
 
-                // Toolbar sits flush below the border — no gap.
+                // Toolbar sits flush below the border -- no gap.
                 // The border's outermost bottom pixel is at:
                 //   _offsetY + region.Height + BorderGap + BorderW/2 - 1
                 // We place the toolbar immediately after.
@@ -206,9 +206,7 @@ namespace PluginScreenshot
                     Invalidate(new Rectangle(0, _tbY, Width, ToolbarH));
             }
 
-            // ---------------------------------------------------------------- //
             //  Pause state
-            // ---------------------------------------------------------------- //
 
             public void UpdatePauseState(bool paused)
             {
@@ -230,16 +228,13 @@ namespace PluginScreenshot
                 InvalidateToolbar();
             }
 
-            // ---------------------------------------------------------------- //
             //  Paint
-            // ---------------------------------------------------------------- //
 
             protected override void OnPaint(PaintEventArgs e)
             {
                 Graphics g = e.Graphics;
                 g.SmoothingMode = SmoothingMode.None; // crisp pixel-aligned rendering
 
-                // ---- Dashed border outside the capture region ----
                 // Pen centre is BorderGap px outside the hole edge.
                 float bx = _offsetX - BorderGap - BorderW / 2f;
                 float by = _offsetY - BorderGap - BorderW / 2f;
@@ -253,7 +248,6 @@ namespace PluginScreenshot
                     g.DrawRectangle(pen, bx, by, bw, bh);
                 }
 
-                // ---- Toolbar ----
                 PaintToolbar(g);
             }
 
@@ -324,9 +318,7 @@ namespace PluginScreenshot
                 return $"{(int)rec.TotalMinutes:D2}:{rec.Seconds:D2}:{rec.Milliseconds / 10:D2}";
             }
 
-            // ---------------------------------------------------------------- //
             //  Mouse
-            // ---------------------------------------------------------------- //
 
             private int HitTestToolbar(Point p)
             {
@@ -356,9 +348,7 @@ namespace PluginScreenshot
                 }
             }
 
-            // ---------------------------------------------------------------- //
-            //  No-activate topmost — keeps Rainmeter skin Z-order intact
-            // ---------------------------------------------------------------- //
+            //  No-activate topmost -- keeps Rainmeter skin Z-order intact
 
             protected override System.Windows.Forms.CreateParams CreateParams
             {
@@ -376,9 +366,7 @@ namespace PluginScreenshot
                 NativeMethods.MakeTopMostNoActivate(Handle);
             }
 
-            // ---------------------------------------------------------------- //
             //  Cleanup
-            // ---------------------------------------------------------------- //
 
             protected override void Dispose(bool disposing)
             {

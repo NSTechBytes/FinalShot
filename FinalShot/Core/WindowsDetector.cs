@@ -1,3 +1,17 @@
+/*
+ * Copyright (c) 2025 nstechbytes
+ *
+ * Licensed under the MIT License.
+ * You may obtain a copy of the License at:
+ * https://opensource.org/licenses/MIT
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -65,7 +79,7 @@ namespace PluginScreenshot
             return CheckHandle(hWnd, clipRect: null);
         }
 
-        // Core handler — shared for top-level and child windows
+        // Core handler -- shared for top-level and child windows
 
         private bool CheckHandle(IntPtr hWnd, Rectangle? clipRect)
         {
@@ -104,7 +118,7 @@ namespace PluginScreenshot
             Rectangle rect;
             if (isTopLevel)
             {
-                // Prefer DWM extended frame bounds — the visually rendered rect without shadow pixels
+                // Prefer DWM extended frame bounds -- the visually rendered rect without shadow pixels
                 rect = GetWindowRectangle(hWnd);
             }
             else

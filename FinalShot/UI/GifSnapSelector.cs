@@ -1,3 +1,17 @@
+/*
+ * Copyright (c) 2025 nstechbytes
+ *
+ * Licensed under the MIT License.
+ * You may obtain a copy of the License at:
+ * https://opensource.org/licenses/MIT
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -7,22 +21,18 @@ using System.Windows.Forms;
 
 namespace PluginScreenshot
 {
-    /// <summary>
-    /// Shows a full-screen translucent overlay that lets the user:
-    ///   • hover over a window/control to snap to it (same logic as CustomScreenshotForm), or
-    ///   • drag a rubber-band rectangle to select an arbitrary region.
-    ///
-    /// Usage (must be called on an STA thread):
-    ///   Rectangle? region = GifSnapSelector.SelectRegion(settings);
-    ///   if (region != null) { /* start recording region.Value */ }
-    /// </summary>
+    // Shows a full-screen translucent overlay that lets the user:
+    //   hover over a window/control to snap to it (same logic as CustomScreenshotForm), or
+    //   drag a rubber-band rectangle to select an arbitrary region.
+    //
+    // Usage (must be called on an STA thread):
+    //   Rectangle? region = GifSnapSelector.SelectRegion(settings);
+    //   if (region != null) { /* start recording region.Value */ }
     internal static class GifSnapSelector
     {
-        /// <summary>
-        /// Blocks until the user confirms or cancels a region selection.
-        /// Returns the selected rectangle in screen coordinates, or null if cancelled.
-        /// Must be called on an STA thread.
-        /// </summary>
+        // Blocks until the user confirms or cancels a region selection.
+        // Returns the selected rectangle in screen coordinates, or null if cancelled.
+        // Must be called on an STA thread.
         public static Rectangle? SelectRegion(Settings settings)
         {
             Rectangle? result = null;
@@ -34,9 +44,7 @@ namespace PluginScreenshot
             return result;
         }
 
-        // ================================================================== //
-        //  Shared style constants — keep in sync with CustomScreenshotForm
-        // ================================================================== //
+        //  Shared style constants -- keep in sync with CustomScreenshotForm
 
         internal static readonly Color SelectionBorderColor = Color.FromArgb(255, 0, 120, 212); // #0078D4
         internal static readonly Color SelectionFillColor   = Color.FromArgb(30,  0, 120, 212);
@@ -44,9 +52,7 @@ namespace PluginScreenshot
         internal static readonly Color LabelForeColor       = Color.White;
         internal static readonly Color DimColor             = Color.FromArgb(130, 0,   0,   0);
 
-        // ================================================================== //
         //  SnapOverlayForm
-        // ================================================================== //
 
         private sealed class SnapOverlayForm : Form
         {
@@ -137,9 +143,7 @@ namespace PluginScreenshot
                 });
             }
 
-            // ---------------------------------------------------------------- //
             //  Keyboard
-            // ---------------------------------------------------------------- //
 
             protected override void OnKeyDown(KeyEventArgs e)
             {
@@ -150,9 +154,7 @@ namespace PluginScreenshot
                 }
             }
 
-            // ---------------------------------------------------------------- //
             //  Mouse down
-            // ---------------------------------------------------------------- //
 
             protected override void OnMouseDown(MouseEventArgs e)
             {
@@ -170,7 +172,7 @@ namespace PluginScreenshot
 
                 if (_windowsLoaded && _hoveredWindow != null && _settings.DetectWindows)
                 {
-                    // A window is highlighted — confirm on mouse-up unless user drags > 4px.
+                    // A window is highlighted -- confirm on mouse-up unless user drags > 4px.
                     _pendingWindowCapture = true;
                     _dragging             = false;
                 }
@@ -181,9 +183,7 @@ namespace PluginScreenshot
                 }
             }
 
-            // ---------------------------------------------------------------- //
             //  Mouse move
-            // ---------------------------------------------------------------- //
 
             protected override void OnMouseMove(MouseEventArgs e)
             {
@@ -213,7 +213,7 @@ namespace PluginScreenshot
                     return;
                 }
 
-                // Idle hover — find topmost window under cursor.
+                // Idle hover -- find topmost window under cursor.
                 if (_windowsLoaded && _settings.DetectWindows)
                 {
                     Point      screenPt = PointToScreen(e.Location);
@@ -236,9 +236,7 @@ namespace PluginScreenshot
                 }
             }
 
-            // ---------------------------------------------------------------- //
             //  Mouse up
-            // ---------------------------------------------------------------- //
 
             protected override void OnMouseUp(MouseEventArgs e)
             {
@@ -249,7 +247,7 @@ namespace PluginScreenshot
                 {
                     _pendingWindowCapture = false;
                     SelectedRegion = _hoveredWindow.Rectangle;
-                    Logger.Log($"GifSnapSelector: window snap → {SelectedRegion}");
+                    Logger.Log($"GifSnapSelector: window snap -> {SelectedRegion}");
                     DialogResult = DialogResult.OK;
                     Close();
                     return;
@@ -270,13 +268,13 @@ namespace PluginScreenshot
                             sel.Y + screen.Y,
                             sel.Width,
                             sel.Height);
-                        Logger.Log($"GifSnapSelector: free-drag → {SelectedRegion}");
+                        Logger.Log($"GifSnapSelector: free-drag -> {SelectedRegion}");
                         DialogResult = DialogResult.OK;
                         Close();
                     }
                     else
                     {
-                        // Too small — reset, let user try again.
+                        // Too small -- reset, let user try again.
                         _dragStart = Point.Empty;
                         _dragEnd   = Point.Empty;
                         Invalidate();
@@ -284,9 +282,7 @@ namespace PluginScreenshot
                 }
             }
 
-            // ---------------------------------------------------------------- //
             //  Paint
-            // ---------------------------------------------------------------- //
 
             protected override void OnPaint(PaintEventArgs e)
             {
@@ -298,7 +294,6 @@ namespace PluginScreenshot
                 using (var dim = new SolidBrush(DimColor))
                     g.FillRectangle(dim, client);
 
-                // ---- Drag mode ----
                 if (_dragging)
                 {
                     Rectangle sel = GetSelectionRect();
@@ -320,7 +315,6 @@ namespace PluginScreenshot
                     return;
                 }
 
-                // ---- Window-hover mode ----
                 if (!_windowsLoaded || _hoveredWindow == null) return;
 
                 // Convert hovered rect to form-local coords.
@@ -362,9 +356,7 @@ namespace PluginScreenshot
                 DrawSizeLabel(g, sizeRect, client);
             }
 
-            // ---------------------------------------------------------------- //
             //  Helpers
-            // ---------------------------------------------------------------- //
 
             private Rectangle GetSelectionRect()
             {
@@ -383,11 +375,9 @@ namespace PluginScreenshot
             }
         }
 
-        // ================================================================== //
-        //  Shared paint helpers — used by GifSnapSelector and CustomScreenshotForm
-        // ================================================================== //
+        //  Shared paint helpers -- used by GifSnapSelector and CustomScreenshotForm
 
-        /// <summary>Draws small square handles at each corner of the selection.</summary>
+        // Draws small square handles at each corner of the selection.
         internal static void DrawCornerHandles(Graphics g, Rectangle sel)
         {
             const int sz = 6;
@@ -405,9 +395,7 @@ namespace PluginScreenshot
             }
         }
 
-        /// <summary>
-        /// Draws the "W × H" size label in a rounded blue pill below (or above) the selection.
-        /// </summary>
+        // Draws the "W x H" size label in a rounded blue pill below (or above) the selection.
         internal static void DrawSizeLabel(Graphics g, Rectangle sel, Rectangle clientBounds)
         {
             string label = $"{sel.Width} × {sel.Height}";

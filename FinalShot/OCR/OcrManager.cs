@@ -1,3 +1,17 @@
+/*
+ * Copyright (c) 2025 nstechbytes
+ *
+ * Licensed under the MIT License.
+ * You may obtain a copy of the License at:
+ * https://opensource.org/licenses/MIT
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 using System;
 using System.Drawing;
 using System.Drawing.Imaging;
@@ -7,28 +21,22 @@ using System.Windows.Forms;
 
 namespace PluginScreenshot
 {
-    /// <summary>
-    /// Orchestrates ShareX-style OCR: snap/select region → capture → recognize → clipboard.
-    /// </summary>
+    // Orchestrates ShareX-style OCR: snap/select region, capture, recognize, clipboard.
     public static class OcrManager
     {
         private static readonly object TextLock = new object();
         private static string _lastOcrText = "";
 
-        /// <summary>
-        /// Last successfully recognized text (empty after cancel/failure).
-        /// Exposed to Rainmeter via GetLastOCRText().
-        /// </summary>
+        // Last successfully recognized text (empty after cancel/failure).
+        // Exposed to Rainmeter via GetLastOCRText().
         public static string LastOcrText
         {
             get { lock (TextLock) return _lastOcrText ?? ""; }
             private set { lock (TextLock) _lastOcrText = value ?? ""; }
         }
 
-        /// <summary>
-        /// Opens the snap overlay, OCRs the selected region, copies text, runs finish action.
-        /// Blocks until the STA worker finishes (same pattern as custom screenshot).
-        /// </summary>
+        // Opens the snap overlay, OCRs the selected region, copies text, runs finish action.
+        // Blocks until the STA worker finishes (same pattern as custom screenshot).
         public static void CaptureAndRecognize(Settings settings)
         {
             if (settings == null)
@@ -96,7 +104,7 @@ namespace PluginScreenshot
                 }
                 catch (Exception ex)
                 {
-                    Logger.Log("OcrManager: OCR failed — " + ex.Message);
+                    Logger.Log("OcrManager: OCR failed -- " + ex.Message);
                     LastOcrText = "";
                     return;
                 }
@@ -113,7 +121,7 @@ namespace PluginScreenshot
                     }
                     catch (Exception ex)
                     {
-                        Logger.Log("OcrManager: clipboard error — " + ex.Message);
+                        Logger.Log("OcrManager: clipboard error -- " + ex.Message);
                     }
                 }
 
@@ -143,7 +151,7 @@ namespace PluginScreenshot
             }
             catch (Exception ex)
             {
-                Logger.Log("OcrManager: OCRFinishAction error — " + ex.Message);
+                Logger.Log("OcrManager: OCRFinishAction error -- " + ex.Message);
             }
         }
 

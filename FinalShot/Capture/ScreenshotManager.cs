@@ -1,3 +1,17 @@
+/*
+ * Copyright (c) 2025 nstechbytes
+ *
+ * Licensed under the MIT License.
+ * You may obtain a copy of the License at:
+ * https://opensource.org/licenses/MIT
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -198,12 +212,10 @@ namespace PluginScreenshot
             }
             return Rectangle.Empty;
         }
-        /// <summary>
-        /// Captures a screen rectangle into a new bitmap (multi-monitor stitch).
-        /// When <paramref name="roundCornersForWindow"/> is a top-level Win11 window,
-        /// rounded corners are masked so desktop pixels do not appear in the corners.
-        /// Caller owns and must dispose the returned bitmap. Returns null on failure.
-        /// </summary>
+        // Captures a screen rectangle into a new bitmap (multi-monitor stitch).
+        // When roundCornersForWindow is a top-level Win11 window, rounded corners
+        // are masked so desktop pixels do not appear in the corners.
+        // Caller owns and must dispose the returned bitmap. Returns null on failure.
         public static Bitmap CaptureRegionToBitmap(Rectangle rect, Settings settings,
             IntPtr roundCornersForWindow = default(IntPtr))
         {
@@ -293,7 +305,7 @@ namespace PluginScreenshot
 
                 var fmt = GetImageFormat(path);
 
-                // JPEG has no alpha — flatten transparent rounded corners onto black.
+                // JPEG has no alpha -- flatten transparent rounded corners onto black.
                 if (fmt.Guid == ImageFormat.Jpeg.Guid &&
                     (source.PixelFormat == PixelFormat.Format32bppArgb ||
                      source.PixelFormat == PixelFormat.Format32bppPArgb))

@@ -1,3 +1,17 @@
+/*
+ * Copyright (c) 2025 nstechbytes
+ *
+ * Licensed under the MIT License.
+ * You may obtain a copy of the License at:
+ * https://opensource.org/licenses/MIT
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -12,7 +26,7 @@ namespace PluginScreenshot
         private readonly Settings _settings;
         private readonly Action   _finishCallback;
 
-        // Desktop snapshot — shown dimmed; the hovered/selected region is shown undimmed.
+        // Desktop snapshot -- shown dimmed; the hovered/selected region is shown undimmed.
         private Bitmap _desktopSnapshot;
 
         // Drag-selection state
@@ -26,14 +40,10 @@ namespace PluginScreenshot
         private bool             _windowsLoaded        = false;
         private bool             _pendingWindowCapture = false;
 
-        // ------------------------------------------------------------------ //
-        //  Static factory — always use this, never Application.Run directly
-        // ------------------------------------------------------------------ //
+        //  Static factory -- always use this, never Application.Run directly
 
-        /// <summary>
-        /// Spawns a fresh STA thread and blocks until the form closes.
-        /// Using a new thread every time prevents the Rainmeter crash on the second call.
-        /// </summary>
+        // Spawns a fresh STA thread and blocks until the form closes.
+        // Using a new thread every time prevents the Rainmeter crash on the second call.
         public static void RunModal(Settings settings, Action finishCallback)
         {
             var thread = new Thread(() =>
@@ -54,9 +64,7 @@ namespace PluginScreenshot
             thread.Join();
         }
 
-        // ------------------------------------------------------------------ //
         //  Constructor
-        // ------------------------------------------------------------------ //
 
         public CustomScreenshotForm(Settings settings, Action finishCallback)
         {
@@ -91,9 +99,7 @@ namespace PluginScreenshot
             Paint     += OnPaint;
         }
 
-        // ------------------------------------------------------------------ //
-        //  Form Load — enumerate windows on a background thread
-        // ------------------------------------------------------------------ //
+        //  Form Load -- enumerate windows on a background thread
 
         private void OnFormLoad(object sender, EventArgs e)
         {
@@ -133,9 +139,7 @@ namespace PluginScreenshot
             });
         }
 
-        // ------------------------------------------------------------------ //
         //  Keyboard
-        // ------------------------------------------------------------------ //
 
         private void OnKeyDown(object s, KeyEventArgs e)
         {
@@ -143,9 +147,7 @@ namespace PluginScreenshot
                 Close();
         }
 
-        // ------------------------------------------------------------------ //
         //  Mouse down
-        // ------------------------------------------------------------------ //
 
         private void OnMouseDown(object s, MouseEventArgs e)
         {
@@ -166,9 +168,7 @@ namespace PluginScreenshot
             }
         }
 
-        // ------------------------------------------------------------------ //
         //  Mouse move
-        // ------------------------------------------------------------------ //
 
         private void OnMouseMove(object s, MouseEventArgs e)
         {
@@ -225,9 +225,7 @@ namespace PluginScreenshot
             }
         }
 
-        // ------------------------------------------------------------------ //
         //  Mouse up
-        // ------------------------------------------------------------------ //
 
         private void OnMouseUp(object s, MouseEventArgs e)
         {
@@ -273,9 +271,7 @@ namespace PluginScreenshot
             Close();
         }
 
-        // ------------------------------------------------------------------ //
         //  Paint
-        // ------------------------------------------------------------------ //
 
         private void OnPaint(object s, PaintEventArgs e)
         {
@@ -287,7 +283,6 @@ namespace PluginScreenshot
             using (var dim = new SolidBrush(GifSnapSelector.DimColor))
                 g.FillRectangle(dim, client);
 
-            // ---- Drag mode ----
             if (_dragging && _selection.Width > 1 && _selection.Height > 1)
             {
                 Rectangle sel = _selection;
@@ -307,7 +302,6 @@ namespace PluginScreenshot
                 return;
             }
 
-            // ---- Window-hover mode ----
             if (!_windowsLoaded || _hoveredWindow == null) return;
 
             // Convert hovered rect from screen coords to form-local coords.
@@ -348,9 +342,7 @@ namespace PluginScreenshot
             GifSnapSelector.DrawSizeLabel(g, sizeRect, client);
         }
 
-        // ------------------------------------------------------------------ //
         //  Cleanup
-        // ------------------------------------------------------------------ //
 
         protected override void Dispose(bool disposing)
         {

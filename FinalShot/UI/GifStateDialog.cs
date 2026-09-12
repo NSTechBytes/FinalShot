@@ -1,4 +1,18 @@
-﻿using System;
+/*
+ * Copyright (c) 2025 nstechbytes
+ *
+ * Licensed under the MIT License.
+ * You may obtain a copy of the License at:
+ * https://opensource.org/licenses/MIT
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Threading;
@@ -8,27 +22,23 @@ using WinTimer = System.Windows.Forms.Timer;
 
 namespace PluginScreenshot
 {
-    /// <summary>
-    /// Borderless dark-theme modal dialog shown when a GIF command is issued
-    /// in an invalid state (already recording / not recording).
-    ///
-    /// Two variants:
-    ///   GifStateDialog.ShowAlreadyRecording()
-    ///   GifStateDialog.ShowNotRecording()
-    ///
-    /// The dialog is modal (blocks the calling thread) but runs its own STA
-    /// message loop so it never blocks the Rainmeter plugin thread.
-    /// It closes when the user clicks OK or presses Enter/Escape.
-    /// </summary>
+    // Borderless dark-theme modal dialog shown when a GIF command is issued
+    // in an invalid state (already recording / not recording).
+    //
+    // Two variants:
+    //   GifStateDialog.ShowAlreadyRecording()
+    //   GifStateDialog.ShowNotRecording()
+    //
+    // The dialog is modal (blocks the calling thread) but runs its own STA
+    // message loop so it never blocks the Rainmeter plugin thread.
+    // It closes when the user clicks OK or presses Enter/Escape.
     internal static class GifStateDialog
     {
         private static UITheme _theme = UITheme.Dark;
 
-        /// <summary>Call from Settings load to keep the dialog themed.</summary>
+        // Call from Settings load to keep the dialog themed.
         public static void SetTheme(UITheme theme) => _theme = theme;
-        // ------------------------------------------------------------------ //
         //  Public helpers
-        // ------------------------------------------------------------------ //
 
         public static void ShowAlreadyRecording()
         {
@@ -57,9 +67,7 @@ namespace PluginScreenshot
             );
         }
 
-        // ------------------------------------------------------------------ //
-        //  Core — spawns an STA thread so the dialog has its own message loop
-        // ------------------------------------------------------------------ //
+        //  Core -- spawns an STA thread so the dialog has its own message loop
 
         private enum DialogKind { Warning, Info }
 
@@ -75,7 +83,7 @@ namespace PluginScreenshot
                 }
                 catch (Exception ex)
                 {
-                    Logger.Log($"GifStateDialog: error — {ex.Message}");
+                    Logger.Log($"GifStateDialog: error -- {ex.Message}");
                 }
             });
             thread.SetApartmentState(ApartmentState.STA);
@@ -84,9 +92,7 @@ namespace PluginScreenshot
             thread.Start();
         }
 
-        // ================================================================== //
         //  StateDialogForm
-        // ================================================================== //
 
         private sealed class StateDialogForm : Form
         {

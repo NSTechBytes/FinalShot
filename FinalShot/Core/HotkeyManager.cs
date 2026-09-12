@@ -1,3 +1,17 @@
+/*
+ * Copyright (c) 2025 nstechbytes
+ *
+ * Licensed under the MIT License.
+ * You may obtain a copy of the License at:
+ * https://opensource.org/licenses/MIT
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
@@ -6,15 +20,13 @@ using System.Windows.Forms;
 
 namespace PluginScreenshot
 {
-    /// <summary>
-    /// Process-wide WH_KEYBOARD_LL hotkey manager for FinalShot.
-    /// Installs the hook only while at least one measure has bindings.
-    /// </summary>
+    // Process-wide WH_KEYBOARD_LL hotkey manager for FinalShot.
+    // Installs the hook only while at least one measure has bindings.
     internal static class HotkeyManager
     {
         private static readonly object Sync = new object();
 
-        // measureId (GCHandle IntPtr) → bindings for that measure
+        // measureId (GCHandle IntPtr) -> bindings for that measure
         private static readonly Dictionary<IntPtr, MeasureBindings> Measures =
             new Dictionary<IntPtr, MeasureBindings>();
 
@@ -43,10 +55,8 @@ namespace PluginScreenshot
             public Settings Settings;
         }
 
-        /// <summary>
-        /// Replace hotkey bindings for a measure. Pass settings with HotkeysEnabled
-        /// and Hotkey* chords. Empty / disabled → removes that measure from the hook.
-        /// </summary>
+        // Replace hotkey bindings for a measure. Pass settings with HotkeysEnabled
+        // and Hotkey* chords. Empty / disabled removes that measure from the hook.
         public static void UpdateBindings(IntPtr measureId, Settings settings)
         {
             if (measureId == IntPtr.Zero)
@@ -112,7 +122,7 @@ namespace PluginScreenshot
             if (chord == null)
             {
                 if (!string.IsNullOrEmpty(error))
-                    Logger.Log("HotkeyManager: invalid " + action + " hotkey — " + error);
+                    Logger.Log("HotkeyManager: invalid " + action + " hotkey -- " + error);
                 return;
             }
 
@@ -136,7 +146,7 @@ namespace PluginScreenshot
                     if (seen.TryGetValue(e.Chord, out HotkeyAction existing) && existing != e.Action)
                     {
                         Logger.Log("HotkeyManager: chord '" + e.Chord.Source
-                            + "' conflict — last measure wins (" + e.Action + " over " + existing + ").");
+                            + "' conflict -- last measure wins (" + e.Action + " over " + existing + ").");
                     }
                     seen[e.Chord] = e.Action;
                     // Last write wins: remove previous same chord then add
@@ -203,7 +213,7 @@ namespace PluginScreenshot
                 }
                 catch (Exception ex)
                 {
-                    Logger.Log("HotkeyManager: pump thread error — " + ex.Message);
+                    Logger.Log("HotkeyManager: pump thread error -- " + ex.Message);
                     startError = startError ?? ex;
                     ready.Set();
                 }
@@ -250,7 +260,7 @@ namespace PluginScreenshot
                 }
                 catch (Exception ex)
                 {
-                    Logger.Log("HotkeyManager: PostThreadMessage failed — " + ex.Message);
+                    Logger.Log("HotkeyManager: PostThreadMessage failed -- " + ex.Message);
                 }
             }
 
@@ -331,7 +341,7 @@ namespace PluginScreenshot
                 Settings settings = entry.Settings;
                 HotkeyAction action = entry.Action;
                 string cmd = CommandDispatcher.CommandFor(action);
-                Logger.Log("HotkeyManager: matched '" + entry.Chord.Source + "' → " + cmd);
+                Logger.Log("HotkeyManager: matched '" + entry.Chord.Source + "' -> " + cmd);
 
                 ThreadPool.QueueUserWorkItem(_ => Dispatch(settings, cmd));
                 return true;
@@ -352,7 +362,7 @@ namespace PluginScreenshot
 
             if (Interlocked.CompareExchange(ref _dispatchBusy, 1, 0) != 0)
             {
-                Logger.Log("HotkeyManager: ignored '" + cmd + "' — another hotkey action is busy.");
+                Logger.Log("HotkeyManager: ignored '" + cmd + "' -- another hotkey action is busy.");
                 return;
             }
 

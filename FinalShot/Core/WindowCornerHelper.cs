@@ -1,3 +1,17 @@
+/*
+ * Copyright (c) 2025 nstechbytes
+ *
+ * Licensed under the MIT License.
+ * You may obtain a copy of the License at:
+ * https://opensource.org/licenses/MIT
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -6,10 +20,8 @@ using System.Runtime.InteropServices;
 
 namespace PluginScreenshot
 {
-    /// <summary>
-    /// Clears Windows 11 rounded-corner "desktop bleed" from rectangular window captures
-    /// by masking outside the DWM rounded path to transparent pixels.
-    /// </summary>
+    // Clears Windows 11 rounded-corner "desktop bleed" from rectangular window captures
+    // by masking outside the DWM rounded path to transparent pixels.
     internal static class WindowCornerHelper
     {
         // DWM_WINDOW_CORNER_PREFERENCE
@@ -28,7 +40,7 @@ namespace PluginScreenshot
         {
             try
             {
-                // Prefer build number via RtlGetVersion — Environment.OSVersion is often capped.
+                // Prefer build number via RtlGetVersion -- Environment.OSVersion is often capped.
                 var info = new OSVERSIONINFOEX
                 {
                     dwOSVersionInfoSize = Marshal.SizeOf(typeof(OSVERSIONINFOEX))
@@ -51,9 +63,7 @@ namespace PluginScreenshot
             }
         }
 
-        /// <summary>
-        /// Returns the pixel corner radius for <paramref name="hWnd"/>, or 0 if no rounding.
-        /// </summary>
+        // Returns the pixel corner radius for hWnd, or 0 if no rounding.
         public static int GetCornerRadiusPixels(IntPtr hWnd)
         {
             if (hWnd == IntPtr.Zero || !IsWindows11OrGreater())
@@ -105,11 +115,9 @@ namespace PluginScreenshot
             }
         }
 
-        /// <summary>
-        /// If the window has rounded corners, returns a new 32bpp ARGB bitmap with
-        /// outside-corner pixels cleared. Otherwise returns <paramref name="source"/> unchanged.
-        /// When a new bitmap is returned, <paramref name="source"/> is disposed.
-        /// </summary>
+        // If the window has rounded corners, returns a new 32bpp ARGB bitmap with
+        // outside-corner pixels cleared. Otherwise returns source unchanged.
+        // When a new bitmap is returned, source is disposed.
         public static Bitmap ApplyRoundedCornersIfNeeded(Bitmap source, IntPtr hWnd)
         {
             if (source == null || hWnd == IntPtr.Zero)
@@ -125,9 +133,7 @@ namespace PluginScreenshot
             return rounded;
         }
 
-        /// <summary>
-        /// Draws <paramref name="source"/> clipped to a rounded rectangle onto a transparent canvas.
-        /// </summary>
+        // Draws source clipped to a rounded rectangle onto a transparent canvas.
         public static Bitmap ApplyRoundedCorners(Bitmap source, int cornerRadius)
         {
             if (source == null)
