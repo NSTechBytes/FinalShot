@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome - FinalShot Documentation</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-title">Documentation</div>
+                <div class="sidebar-brand">Final<span>Shot</span></div>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="welcome.html" class="nav-link active">Welcome</a>
+                <a href="installation.html" class="nav-link">Installation</a>
+                <a href="api.html" class="nav-link">API</a>
+                <a href="support.html" class="nav-link">Support</a>
+            </nav>
+        </aside>
+
+        <main class="main">
+            <div class="content">
+                <h1>FinalShot</h1>
+                <p class="subtitle">A Rainmeter plugin for capturing screenshots and recording GIFs directly from your skins.</p>
+
+                <hr class="section-divider">
+
+                <nav class="page-nav">
+                    <a href="#what-is-finalshot">What is FinalShot</a>
+                    <a href="#key-features">Key Features</a>
+                    <a href="#quick-start">Quick Start</a>
+                    <a href="#supported-capture-modes">Capture Modes</a>
+                    <a href="#next-steps">Next Steps</a>
+                </nav>
+
+                <hr class="section-divider">
+
+                <h2 id="what-is-finalshot">What is FinalShot?</h2>
+                <p>FinalShot is a Rainmeter plugin that adds screenshot capture, GIF recording, and OCR text extraction capabilities to your Rainmeter skins. It provides a set of measure-based APIs and bang commands that integrate directly into the Rainmeter workflow.</p>
+
+                <hr class="section-divider">
+
+                <h2 id="key-features">Key Features</h2>
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h4>Screenshot Capture</h4>
+                        <p>Full-screen, predefined region, custom selection, and window capture modes. Multi-monitor composition and optional cursor inclusion.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>Smart Window Snap</h4>
+                        <p>Automatic window and child-control detection. Hover to highlight, click to capture. Works with toolbars, sidebars, panels, and individual controls.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>GIF Recording</h4>
+                        <p>Record animated GIFs with configurable FPS, duration, and capture modes. Includes pause/resume, overlay controls, and encoding progress window.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>OCR Text Extraction</h4>
+                        <p>Extract text from any region using Windows OCR. Supports multiple languages, upscaling, and editable result window.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>Global Hotkeys</h4>
+                        <p>Low-level keyboard hooks for capture, OCR, and GIF actions. Configurable chord format (e.g. <code>Ctrl+Shift+PrintScreen</code>).</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>Themed Notifications</h4>
+                        <p>Dark, Light, or System-themed toast notifications with screenshot preview. Configurable click actions and auto-dismiss.</p>
+                    </div>
+                </div>
+
+                <hr class="section-divider">
+
+                <h2 id="quick-start">Quick Start</h2>
+                <p>After installing FinalShot, define a measure in your Rainmeter skin:</p>
+<pre><code>[MeasureScreenshot]
+Measure=Plugin
+Plugin=FinalShot
+SavePath=#@#Screenshots\shot.png
+ShowCursor=1
+ShowNotification=1</code></pre>
+
+                <p>Then trigger a capture with a bang:</p>
+<pre><code>[!CommandMeasure MeasureScreenshot "-fs"]</code></pre>
+
+                <p>This captures the full screen, saves it to the specified path, and shows a notification toast with a preview.</p>
+
+                <hr class="section-divider">
+
+                <h2 id="supported-capture-modes">Supported Capture Modes</h2>
+                <ul>
+                    <li><strong>Full Screen</strong> (<a href="api.html#bang-commands"><code>-fs</code></a>) - Capture the entire virtual screen across all monitors.</li>
+                    <li><strong>Predefined Region</strong> (<a href="api.html#bang-commands"><code>-ps</code></a>) - Capture a fixed rectangle specified by coordinates.</li>
+                    <li><strong>Custom Selection</strong> (<a href="api.html#bang-commands"><code>-cs</code></a>) - Open an overlay for drag-selection or smart window snap.</li>
+                    <li><strong>Window Capture</strong> (<a href="api.html#bang-commands"><code>-ws|title</code></a>) - Capture a specific window by title.</li>
+                    <li><strong>OCR</strong> (<a href="api.html#bang-commands"><code>-ocr</code></a>) - Extract text from a selected region using Windows OCR.</li>
+                    <li><strong>GIF Recording</strong> (<a href="api.html#gif-recording-settings"><code>-gif-start</code></a>, <a href="api.html#gif-recording-settings"><code>-gif-stop</code></a>, etc.) - Record animated GIFs.</li>
+                </ul>
+
+                <hr class="section-divider">
+
+                <h2 id="next-steps">Next Steps</h2>
+                <ul>
+                    <li><a href="installation.html">Installation</a> - How to install and configure FinalShot.</li>
+                    <li><a href="api.html">API Reference</a> - Complete documentation for all settings, <a href="api.html#bang-commands">bangs</a>, and <a href="api.html#section-variables">section variables</a>.</li>
+                    <li><a href="support.html">Support</a> - How to report issues and get help.</li>
+                </ul>
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

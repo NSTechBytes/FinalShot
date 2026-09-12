@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Installation - FinalShot Documentation</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-title">Documentation</div>
+                <div class="sidebar-brand">Final<span>Shot</span></div>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="welcome.html" class="nav-link">Welcome</a>
+                <a href="installation.html" class="nav-link active">Installation</a>
+                <a href="api.html" class="nav-link">API</a>
+                <a href="support.html" class="nav-link">Support</a>
+            </nav>
+        </aside>
+
+        <main class="main">
+            <div class="content">
+                <h1>Installation</h1>
+                <p class="subtitle">How to install, configure, and run FinalShot.</p>
+
+                <hr class="section-divider">
+
+                <nav class="page-nav">
+                    <a href="#requirements">Requirements</a>
+                    <a href="#installation-steps">Installation Steps</a>
+                    <a href="#building-from-source">Building from Source</a>
+                    <a href="#basic-configuration">Basic Configuration</a>
+                    <a href="#first-capture">First Capture</a>
+                    <a href="#gif-recording-setup">GIF Setup</a>
+                    <a href="#ocr-setup">OCR Setup</a>
+                    <a href="#global-hotkeys">Global Hotkeys</a>
+                    <a href="#debug-logging">Debug Logging</a>
+                </nav>
+
+                <hr class="section-divider">
+
+                <h2 id="requirements">Requirements</h2>
+                <ul>
+                    <li><strong>Rainmeter 4.x</strong> or later</li>
+                    <li><strong>.NET Framework 4.8</strong></li>
+                    <li><strong>Windows 7+</strong> for screenshots and GIF recording</li>
+                    <li><strong>Windows 10 version 1903</strong> (10.0.18362) or later for OCR functionality</li>
+                    <li>An installed <strong>Windows OCR language pack</strong> (for <code>-ocr</code> commands only). Add via Windows Settings, Time &amp; Language, Language.</li>
+                </ul>
+
+                <hr class="section-divider">
+
+                <h2 id="installation-steps">Installation Steps</h2>
+                <ol>
+                    <li><strong>Build or download</strong> the <code>FinalShot.dll</code> plugin file.</li>
+                    <li><strong>Copy</code> <code>FinalShot.dll</code> into your Rainmeter Plugins folder. The default location is:
+<pre><code>%APPDATA%\Rainmeter\Plugins\</code></pre>
+                    </li>
+                    <li><strong>Restart Rainmeter</strong> or refresh all skins to load the new plugin.</li>
+                </ol>
+
+                <hr class="section-divider">
+
+                <h2 id="building-from-source">Building from Source</h2>
+                <p>If building from the repository:</p>
+                <ol>
+                    <li>Open the solution in Visual Studio.</li>
+                    <li>Ensure the target framework is set to .NET Framework 4.8 or higher.</li>
+                    <li>Build in <strong>Release</strong> mode.</li>
+                    <li>Copy the resulting <code>FinalShot.dll</code> from the output folder to your Rainmeter Plugins folder.</li>
+                </ol>
+
+                <hr class="section-divider">
+
+                <h2 id="basic-configuration">Basic Configuration</h2>
+                <p>Add a FinalShot measure to any Rainmeter skin <code>.ini</code> file:</p>
+<pre><code>[MeasureScreenshot]
+Measure=Plugin
+Plugin=FinalShot
+SavePath=C:\Users\You\Pictures\shot.png
+ShowCursor=1
+ShowNotification=1</code></pre>
+
+                <p>Replace the path and options as needed. See the <a href="api.html#screenshot-settings">API Reference</a> for all available settings.</p>
+
+                <hr class="section-divider">
+
+                <h2 id="first-capture">First Capture</h2>
+                <p>Trigger a capture using a Rainmeter bang:</p>
+<pre><code>[!CommandMeasure MeasureScreenshot "-fs"]</code></pre>
+
+                <p>This performs a full-screen capture and saves it to <code>SavePath</code>. If <code>ShowNotification=1</code>, a toast notification with a preview is displayed.</p>
+
+                <hr class="section-divider">
+
+                <h2 id="gif-recording-setup">GIF Recording Setup</h2>
+                <p>To enable GIF recording, add GIF-specific settings to your measure:</p>
+<pre><code>[MeasureGif]
+Measure=Plugin
+Plugin=FinalShot
+GifSavePath=C:\Users\You\Pictures\recording.gif
+GifFPS=10
+GifDuration=0
+ShowNotification=1
+GifShowOverlay=1</code></pre>
+
+                <p>Start recording with:</p>
+<pre><code>[!CommandMeasure MeasureGif "-gif-start"]</code></pre>
+
+                <p>Stop and save with:</p>
+<pre><code>[!CommandMeasure MeasureGif "-gif-stop"]</code></pre>
+
+                <p>See the <a href="api.html#gif-recording-settings">API Reference</a> for all GIF-related settings.</p>
+
+                <hr class="section-divider">
+
+                <h2 id="ocr-setup">OCR Setup</h2>
+                <p>For OCR text extraction, ensure a Windows OCR language pack is installed, then configure:</p>
+<pre><code>[MeasureOCR]
+Measure=Plugin
+Plugin=FinalShot
+OcrLanguage=en
+OcrScaleFactor=2
+ShowOCRWindow=1
+DetectWindows=1
+DetectControls=1</code></pre>
+
+                <p>Trigger OCR with:</p>
+<pre><code>[!CommandMeasure MeasureOCR "-ocr"]</code></pre>
+
+                <p>After recognition, retrieve the text with:</p>
+<pre><code>[&amp;MeasureOCR:<a href="api.html#section-variables">GetLastOCRText()</a>]</code></pre>
+
+                <p>See the <a href="api.html#ocr-settings">API Reference</a> for all OCR-related settings.</p>
+
+                <hr class="section-divider">
+
+                <h2 id="global-hotkeys">Global Hotkeys</h2>
+                <p>To enable global hotkeys, add chord definitions to your measure:</p>
+<pre><code>[MeasureHotkeys]
+Measure=Plugin
+Plugin=FinalShot
+SavePath=#@#Screenshots\shot.png
+GifSavePath=#@#Screenshots\recording.gif
+HotkeysEnabled=1
+HotkeyCustom=Ctrl+Shift+PrintScreen
+HotkeyOCR=Ctrl+Shift+O
+HotkeyGifToggleSnap=Ctrl+Shift+G
+ShowNotification=1</code></pre>
+
+                <p>Chords use <code>+</code> as a separator. Supported modifiers: <code>Ctrl</code>, <code>Alt</code>, <code>Shift</code>, <code>Win</code>. Supported keys: <code>A</code>-<code>Z</code>, <code>F1</code>-<code>F24</code>, <code>PrintScreen</code>, and more. See <a href="api.html#hotkey-settings">Hotkey Settings</a> for the full list.</p>
+
+                <div class="note">
+                    <p>Matched hotkey keys are suppressed so the OS does not also handle them. Antivirus software may prompt about the low-level keyboard hook.</p>
+                </div>
+
+                <hr class="section-divider">
+
+                <h2 id="debug-logging">Debug Logging</h2>
+                <p>To troubleshoot issues, enable debug logging:</p>
+<pre><code>DebugLog=1
+DebugLogPath=C:\Temp\FinalShotDebug.log</code></pre>
+
+                <p>Logs are written to <code>FinalShotDebug.log</code> in the Rainmeter profile directory by default. Log files automatically rotate at 5 MB.</p>
+
+                <hr class="section-divider">
+
+                <h2 id="next-steps">Next Steps</h2>
+                <ul>
+                    <li><a href="api.html">API Reference</a> - Complete documentation for all settings, <a href="api.html#bang-commands">bangs</a>, and <a href="api.html#section-variables">section variables</a>.</li>
+                    <li><a href="support.html">Support</a> - How to report issues and get help.</li>
+                </ul>
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Reference - FinalShot Documentation</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-title">Documentation</div>
+                <div class="sidebar-brand">Final<span>Shot</span></div>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="welcome.html" class="nav-link">Welcome</a>
+                <a href="installation.html" class="nav-link">Installation</a>
+                <a href="api.html" class="nav-link active">API</a>
+                <a href="support.html" class="nav-link">Support</a>
+            </nav>
+        </aside>
+
+        <main class="main">
+            <div class="content">
+                <h1>API Reference</h1>
+                <p class="subtitle">Complete documentation for all FinalShot measure settings, bang commands, and section variables.</p>
+
+                <!-- ============================================ -->
+                <!-- Screenshot Settings                          -->
+                <!-- ============================================ -->
+                <nav class="page-nav">
+                    <a href="#screenshot-settings">Screenshot</a>
+                    <a href="#predefined-region">Predefined Region</a>
+                    <a href="#smart-window-snap">Window Snap</a>
+                    <a href="#gif-recording-settings">GIF Recording</a>
+                    <a href="#ocr-settings">OCR</a>
+                    <a href="#hotkey-settings">Hotkeys</a>
+                    <a href="#debug-settings">Debug</a>
+                    <a href="#bang-commands">Bang Commands</a>
+                    <a href="#section-variables">Section Variables</a>
+                    <a href="#example">Example</a>
+                </nav>
+
+                <hr class="section-divider">
+
+                <div class="category-header">
+                    <h3 id="screenshot-settings">Screenshot Settings</h3>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">SavePath</span>
+                        <span class="api-default">Default: (empty)</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">string</span>
+                        <p>Full path including filename and extension where the screenshot will be saved. Supported formats: .png, .jpg, .jpeg, .bmp, .tiff. If empty, captures are silently discarded.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">ShowCursor</span>
+                        <span class="api-default">Default: 0</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">int (0 or 1)</span>
+                        <p>Include the mouse cursor in screenshots and GIF frames. Set to 1 to draw the cursor at its screen position.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">ShowNotification</span>
+                        <span class="api-default">Default: 0</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">int (0 or 1)</span>
+                        <p>Show a themed toast notification with image preview after a successful capture or GIF save. Plays the Windows notification sound.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">UsePrintWindow</span>
+                        <span class="api-default">Default: 0</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">int (0 or 1)</span>
+                        <p>Window capture mode for <a href="#bang-commands"><code>-ws</code></a> commands. When 1, uses the PrintWindow API for exclusive window capture (no overlapping windows). When 0, uses screen-based capture which may include overlapping content.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">JpgQuality</span>
+                        <span class="api-default">Default: 70</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">int (0-100)</span>
+                        <p>JPEG compression quality. Only applies when <a href="#screenshot-settings"><code>SavePath</code></a> ends in <code>.jpg</code> or <code>.jpeg</code>.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">ScreenshotFinishAction</span>
+                        <span class="api-default">Default: (empty)</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">string</span>
+                        <p>Rainmeter bang or external command to execute after a screenshot is saved. Leave empty for no action.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">OnNotificationClickAction</span>
+                        <span class="api-default">Default: (empty)</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">string</span>
+                        <p>Rainmeter bang to execute when the user clicks the notification toast body (not the close button). Leave empty for no action.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">UITheme</span>
+                        <span class="api-default">Default: 0</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">int (0-2) or string</span>
+                        <p>Theme for all FinalShot popup windows (notification, encoding progress, state dialog). Accepts: <code>0</code> or <code>dark</code>, <code>1</code> or <code>light</code>, <code>2</code> or <code>system</code>. System mode follows the Windows "Apps use light theme" setting.</p>
+                    </div>
+                </div>
+
+                <!-- ============================================ -->
+                <!-- Predefined Region                            -->
+                <!-- ============================================ -->
+                <div class="category-header">
+                    <h3 id="predefined-region">Predefined Region</h3>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">PredefX</span>
+                        <span class="api-default">Default: 0</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">int</span>
+                        <p>X coordinate (left) of the predefined capture region in screen pixels.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">PredefY</span>
+                        <span class="api-default">Default: 0</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">int</span>
+                        <p>Y coordinate (top) of the predefined capture region in screen pixels.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">PredefWidth</span>
+                        <span class="api-default">Default: 0</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">int</span>
+                        <p>Width of the predefined capture region in screen pixels.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">PredefHeight</span>
+                        <span class="api-default">Default: 0</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">int</span>
+                        <p>Height of the predefined capture region in screen pixels.</p>
+                    </div>
+                </div>
+
+                <!-- ============================================ -->
+                <!-- Smart Window Snap                            -->
+                <!-- ============================================ -->
+                <div class="category-header">
+                    <h3 id="smart-window-snap">Smart Window Snap</h3>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">DetectWindows</span>
+                        <span class="api-default">Default: 1</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">int (0 or 1)</span>
+                        <p>Enable Smart Window Snap in <a href="#bang-commands"><code>-cs</code></a> custom capture mode. When enabled, the overlay detects visible top-level windows and child controls for instant snap-to-window capture. Set to 0 for drag-only mode.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">DetectControls</span>
+                        <span class="api-default">Default: 1</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">int (0 or 1)</span>
+                        <p>Detect child controls inside windows (toolbars, sidebars, panels, list views, buttons). Has no effect when <code>DetectWindows=0</code>. Set to 0 to detect top-level windows only.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">RoundWindowCorners</span>
+                        <span class="api-default">Default: 0</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">int (0 or 1)</span>
+                        <p>Mask Windows 11 rounded corners on top-level window captures. When enabled, desktop pixels in the sharp rectangle corners are removed (transparent in PNG, black in JPEG). Requires DWM corner preference detection.</p>
+                    </div>
+                </div>
+
+                <!-- ============================================ -->
+                <!-- GIF Recording Settings                       -->
+                <!-- ============================================ -->
+                <div class="category-header">
+                    <h3 id="gif-recording-settings">GIF Recording Settings</h3>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">GifSavePath</span>
+                        <span class="api-default">Default: (empty)</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">string</span>
+                        <p>Full path including filename where the recorded GIF will be saved. If empty, <a href="#bang-commands">GIF recording commands</a> are aborted.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">GifFPS</span>
+                        <span class="api-default">Default: 10</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">int (1-30)</span>
+                        <p>Frames per second for GIF recording. Values outside 1-30 are clamped.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">GifDuration</span>
+                        <span class="api-default">Default: 0</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">int</span>
+                        <p>Maximum recording duration in seconds. When 0, recording continues until explicitly stopped.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">GifPredefX</span>
+                        <span class="api-default">Default: (same as PredefX)</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">int</span>
+                        <p>X coordinate of the predefined GIF capture region. Falls back to <code>PredefX</code> if not set.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">GifPredefY</span>
+                        <span class="api-default">Default: (same as PredefY)</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">int</span>
+                        <p>Y coordinate of the predefined GIF capture region. Falls back to <code>PredefY</code> if not set.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">GifPredefWidth</span>
+                        <span class="api-default">Default: (same as PredefWidth)</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">int</span>
+                        <p>Width of the predefined GIF capture region. Falls back to <code>PredefWidth</code> if not set.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">GifPredefHeight</span>
+                        <span class="api-default">Default: (same as PredefHeight)</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">int</span>
+                        <p>Height of the predefined GIF capture region. Falls back to <code>PredefHeight</code> if not set.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">GifShowOverlay</span>
+                        <span class="api-default">Default: 1</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">int (0 or 1)</span>
+                        <p>Show the recording overlay with Stop, Pause, and Abort buttons during GIF recording.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">GifShowEncodingWindow</span>
+                        <span class="api-default">Default: 1</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">int (0 or 1)</span>
+                        <p>Show a progress window while the GIF is being encoded and written to disk after recording stops.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">GifShowStateDialogs</span>
+                        <span class="api-default">Default: 1</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">int (0 or 1)</span>
+                        <p>Show a dialog when the user issues a GIF command in an invalid state (e.g. trying to start while already recording, or stopping when not recording).</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">GifStartAction</span>
+                        <span class="api-default">Default: (empty)</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">string</span>
+                        <p>Rainmeter bang to execute when GIF recording starts.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">GifCancelAction</span>
+                        <span class="api-default">Default: (empty)</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">string</span>
+                        <p>Rainmeter bang to execute when GIF recording is cancelled (frames discarded).</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">GifPauseAction</span>
+                        <span class="api-default">Default: (empty)</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">string</span>
+                        <p>Rainmeter bang to execute when GIF recording is paused.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">GifResumeAction</span>
+                        <span class="api-default">Default: (empty)</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">string</span>
+                        <p>Rainmeter bang to execute when GIF recording resumes from pause.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">OnGifEncodingAction</span>
+                        <span class="api-default">Default: (empty)</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">string</span>
+                        <p>Rainmeter bang to execute when GIF encoding begins (after recording stops, before encoding completes).</p>
+                    </div>
+                </div>
+
+                <!-- ============================================ -->
+                <!-- OCR Settings                                 -->
+                <!-- ============================================ -->
+                <div class="category-header">
+                    <h3 id="ocr-settings">OCR Settings</h3>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">OcrLanguage</span>
+                        <span class="api-default">Default: en</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">string</span>
+                        <p>Windows OCR language tag (e.g. <code>en</code>, <code>en-US</code>, <code>de</code>, <code>ja</code>). The corresponding Windows OCR language pack must be installed. Falls back to <code>en</code> if empty or whitespace.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">OcrScaleFactor</span>
+                        <span class="api-default">Default: 2</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">float (1-4)</span>
+                        <p>Upscale factor applied to the captured region before OCR. Higher values can improve recognition of small text. Clamped to 1-4.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">OcrSingleLine</span>
+                        <span class="api-default">Default: 0</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">int (0 or 1)</span>
+                        <p>When 1, OCR result lines are joined with spaces instead of newlines.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">ShowOCRWindow</span>
+                        <span class="api-default">Default: 0</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">int (0 or 1)</span>
+                        <p>Show an editable OCR result window after recognition. The user can edit text, copy to clipboard, then close. When 0, text is silently copied to the clipboard.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">OCRFinishAction</span>
+                        <span class="api-default">Default: (empty)</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">string</span>
+                        <p>Rainmeter bang to execute after successful OCR (not on cancel).</p>
+                    </div>
+                </div>
+
+                <!-- ============================================ -->
+                <!-- Hotkey Settings                              -->
+                <!-- ============================================ -->
+                <div class="category-header">
+                    <h3 id="hotkey-settings">Hotkey Settings</h3>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">HotkeysEnabled</span>
+                        <span class="api-default">Default: 1</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">int (0 or 1)</span>
+                        <p>Master switch for global hotkeys. When 0, all <a href="#hotkey-settings"><code>Hotkey*</code></a> chords are ignored. Individual chords must still be set for their respective actions.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">HotkeyFullscreen</span>
+                        <span class="api-default">Default: (empty)</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">string</span>
+                        <p>Global hotkey chord for full-screen capture (<code>-fs</code>). Example: <code>Ctrl+Shift+F</code>.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">HotkeyPredefined</span>
+                        <span class="api-default">Default: (empty)</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">string</span>
+                        <p>Global hotkey chord for predefined region capture (<code>-ps</code>).</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">HotkeyCustom</span>
+                        <span class="api-default">Default: (empty)</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">string</span>
+                        <p>Global hotkey chord for custom selection / Smart Window Snap (<code>-cs</code>). Example: <code>Ctrl+Shift+PrintScreen</code>.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">HotkeyOCR</span>
+                        <span class="api-default">Default: (empty)</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">string</span>
+                        <p>Global hotkey chord for OCR text extraction (<code>-ocr</code>). Example: <code>Ctrl+Shift+O</code>.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">HotkeyGifToggle</span>
+                        <span class="api-default">Default: (empty)</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">string</span>
+                        <p>Global hotkey chord for GIF toggle full-screen recording (<code>-gif-toggle</code>).</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">HotkeyGifToggleSnap</span>
+                        <span class="api-default">Default: (empty)</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">string</span>
+                        <p>Global hotkey chord for GIF toggle snap recording (<code>-gif-toggle-snap</code>). Example: <code>Ctrl+Shift+G</code>.</p>
+                    </div>
+                </div>
+
+                <div class="note">
+                    <p><strong>Chord format:</strong> Parts separated by <code>+</code>. Modifiers: <code>Ctrl</code>, <code>Alt</code>, <code>Shift</code>, <code>Win</code>. Keys: <code>A</code>-<code>Z</code>, <code>F1</code>-<code>F24</code>, <code>PrintScreen</code>, <code>Insert</code>, <code>Delete</code>, <code>Home</code>, <code>End</code>, <code>PageUp</code>, <code>PageDown</code>, <code>Escape</code>, <code>Tab</code>, <code>Space</code>, <code>Enter</code>, <code>Backspace</code>, arrow keys, or hex VK codes (e.g. <code>0x2C</code>). Matching keys are suppressed by the keyboard hook.</p>
+                </div>
+
+                <!-- ============================================ -->
+                <!-- Debug Settings                               -->
+                <!-- ============================================ -->
+                <div class="category-header">
+                    <h3 id="debug-settings">Debug Settings</h3>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">DebugLog</span>
+                        <span class="api-default">Default: 0</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">int (0 or 1)</span>
+                        <p>Enable debug logging. When 1, detailed logs are written to the log file for troubleshooting.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">DebugLogPath</span>
+                        <span class="api-default">Default: (empty)</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">string</span>
+                        <p>Custom path for the debug log file. Overrides the default <code>FinalShotDebug.log</code> in the Rainmeter profile directory.</p>
+                    </div>
+                </div>
+
+                <!-- ============================================ -->
+                <!-- Bang Commands                                -->
+                <!-- ============================================ -->
+                <div class="category-header">
+                    <h3 id="bang-commands">Bang Commands</h3>
+                </div>
+
+                <p>Bang commands are sent via <code>[!CommandMeasure MeasureName "command"]</code>. All commands are case-insensitive.</p>
+
+                <h4>Screenshot Commands</h4>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">-fs</span>
+                        <span class="api-default">Full Screen</span>
+                    </div>
+                    <div class="api-block-content">
+                        <p>Capture the entire virtual screen (all monitors) and save to <code>SavePath</code>.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">-ps</span>
+                        <span class="api-default">Predefined Region</span>
+                    </div>
+                    <div class="api-block-content">
+                        <p>Capture the rectangle defined by <a href="#predefined-region"><code>PredefX</code></a>, <a href="#predefined-region"><code>PredefY</code></a>, <a href="#predefined-region"><code>PredefWidth</code></a>, <a href="#predefined-region"><code>PredefHeight</code></a>.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">-cs</span>
+                        <span class="api-default">Custom Selection</span>
+                    </div>
+                    <div class="api-block-content">
+                        <p>Open the full-screen overlay. Hover to highlight a window or control and click to snap it, or drag to draw a free-selection rectangle. Calls <a href="#screenshot-settings"><code>ScreenshotFinishAction</code></a> after saving.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">-ws|windowtitle</span>
+                        <span class="api-default">Window Capture</span>
+                    </div>
+                    <div class="api-block-content">
+                        <p>Capture a specific window by its exact title. The pipe <code>|</code> separator is followed by the window title string. Use <a href="#screenshot-settings"><code>UsePrintWindow=1</code></a> for exclusive capture.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">-ocr</span>
+                        <span class="api-default">OCR Text Extract</span>
+                    </div>
+                    <div class="api-block-content">
+                        <p>Open the snap overlay for region selection, then extract text using Windows OCR. Text is copied to the clipboard and available via <a href="#section-variables"><code>GetLastOCRText()</code></a>. Requires <a href="#ocr-settings"><code>OcrLanguage</code></a> to be set and the corresponding language pack installed.</p>
+                    </div>
+                </div>
+
+                <h4>GIF Recording Commands</h4>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">-gif-start</span>
+                        <span class="api-default">Start Full Screen GIF</span>
+                    </div>
+                    <div class="api-block-content">
+                        <p>Start recording a full-screen GIF. Requires <a href="#gif-recording-settings"><code>GifSavePath</code></a> to be set.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">-gif-start-snap</span>
+                        <span class="api-default">Start Snap GIF</span>
+                    </div>
+                    <div class="api-block-content">
+                        <p>Open the snap overlay for region selection, then start recording a GIF of the selected area.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">-gif-start-predefined</span>
+                        <span class="api-default">Start Predefined GIF</span>
+                    </div>
+                    <div class="api-block-content">
+                        <p>Start recording a GIF of the predefined region (<a href="#gif-recording-settings"><code>GifPredefX</code></a>, <a href="#gif-recording-settings"><code>GifPredefY</code></a>, <a href="#gif-recording-settings"><code>GifPredefWidth</code></a>, <a href="#gif-recording-settings"><code>GifPredefHeight</code></a>).</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">-gif-start-window|title</span>
+                        <span class="api-default">Start Window GIF</span>
+                    </div>
+                    <div class="api-block-content">
+                        <p>Start recording a GIF of a specific window by title. The pipe <code>|</code> separator is followed by the window title.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">-gif-stop</span>
+                        <span class="api-default">Stop and Save</span>
+                    </div>
+                    <div class="api-block-content">
+                        <p>Stop the current GIF recording and encode/save to <a href="#gif-recording-settings"><code>GifSavePath</code></a>.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">-gif-cancel</span>
+                        <span class="api-default">Cancel</span>
+                    </div>
+                    <div class="api-block-content">
+                        <p>Cancel the current GIF recording and discard all captured frames.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">-gif-pause</span>
+                        <span class="api-default">Pause / Resume</span>
+                    </div>
+                    <div class="api-block-content">
+                        <p>Toggle pause on the current GIF recording. Paused time is excluded from the recording duration.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">-gif-toggle</span>
+                        <span class="api-default">Toggle Full Screen</span>
+                    </div>
+                    <div class="api-block-content">
+                        <p>Toggle GIF recording: starts full-screen recording if idle, stops and saves if recording. Ignored if encoding.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">-gif-toggle-snap</span>
+                        <span class="api-default">Toggle Snap</span>
+                    </div>
+                    <div class="api-block-content">
+                        <p>Toggle GIF recording with snap overlay: starts snap recording if idle, stops and saves if recording. Ignored if encoding.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">-gif-toggle-predefined</span>
+                        <span class="api-default">Toggle Predefined</span>
+                    </div>
+                    <div class="api-block-content">
+                        <p>Toggle GIF recording of the predefined region. Starts if idle, stops and saves if recording.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">-gif-toggle-window|title</span>
+                        <span class="api-default">Toggle Window</span>
+                    </div>
+                    <div class="api-block-content">
+                        <p>Toggle GIF recording of a specific window by title. Starts if idle, stops and saves if recording.</p>
+                    </div>
+                </div>
+
+                <h4>Batch Commands</h4>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">ExecuteBatch N</span>
+                        <span class="api-default">Legacy Batch</span>
+                    </div>
+                    <div class="api-block-content">
+                        <p>Execute a numbered batch command: <code>1</code> = full-screen, <code>2</code> = custom, <code>3</code> = predefined. Example: <code>ExecuteBatch 1</code>.</p>
+                    </div>
+                </div>
+
+                <!-- ============================================ -->
+                <!-- Section Variables                            -->
+                <!-- ============================================ -->
+                <div class="category-header">
+                    <h3 id="section-variables">Section Variables</h3>
+                </div>
+
+                <p>Section variables are accessed via <code>[&amp;MeasureName:FunctionName()]</code>. Requires <code>DynamicVariables=1</code> on the referencing meter.</p>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">GetStatus()</span>
+                        <span class="api-default">Returns: string</span>
+                    </div>
+                    <div class="api-block-content">
+                        <p>Returns the numeric recording state: <code>1</code> = Idle, <code>2</code> = Recording, <code>3</code> = Encoding.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">IsRecording()</span>
+                        <span class="api-default">Returns: string</span>
+                    </div>
+                    <div class="api-block-content">
+                        <p>Returns <code>1</code> if currently recording, <code>-1</code> otherwise.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">IsEncoding()</span>
+                        <span class="api-default">Returns: string</span>
+                    </div>
+                    <div class="api-block-content">
+                        <p>Returns <code>1</code> if currently encoding, <code>-1</code> otherwise.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">IsIdle()</span>
+                        <span class="api-default">Returns: string</span>
+                    </div>
+                    <div class="api-block-content">
+                        <p>Returns <code>1</code> if idle (not recording or encoding), <code>-1</code> otherwise.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">IsPaused()</span>
+                        <span class="api-default">Returns: string</span>
+                    </div>
+                    <div class="api-block-content">
+                        <p>Returns <code>1</code> if recording is paused, <code>-1</code> otherwise.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">GetFrameCount()</span>
+                        <span class="api-default">Returns: string</span>
+                    </div>
+                    <div class="api-block-content">
+                        <p>Returns the number of frames captured so far in the current recording. Returns <code>0</code> when not recording.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">GetElapsedTime()</span>
+                        <span class="api-default">Returns: string</span>
+                    </div>
+                    <div class="api-block-content">
+                        <p>Returns the elapsed recording time as <code>MM:SS</code> (excludes paused time). Returns <code>00:00</code> when not recording.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">GetElapsedSeconds()</span>
+                        <span class="api-default">Returns: string</span>
+                    </div>
+                    <div class="api-block-content">
+                        <p>Returns the elapsed recording time in whole seconds (excludes paused time). Returns <code>0</code> when not recording.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">GetSavePath()</span>
+                        <span class="api-default">Returns: string</span>
+                    </div>
+                    <div class="api-block-content">
+                        <p>Returns the full path of the last successfully saved GIF file. Returns <code>""</code> if no GIF has been saved yet this session.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">GetLastFileSize()</span>
+                        <span class="api-default">Returns: string</span>
+                    </div>
+                    <div class="api-block-content">
+                        <p>Returns the file size of the last saved GIF as a human-readable string (e.g. <code>2.4 MB</code>, <code>512 KB</code>, <code>980 B</code>). Returns <code>""</code> if no GIF has been saved yet.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">GetLastOCRText()</span>
+                        <span class="api-default">Returns: string</span>
+                    </div>
+                    <div class="api-block-content">
+                        <p>Returns the last OCR result text. Empty if none, cancelled, or failed. After <a href="#ocr-settings"><code>ShowOCRWindow=1</code></a>, this reflects any edits made in the result window.</p>
+                    </div>
+                </div>
+
+                <div class="note">
+                    <p><strong>Default measure string:</strong> When the measure is referenced without a function name (e.g. <code>[&amp;Measure_FinalShot]</code>), it returns the current status: <code>Idle</code>, <code>Recording</code>, or <code>Encoding</code>.</p>
+                </div>
+
+                <hr class="section-divider">
+
+                <h2 id="example">Example: Complete Measure</h2>
+<pre><code>[MeasureFinalShot]
+Measure=Plugin
+Plugin=FinalShot
+
+; Screenshot
+SavePath=#@#Screenshots\shot.png
+ShowCursor=1
+ShowNotification=1
+UsePrintWindow=0
+JpgQuality=85
+ScreenshotFinishAction=[!Log "Screenshot saved"]
+UITheme=0
+
+; Predefined Region
+PredefX=200
+PredefY=150
+PredefWidth=1024
+PredefHeight=768
+
+; Smart Window Snap
+DetectWindows=1
+DetectControls=1
+RoundWindowCorners=0
+
+; GIF Recording
+GifSavePath=#@#Screenshots\recording.gif
+GifFPS=10
+GifDuration=0
+GifShowOverlay=1
+GifShowEncodingWindow=1
+GifShowStateDialogs=1
+GifStartAction=[!Log "GIF recording started"]
+GifStopAction=[!Log "GIF recording stopped"]
+
+; OCR
+OcrLanguage=en
+OcrScaleFactor=2
+OcrSingleLine=0
+ShowOCRWindow=1
+OCRFinishAction=[!UpdateMeter MeterOCR][!Redraw]
+
+; Hotkeys
+HotkeysEnabled=1
+HotkeyCustom=Ctrl+Shift+PrintScreen
+HotkeyOCR=Ctrl+Shift+O
+HotkeyGifToggleSnap=Ctrl+Shift+G
+
+; Debug
+DebugLog=0</code></pre>
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
