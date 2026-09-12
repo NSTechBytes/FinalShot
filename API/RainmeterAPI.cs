@@ -447,4 +447,43 @@ namespace Rainmeter
 
         }
     }
+
+    /// <summary>
+    /// Thread-safe string buffer for returning strings from section variable exports.
+    /// Rainmeter requires the returned IntPtr to remain valid until the next call.
+    /// Usage: return Rainmeter.StringBuffer.Update("your value");
+    /// </summary>
+    public sealed class StringBuffer
+    {
+        private static readonly StringBuffer s_Instance = new StringBuffer();
+        private IntPtr m_Buffer = IntPtr.Zero;
+
+        static StringBuffer() { }
+        private StringBuffer() { }
+
+        ~StringBuffer() { FreeBuffer(); }
+
+        private void FreeBuffer()
+        {
+            if (m_Buffer != IntPtr.Zero)
+            {
+                Marshal.FreeHGlobal(m_Buffer);
+                m_Buffer = IntPtr.Zero;
+            }
+        }
+
+        public static IntPtr Update(string value)
+        {
+            s_Instance.FreeBuffer();
+            s_Instance.m_Buffer = value != null
+                ? Marshal.StringToHGlobalUni(value)
+                : IntPtr.Zero;
+            return s_Instance.m_Buffer;
+        }
+
+        public static IntPtr Get()
+        {
+            return s_Instance.m_Buffer;
+        }
+    }
 }

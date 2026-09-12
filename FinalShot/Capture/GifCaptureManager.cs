@@ -24,7 +24,7 @@ namespace PluginScreenshot
         private static readonly object _stateLock = new object();
         private static volatile State  _state      = State.Idle;
         private static Thread          _captureThread;
-        private static GifDiskCache    _cache;          // ← disk-backed, not in-memory
+        private static GifDiskCache    _cache;
         private static volatile bool   _stopRequested;
         private static volatile bool   _pauseRequested;
         private static Settings        _activeSettings;
@@ -34,12 +34,54 @@ namespace PluginScreenshot
         private static string          _captureWindowTitle;
 
         // ------------------------------------------------------------------ //
-        //  Public API
+        //  Tracking fields — updated during recording lifecycle
+        // ------------------------------------------------------------------ //
+
+        private static DateTime  _recordingStart   = DateTime.MinValue;  // set when capture begins
+        private static TimeSpan  _pausedDuration   = TimeSpan.Zero;      // accumulated pause time
+        private static DateTime  _pauseStartUtc    = DateTime.MinValue;  // when current pause began
+        private static int       _framesCaptured   = 0;                  // live frame counter
+        private static string    _lastSavedPath    = "";                 // path of last saved GIF
+        private static long      _lastFileSizeBytes= 0;                  // size of last saved GIF
+
+        // ------------------------------------------------------------------ //
+        //  Public state properties
         // ------------------------------------------------------------------ //
 
         public static bool IsActive    => _state != State.Idle;
         public static bool IsRecording => _state == State.Recording;
         public static bool IsEncoding  => _state == State.Encoding;
+        public static bool IsIdle      => _state == State.Idle;
+
+        /// <summary>True when the recording is currently paused.</summary>
+        public static bool IsPaused    => _pauseRequested;
+
+        /// <summary>
+        /// Elapsed recording time (excluding paused intervals).
+        /// Returns TimeSpan.Zero when not recording.
+        /// </summary>
+        public static TimeSpan RecordingElapsed
+        {
+            get
+            {
+                if (_state != State.Recording || _recordingStart == DateTime.MinValue)
+                    return TimeSpan.Zero;
+                TimeSpan total = DateTime.UtcNow - _recordingStart - _pausedDuration;
+                // If currently paused, subtract the ongoing pause as well
+                if (_pauseRequested && _pauseStartUtc != DateTime.MinValue)
+                    total -= DateTime.UtcNow - _pauseStartUtc;
+                return total < TimeSpan.Zero ? TimeSpan.Zero : total;
+            }
+        }
+
+        /// <summary>Number of frames captured so far in the current recording.</summary>
+        public static int FramesCaptured => _framesCaptured;
+
+        /// <summary>Full path of the last successfully saved GIF file.</summary>
+        public static string LastSavedPath => _lastSavedPath;
+
+        /// <summary>File size in bytes of the last saved GIF. 0 if none saved yet.</summary>
+        public static long LastFileSizeBytes => _lastFileSizeBytes;
 
         public static void StartRecording(Settings settings,
                                           GifCaptureMode mode = GifCaptureMode.FullScreen,
@@ -174,6 +216,15 @@ namespace PluginScreenshot
             {
                 if (_state != State.Recording) return;
                 _pauseRequested = !_pauseRequested;
+                if (_pauseRequested)
+                {
+                    _pauseStartUtc = DateTime.UtcNow;
+                }
+                else if (_pauseStartUtc != DateTime.MinValue)
+                {
+                    _pausedDuration += DateTime.UtcNow - _pauseStartUtc;
+                    _pauseStartUtc   = DateTime.MinValue;
+                }
                 Logger.Log($"GifCaptureManager.PauseRecording: paused={_pauseRequested}");
             }
             GifRecordingOverlay.SetPaused(_pauseRequested);
@@ -272,6 +323,12 @@ namespace PluginScreenshot
                 _captureWindowTitle = windowTitle;
                 _activeSettings     = settings;
 
+                // Reset tracking
+                _recordingStart    = DateTime.UtcNow;
+                _pausedDuration    = TimeSpan.Zero;
+                _pauseStartUtc     = DateTime.MinValue;
+                _framesCaptured    = 0;
+
                 Logger.Log($"GifCaptureManager.StartRecordingInternal: mode={mode}, " +
                            $"region={captureRegion}, fps={settings.GifFPS}, " +
                            $"duration={settings.GifDuration}s, " +
@@ -348,6 +405,7 @@ namespace PluginScreenshot
                         // Hand off to disk cache — bitmap is written to disk and
                         // disposed by the cache's background writer thread.
                         localCache.Add(new GifFrame(bmp, delayCs));
+                        Interlocked.Increment(ref _framesCaptured);
                     }
                     catch (Exception ex)
                     {
@@ -427,6 +485,12 @@ namespace PluginScreenshot
             if (success)
             {
                 Logger.Log($"GifCaptureManager.EncodeAndFinish: GIF saved → {settings.GifSavePath}");
+                try
+                {
+                    _lastSavedPath     = settings.GifSavePath;
+                    _lastFileSizeBytes = new FileInfo(settings.GifSavePath).Length;
+                }
+                catch { }
                 if (settings.ShowNotification && File.Exists(settings.GifSavePath))
                     ShowGifNotification(settings.GifSavePath);
                 ScreenshotManager.ExecuteFinishAction(settings);
