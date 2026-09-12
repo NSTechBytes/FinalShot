@@ -78,10 +78,29 @@
   <PropertyGroup>
     <RunPostBuildEvent>Always</RunPostBuildEvent>
   </PropertyGroup>
+  <PropertyGroup>
+    <!-- Required for Windows.winmd / Windows.Media.Ocr on .NET Framework -->
+    <TargetPlatformVersion>10.0</TargetPlatformVersion>
+    <WindowsSdkDir Condition="'$(WindowsSdkDir)' == ''">$(MSBuildProgramFiles32)\Windows Kits\10\</WindowsSdkDir>
+    <!-- Prefer a concrete SDK winmd when present; Facade is the fallback. -->
+    <WindowsWinMdPath Condition="Exists('$(WindowsSdkDir)UnionMetadata\10.0.26100.0\Windows.winmd')">$(WindowsSdkDir)UnionMetadata\10.0.26100.0\Windows.winmd</WindowsWinMdPath>
+    <WindowsWinMdPath Condition="'$(WindowsWinMdPath)' == '' and Exists('$(WindowsSdkDir)UnionMetadata\10.0.22621.0\Windows.winmd')">$(WindowsSdkDir)UnionMetadata\10.0.22621.0\Windows.winmd</WindowsWinMdPath>
+    <WindowsWinMdPath Condition="'$(WindowsWinMdPath)' == '' and Exists('$(WindowsSdkDir)UnionMetadata\10.0.19041.0\Windows.winmd')">$(WindowsSdkDir)UnionMetadata\10.0.19041.0\Windows.winmd</WindowsWinMdPath>
+    <WindowsWinMdPath Condition="'$(WindowsWinMdPath)' == ''">$(WindowsSdkDir)UnionMetadata\Facade\Windows.WinMD</WindowsWinMdPath>
+  </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Runtime.WindowsRuntime">
+      <HintPath>$(windir)\Microsoft.NET\Framework\v4.0.30319\System.Runtime.WindowsRuntime.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Windows">
+      <HintPath>$(WindowsWinMdPath)</HintPath>
+      <IsWinMDFile>true</IsWinMDFile>
+      <Private>False</Private>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AssemblyInfo.cs" />
@@ -93,6 +112,8 @@
     <Compile Include="Core\WindowsDetector.cs" />
     <Compile Include="Capture\ScreenshotManager.cs" />
     <Compile Include="Capture\GifCaptureManager.cs" />
+    <Compile Include="OCR\OcrHelper.cs" />
+    <Compile Include="OCR\OcrManager.cs" />
     <Compile Include="Gif\AnimatedGifEncoder.cs" />
     <Compile Include="Gif\GifDiskCache.cs" />
     <Compile Include="UI\CustomScreenshotForm.cs" />

@@ -185,6 +185,17 @@ namespace PluginScreenshot
             return Rainmeter.StringBuffer.Update(size);
         }
 
+        /// <summary>
+        /// Returns the last OCR result text (empty if none / cancelled / failed).
+        /// Usage: [&Measure_FinalShot:GetOCRText()]
+        /// </summary>
+        [DllExport]
+        public static IntPtr GetOCRText(IntPtr data, int argc,
+            [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr, SizeParamIndex = 1)] string[] argv)
+        {
+            return Rainmeter.StringBuffer.Update(OcrManager.LastOcrText);
+        }
+
         [DllExport]
         public static void ExecuteBang(IntPtr data, IntPtr args)
         {
@@ -212,6 +223,11 @@ namespace PluginScreenshot
                     Logger.Log("Custom capture done, calling FinishAction.");
                     ScreenshotManager.ExecuteFinishAction(settings);
                 });
+            }
+            else if (string.Equals(cmd, "-ocr", StringComparison.OrdinalIgnoreCase))
+            {
+                Logger.Log("ExecuteBang: OCR snap requested.");
+                OcrManager.CaptureAndRecognize(settings);
             }
             else if (cmd.StartsWith("-ws|", StringComparison.OrdinalIgnoreCase))
             {

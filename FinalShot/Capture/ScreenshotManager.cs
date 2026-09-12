@@ -170,6 +170,52 @@ namespace PluginScreenshot
             }
             ExecuteFinishAction(settings);
         }
+        /// <summary>
+        /// Captures a screen rectangle into a new bitmap (multi-monitor stitch).
+        /// Caller owns and must dispose the returned bitmap. Returns null on failure.
+        /// </summary>
+        public static Bitmap CaptureRegionToBitmap(Rectangle rect, Settings settings)
+        {
+            if (rect.Width <= 0 || rect.Height <= 0)
+            {
+                Logger.Log("CaptureRegionToBitmap: invalid rectangle.");
+                return null;
+            }
+
+            Bitmap finalBmp = null;
+            try
+            {
+                finalBmp = new Bitmap(rect.Width, rect.Height);
+                using (var finalG = Graphics.FromImage(finalBmp))
+                {
+                    foreach (var scr in Screen.AllScreens)
+                    {
+                        var inter = Rectangle.Intersect(rect, scr.Bounds);
+                        if (inter.Width <= 0 || inter.Height <= 0)
+                            continue;
+                        using (var part = new Bitmap(inter.Width, inter.Height))
+                        using (var g = Graphics.FromImage(part))
+                        {
+                            g.CopyFromScreen(inter.Location, Point.Empty, inter.Size);
+                            if (settings != null && settings.ShowCursor)
+                                DrawCursor(g, new Rectangle(Point.Empty, inter.Size));
+                            finalG.DrawImage(part,
+                                             inter.Left - rect.Left,
+                                             inter.Top - rect.Top);
+                        }
+                    }
+                }
+                return finalBmp;
+            }
+            catch (Exception ex)
+            {
+                Logger.Log("CaptureRegionToBitmap: " + ex.Message);
+                if (finalBmp != null)
+                    finalBmp.Dispose();
+                return null;
+            }
+        }
+
         public static void CompositeCapture(Rectangle rect, Settings settings)
         {
             if (settings == null || string.IsNullOrWhiteSpace(settings.SavePath))
@@ -177,24 +223,12 @@ namespace PluginScreenshot
                 Logger.Log("CompositeCapture: no SavePath, skipping.");
                 return;
             }
-            using (var finalBmp = new Bitmap(rect.Width, rect.Height))
-            using (var finalG = Graphics.FromImage(finalBmp))
+            using (var finalBmp = CaptureRegionToBitmap(rect, settings))
             {
-                foreach (var scr in Screen.AllScreens)
+                if (finalBmp == null)
                 {
-                    var inter = Rectangle.Intersect(rect, scr.Bounds);
-                    if (inter.Width <= 0 || inter.Height <= 0)
-                        continue;
-                    using (var part = new Bitmap(inter.Width, inter.Height))
-                    using (var g = Graphics.FromImage(part))
-                    {
-                        g.CopyFromScreen(inter.Location, Point.Empty, inter.Size);
-                        if (settings.ShowCursor)
-                            DrawCursor(g, new Rectangle(Point.Empty, inter.Size));
-                        finalG.DrawImage(part,
-                                         inter.Left - rect.Left,
-                                         inter.Top - rect.Top);
-                    }
+                    Logger.Log("CompositeCapture: capture failed.");
+                    return;
                 }
                 SaveImageSafely(finalBmp, settings);
             }

@@ -56,6 +56,18 @@ namespace PluginScreenshot
         /// </summary>
         public bool GifShowEncodingWindow { get; private set; }
 
+        /// <summary>OCR language tag (e.g. en, en-US). Requires installed Windows OCR pack.</summary>
+        public string OcrLanguage { get; private set; }
+
+        /// <summary>Upscale factor before OCR (1–4). Default 2.</summary>
+        public float OcrScaleFactor { get; private set; }
+
+        /// <summary>When true, OCR lines are joined with spaces instead of newlines.</summary>
+        public bool OcrSingleLine { get; private set; }
+
+        /// <summary>Bang executed after successful OCR (not on cancel).</summary>
+        public string OcrFinishAction { get; private set; }
+
         public Settings(API api)
         {
             Api              = api;
@@ -77,6 +89,22 @@ namespace PluginScreenshot
 
             DetectWindows  = api.ReadInt("DetectWindows",  1) > 0;
             DetectControls = api.ReadInt("DetectControls", 1) > 0;
+
+            OcrLanguage = api.ReadString("OcrLanguage", "en");
+            if (string.IsNullOrWhiteSpace(OcrLanguage))
+                OcrLanguage = "en";
+
+            float scale = 2f;
+            string scaleRaw = api.ReadString("OcrScaleFactor", "2");
+            if (!float.TryParse(scaleRaw, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out scale))
+                scale = 2f;
+            if (scale < 1f) scale = 1f;
+            if (scale > 4f) scale = 4f;
+            OcrScaleFactor = scale;
+
+            OcrSingleLine    = api.ReadInt("OcrSingleLine", 0) > 0;
+            OcrFinishAction  = api.ReadString("OCRFinishAction", "");
 
             GifSavePath = api.ReadString("GifSavePath", "");
             GifFPS      = api.ReadInt("GifFPS", 10);
@@ -108,6 +136,10 @@ namespace PluginScreenshot
             Logger.Log("Settings reloaded. SavePath=" + SavePath
                 + "  DetectWindows=" + DetectWindows
                 + "  DetectControls=" + DetectControls
+                + "  OcrLanguage=" + OcrLanguage
+                + "  OcrScaleFactor=" + OcrScaleFactor
+                + "  OcrSingleLine=" + OcrSingleLine
+                + "  OCRFinishAction=" + (string.IsNullOrEmpty(OcrFinishAction) ? "(none)" : "(set)")
                 + "  GifSavePath=" + GifSavePath
                 + "  GifFPS=" + GifFPS
                 + "  GifDuration=" + GifDuration

@@ -35,6 +35,9 @@ FinalShot supports full‑screen captures, predefined regions, custom selection,
   Capture a specific window by its exact title.  
   Supports two modes: exclusive window capture (using `PrintWindow` API) or screen-based capture (includes overlapping windows).
 
+- **OCR Text Extract** (`-ocr`)  
+  Opens the same Smart Window Snap overlay as custom capture. Hover a window or control and click, or drag a free region — then extract text with Windows OCR, copy it to the clipboard, and expose it via `GetOCRText()`.
+
 - **Toast Notifications**  
   Beautiful themed notifications that adapt to Windows Dark/Light mode with screenshot preview.
 
@@ -98,9 +101,10 @@ Set `DetectControls=0` to detect top-level windows only, without snapping to ind
 
 ## Requirements
 
-- Windows 7 or later  
+- Windows 10 version 1903 (10.0.18362) or later for OCR (`-ocr`); Windows 7+ for screenshots/GIF  
+- An installed **Windows OCR language pack** (Settings → Time & Language → Language → add language / OCR)  
 - Rainmeter 4.x or later  
-- .NET Framework 4.5 or higher  
+- .NET Framework 4.8 
 
 ---
 
@@ -173,6 +177,13 @@ DebugLog=0
   ```
   Note: Window title must match exactly as shown in the title bar.
 
+- **OCR Text Extract**  
+  ```ini
+  [!CommandMeasure MeasureScreenshot "-ocr"]
+  ```
+  Opens the snap overlay. Click a highlighted window/control or drag a region.  
+  Text is copied to the clipboard and available as `[&MeasureScreenshot:GetOCRText()]`.
+
 - **Batch Execution**  
   ```ini
   [!CommandMeasure MeasureScreenshot "ExecuteBatch 1"]  ; full-screen
@@ -196,6 +207,10 @@ DebugLog=0
 | `PredefWidth`, `PredefHeight` | Width & height of the predefined capture region.                                                | 0       |
 | `DetectWindows`               | Enable Smart Window Snap in custom capture mode. (1 = on, 0 = off)                             | 1       |
 | `DetectControls`              | Detect child controls (toolbars, sidebars, panels) in addition to top-level windows. Has no effect when `DetectWindows=0`. | 1       |
+| `OcrLanguage`                 | Windows OCR language tag (e.g. `en`, `en-US`, `de`). Pack must be installed.                  | `en`    |
+| `OcrScaleFactor`              | Upscale factor before OCR (1–4). Higher can improve small text.                               | 2       |
+| `OcrSingleLine`               | Join OCR lines with spaces instead of newlines. (1 = yes, 0 = no)                             | 0       |
+| `OCRFinishAction`             | Rainmeter bang or command to run after successful OCR.                                        | (empty) |
 | `DebugLog`                    | Enable debug logging? (1 = yes, 0 = no).                                                        | 0       |
 | `DebugLogPath`                | Custom path for the debug log file (overrides default `FinalShotDebug.log`).                   | (empty) |
 
@@ -255,6 +270,34 @@ Plugin=FinalShot
 SavePath=#@#Screenshots\Custom.png
 DetectWindows=0
 ```
+
+### OCR Text Extract
+```ini
+[MeasureOCR]
+Measure=Plugin
+Plugin=FinalShot
+OcrLanguage=en
+OcrScaleFactor=2
+OcrSingleLine=0
+DetectWindows=1
+DetectControls=1
+ShowNotification=1
+OCRFinishAction=[!UpdateMeter MeterOCRResult][!Redraw]
+
+[MeterOCRResult]
+Meter=String
+MeasureName=MeasureOCR
+Text=OCR: [&MeasureOCR:GetOCRText()]
+DynamicVariables=1
+ClipString=1
+W=400
+
+[ButtonOCR]
+Meter=String
+Text=Extract Text
+LeftMouseUpAction=[!CommandMeasure MeasureOCR "-ocr"]
+```
+Hover a window/control and click, or drag a region. Text is copied to the clipboard.
 
 ### Window Capture (Exclusive Mode)
 ```ini
