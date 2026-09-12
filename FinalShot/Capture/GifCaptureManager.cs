@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -382,6 +383,10 @@ namespace PluginScreenshot
             try
             {
                 var frameClock = Stopwatch.StartNew();
+                ulong prevHash = 0;
+                bool  havePrev = false;
+                int   pendingDelayCs = 0;
+                int   stillSkipped = 0;
 
                 for (int i = 0; !_stopRequested && i < maxFrames; i++)
                 {
@@ -402,10 +407,24 @@ namespace PluginScreenshot
                         int delayCs     = (int)Math.Round(elapsedMs / 10.0);
                         if (delayCs < 2) delayCs = 2;
 
-                        // Hand off to disk cache — bitmap is written to disk and
-                        // disposed by the cache's background writer thread.
-                        localCache.Add(new GifFrame(bmp, delayCs));
-                        Interlocked.Increment(ref _framesCaptured);
+                        // Still-frame merge: identical captures fold into the next
+                        // frame's delay — same timing, fewer frames, no quality loss.
+                        ulong hash = HashBitmapPixels(bmp);
+                        if (havePrev && hash == prevHash)
+                        {
+                            pendingDelayCs += delayCs;
+                            stillSkipped++;
+                            bmp.Dispose();
+                        }
+                        else
+                        {
+                            delayCs += pendingDelayCs;
+                            pendingDelayCs = 0;
+                            prevHash = hash;
+                            havePrev = true;
+                            localCache.Add(new GifFrame(bmp, delayCs));
+                            Interlocked.Increment(ref _framesCaptured);
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -417,14 +436,51 @@ namespace PluginScreenshot
                     if (sleep > 0)
                         Thread.Sleep(sleep);
                 }
+
+                if (stillSkipped > 0)
+                    Logger.Log($"GifCaptureManager.CaptureLoop: coalesced {stillSkipped} still frame(s).");
             }
             finally
             {
                 NativeMethods.SetThreadDpiAwarenessContext(oldCtx);
-                // Complete() blocks until the writer thread has flushed every
-                // frame to disk and closed the write stream.
                 localCache.Complete();
                 Logger.Log("GifCaptureManager.CaptureLoop: finished.");
+            }
+        }
+
+        /// <summary>
+        /// Fast FNV-1a over BGRA pixels. Used only to detect exact still frames.
+        /// </summary>
+        private static ulong HashBitmapPixels(Bitmap bmp)
+        {
+            var bd = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height),
+                                  ImageLockMode.ReadOnly,
+                                  PixelFormat.Format32bppArgb);
+            try
+            {
+                ulong hash = 14695981039346656037UL;
+                int h = bmp.Height;
+                int rowBytes = bmp.Width * 4;
+                byte[] row = new byte[rowBytes];
+                for (int y = 0; y < h; y++)
+                {
+                    Marshal.Copy(IntPtr.Add(bd.Scan0, y * bd.Stride), row, 0, rowBytes);
+                    for (int i = 0; i < rowBytes; i++)
+                    {
+                        hash ^= row[i];
+                        hash *= 1099511628211UL;
+                    }
+                }
+                // Mix dimensions so same pixels at different sizes never collide
+                hash ^= (uint)bmp.Width;
+                hash *= 1099511628211UL;
+                hash ^= (uint)bmp.Height;
+                hash *= 1099511628211UL;
+                return hash;
+            }
+            finally
+            {
+                bmp.UnlockBits(bd);
             }
         }
 

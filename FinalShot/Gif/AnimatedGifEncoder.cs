@@ -10,29 +10,13 @@ namespace PluginScreenshot
     // ======================================================================
     //  AnimatedGifEncoder  —  Pure .NET 4.8 animated GIF encoder.
     //
-    //  Key optimisations (file-size reduction):
-    //    • One GLOBAL palette is built once from a sample of all frames using
-    //      a uniform stride across the entire pixel population (same strategy
-    //      as FFmpeg's palettegen=stats_mode=full).
-    //    • The global palette is written ONCE in the Logical Screen Descriptor
-    //      instead of being repeated as a local colour table in every frame,
-    //      saving palette.Length × 3 bytes per frame.
-    //    • Every frame is quantised against that same palette so identical
-    //      pixels get the same index in consecutive frames.
-    //    • The last palette slot is reserved as a TRANSPARENT index.
-    //    • Each frame only writes the CHANGED RECTANGLE — the minimal
-    //      bounding box of pixels that differ from the previous frame.
-    //      Unchanged pixels outside that rect show through via GIF disposal.
-    //    • Disposal method is set to "do not dispose" (1) so unchanged pixels
-    //      from the previous frame remain visible through the transparency.
-    //    • Bayer ordered dithering (quality 3–5): the 8×8 Bayer threshold
-    //      depends only on pixel position, making the dither completely
-    //      deterministic and frame-independent.  The same source pixel at
-    //      (x,y) always gets the same palette index, so static regions
-    //      compare equal between frames and the changed-rect / transparent
-    //      pixel trick is fully effective.
-    //    • LZW sees massive runs of the same transparent index → compresses
-    //      dramatically better than per-frame independent palettes.
+    //  Key optimisations (file-size reduction, same resolution):
+    //    • Global palette sampled evenly across ALL frames (FFmpeg palettegen-style).
+    //    • Bayer ordered dither on every pixel (smooth gradients; frame-stable for deltas).
+    //    • Dirty horizontal bands instead of one huge AABB when updates are distant.
+    //    • Exact + near-duplicate frame coalesce (sub-pixel shimmer).
+    //    • Capture-time still-frame merge (identical bitmaps fold into next delay).
+    //    • Disposal=1 + transparent index for unchanged pixels (gifsicle-style).
     // ======================================================================
     internal static class AnimatedGifEncoder
     {
@@ -86,20 +70,23 @@ namespace PluginScreenshot
 
             const int  REAL_COLORS = 256;
             const int  MAX_SAMPLES = 500_000;
-            const bool USE_DITHER  = true;
+            // Near-duplicate: skip frames that change fewer than this fraction of pixels
+            // (ClearType / cursor anti-alias shimmer) — visually identical at GIF scale.
+            const double NearDupeFraction = 0.0002; // 0.02%
 
             Logger.Log($"AnimatedGifEncoder: {cache.Count} frames, {w}x{h}, " +
                        $"colors={REAL_COLORS}, maxSamples={MAX_SAMPLES}, " +
-                       $"dither={USE_DITHER}, out={outputPath}");
+                       $"dither=bayer, out={outputPath}");
 
-            // -- Pass 1: build global palette (streaming) ------------------
+            // -- Pass 1: build global palette (streaming, even across all frames)
             int     realColors = REAL_COLORS;
             int     transpIdx  = realColors - 1;
             Color[] palette    = MediaCutQuantizer.BuildGlobalStreaming(
                                      cache.GetFrameEnumerator(),
                                      w, h,
                                      realColors - 1,
-                                     MAX_SAMPLES);
+                                     MAX_SAMPLES,
+                                     cache.Count);
 
             if (palette.Length < realColors)
             {
@@ -144,23 +131,23 @@ namespace PluginScreenshot
                 int    pendingCs   = 0;
                 int    written     = 0;
                 int    frameNum    = 0;
+                int    nearDupes   = 0;
+                int    multiBandFrames = 0;
+                long   nearDupeThreshold = Math.Max(4L, (long)(w * (long)h * NearDupeFraction));
 
                 foreach (GifFrame frame in cache.GetFrameEnumerator())
                 {
                     frameNum++;
                     int delayCs = frame.DelayCs;
 
-                    // Read pixels then dispose bitmap immediately
                     byte[] bgra = ReadBgraInternal(frame.Bitmap, w, h);
                     frame.Bitmap.Dispose();
 
-                    // Quantise against global palette
-                    byte[] indices = USE_DITHER
-                        ? DitherInternal(bgra, w, h, palette, cube, transpIdx)
-                        : QuantizeNoDither(bgra, w, h, cube);
-                    bgra = null; // release BGRA immediately
+                    // Full Bayer ordered dither — required for smooth gradients
+                    // (wallpaper, shadows). Selective/nearest-only dither bands them.
+                    byte[] indices = DitherInternal(bgra, w, h, palette, cube, transpIdx);
+                    bgra = null;
 
-                    // Deduplication
                     if (prevIndices != null && BytesEqual(indices, prevIndices))
                     {
                         pendingCs += delayCs;
@@ -168,26 +155,49 @@ namespace PluginScreenshot
                         continue;
                     }
 
+                    if (prevIndices != null)
+                    {
+                        long changedCount = CountChangedPixels(indices, prevIndices);
+                        if (changedCount < nearDupeThreshold)
+                        {
+                            pendingCs += delayCs;
+                            nearDupes++;
+                            Logger.Log($"AnimatedGifEncoder: frame {frameNum} near-duplicate " +
+                                       $"({changedCount} px) skipped.");
+                            continue;
+                        }
+                    }
+
                     int effectiveCs = delayCs + pendingCs;
                     pendingCs = 0;
 
                     if (prevIndices != null)
                     {
-                        Rectangle? changed = ComputeChangedRect(indices, prevIndices, w, h);
-                        if (changed == null)
+                        List<Rectangle> bands = ComputeDirtyBands(indices, prevIndices, w, h);
+                        if (bands == null || bands.Count == 0)
                         {
-                            prevIndices = indices;
-                            written++;
+                            // Nothing changed — fold delay (should be rare after near-dupe check)
+                            pendingCs += effectiveCs;
                             continue;
                         }
-                        Rectangle cr = changed.Value;
-                        byte[] deltaIndices = ExtractSubRect(
-                            ApplyDelta(indices, prevIndices, transpIdx), w, cr);
+
+                        byte[] deltaFull = ApplyDelta(indices, prevIndices, transpIdx);
+                        if (bands.Count > 1)
+                            multiBandFrames++;
+
                         Logger.Log($"AnimatedGifEncoder: writing frame {frameNum}/{cache.Count} " +
-                                   $"delay={effectiveCs}cs changedRect={cr}");
-                        WriteGifFrameWithTransparency(bw, deltaIndices,
-                            cr.Left, cr.Top, cr.Width, cr.Height,
-                            effectiveCs, transpIdx, lzwMinCode);
+                                   $"delay={effectiveCs}cs bands={bands.Count}");
+
+                        for (int b = 0; b < bands.Count; b++)
+                        {
+                            Rectangle cr = bands[b];
+                            // Delay only on the last band so all patches paint in one tick.
+                            int bandDelay = (b == bands.Count - 1) ? effectiveCs : 0;
+                            byte[] sub = ExtractSubRect(deltaFull, w, cr);
+                            WriteGifFrameWithTransparency(bw, sub,
+                                cr.Left, cr.Top, cr.Width, cr.Height,
+                                bandDelay, transpIdx, lzwMinCode);
+                        }
                     }
                     else
                     {
@@ -202,8 +212,11 @@ namespace PluginScreenshot
                     GifEncodingWindow.UpdateProgress(written, cache.Count);
                 }
 
+                // Trailing pending delay: append to last written frame is not possible
+                // after the fact; if we ended on skips only, ignore leftover delay.
                 bw.Write((byte)0x3B); // GIF trailer
-                Logger.Log($"AnimatedGifEncoder: done - {written}/{cache.Count} frames written -> {outputPath}");
+                Logger.Log($"AnimatedGifEncoder: done - {written}/{cache.Count} frames written, " +
+                           $"nearDupes={nearDupes}, multiBandFrames={multiBandFrames} -> {outputPath}");
             }
         }
 
@@ -248,6 +261,110 @@ namespace PluginScreenshot
             }
             if (maxX < 0) return null; // nothing changed
             return new Rectangle(minX, minY, maxX - minX + 1, maxY - minY + 1);
+        }
+
+        private static long CountChangedPixels(byte[] current, byte[] previous)
+        {
+            long n = 0;
+            int len = current.Length;
+            for (int i = 0; i < len; i++)
+                if (current[i] != previous[i]) n++;
+            return n;
+        }
+
+        /// <summary>
+        /// Splits dirty pixels into horizontal bands so distant updates (e.g. cursor
+        /// + toast) do not force one huge AABB. Returns null/empty if nothing changed.
+        /// Falls back to a single AABB when banding would not shrink encoded area.
+        /// </summary>
+        private static List<Rectangle> ComputeDirtyBands(byte[] current, byte[] previous,
+                                                         int w, int h)
+        {
+            const int MergeGapRows = 8; // merge bands separated by tiny quiet gaps
+
+            var dirtyRows = new bool[h];
+            int dirtyRowCount = 0;
+            for (int y = 0; y < h; y++)
+            {
+                int rowBase = y * w;
+                for (int x = 0; x < w; x++)
+                {
+                    if (current[rowBase + x] != previous[rowBase + x])
+                    {
+                        dirtyRows[y] = true;
+                        dirtyRowCount++;
+                        break;
+                    }
+                }
+            }
+
+            if (dirtyRowCount == 0)
+                return null;
+
+            // Build row-run bands, merging runs separated by ≤ MergeGapRows
+            var rawBands = new List<(int y0, int y1)>();
+            int i = 0;
+            while (i < h)
+            {
+                while (i < h && !dirtyRows[i]) i++;
+                if (i >= h) break;
+                int y0 = i;
+                while (i < h && dirtyRows[i]) i++;
+                int y1 = i - 1;
+
+                if (rawBands.Count > 0 && y0 - rawBands[rawBands.Count - 1].y1 - 1 <= MergeGapRows)
+                {
+                    var last = rawBands[rawBands.Count - 1];
+                    rawBands[rawBands.Count - 1] = (last.y0, y1);
+                }
+                else
+                {
+                    rawBands.Add((y0, y1));
+                }
+            }
+
+            var bands = new List<Rectangle>(rawBands.Count);
+            long bandArea = 0;
+            foreach (var (y0, y1) in rawBands)
+            {
+                int minX = w, maxX = -1;
+                for (int y = y0; y <= y1; y++)
+                {
+                    int rowBase = y * w;
+                    for (int x = 0; x < w; x++)
+                    {
+                        if (current[rowBase + x] == previous[rowBase + x]) continue;
+                        if (x < minX) minX = x;
+                        if (x > maxX) maxX = x;
+                    }
+                }
+                if (maxX < 0) continue;
+                var r = new Rectangle(minX, y0, maxX - minX + 1, y1 - y0 + 1);
+                bands.Add(r);
+                bandArea += (long)r.Width * r.Height;
+            }
+
+            if (bands.Count == 0)
+                return null;
+
+            // If banding barely helps vs one AABB, keep a single rect (simpler LZW).
+            Rectangle? aabb = ComputeChangedRect(current, previous, w, h);
+            if (aabb != null && bands.Count > 1)
+            {
+                long aabbArea = (long)aabb.Value.Width * aabb.Value.Height;
+                if (bandArea >= aabbArea * 85 / 100)
+                    return new List<Rectangle> { aabb.Value };
+            }
+            else if (bands.Count == 1)
+            {
+                return bands;
+            }
+
+            // Cap band count to avoid GCE overhead on noisy frames
+            if (bands.Count > 6 && aabb != null)
+                return new List<Rectangle> { aabb.Value };
+
+            return bands;
         }
 
         /// <summary>
@@ -408,7 +525,7 @@ namespace PluginScreenshot
         };
 
         // Bayer dither strength: offset added to each channel is in [-strength/2, +strength/2].
-        // 24 gives good colour smoothing with minimal banding.
+        // 24 smooths wallpaper/UI gradients without harsh patterning.
         private const int BayerStrength = 24;
 
         internal static byte[] DitherInternal(byte[] bgra, int w, int h,
@@ -422,7 +539,6 @@ namespace PluginScreenshot
                 int rowBase = y * w;
                 for (int x = 0; x < w; x++)
                 {
-                    // Bayer threshold in [0,63], mapped to offset in [-strength/2, +strength/2]
                     int   threshold = _bayer8x8[(y & 7) * 8 + (x & 7)];
                     int   offset    = (threshold * BayerStrength + 32) / 64 - BayerStrength / 2;
 
@@ -589,47 +705,54 @@ namespace PluginScreenshot
     internal static class MediaCutQuantizer
     {
         /// <summary>
-        /// Streaming palette builder — reads frames one at a time from the disk
-        /// cache, samples pixels from each BGRA buffer, then disposes immediately.
+        /// Streaming palette builder — samples evenly across all frames (like
+        /// FFmpeg palettegen=stats_mode=full) so late frames are not starved.
         /// Never holds more than one frame's pixels in memory at once.
-        /// Uses a uniform global stride across all frames combined, identical to
-        /// the batch BuildGlobal approach but without storing all BGRA in RAM.
         /// </summary>
         public static Color[] BuildGlobalStreaming(IEnumerable<GifFrame> frames,
                                                    int w, int h,
-                                                   int maxColors, int maxSamplesTotal)
+                                                   int maxColors, int maxSamplesTotal,
+                                                   int frameCount = 0)
         {
             int pixelsPerFrame = w * h;
+            if (frameCount < 1) frameCount = 1;
 
-            // Collect samples with a uniform stride.
-            // We don't know frameCount upfront, so we use a generous per-frame
-            // allowance: budget / 1 frame minimum, then skip by step within each frame.
-            // Step is estimated as pixelsPerFrame / (maxSamplesTotal / 30) — assuming
-            // up to ~30 frames; it self-corrects because we stop when budget is full.
-            int stepEstimate = Math.Max(1, pixelsPerFrame * 30 / maxSamplesTotal);
+            // Even budget per frame so long recordings still represent late colors.
+            int samplesPerFrame = Math.Max(1, maxSamplesTotal / frameCount);
+            int step = Math.Max(1, pixelsPerFrame / samplesPerFrame);
 
-            int[] flat = new int[maxSamplesTotal * 3];
+            int capacity = Math.Min(maxSamplesTotal, samplesPerFrame * frameCount);
+            int[] flat = new int[capacity * 3];
             int   si   = 0;
+            int   framesSeen = 0;
 
             foreach (GifFrame frame in frames)
             {
+                framesSeen++;
                 if (si >= flat.Length - 2) break;
 
                 byte[] bgra = AnimatedGifEncoder.ReadBgraInternal(frame.Bitmap, w, h);
                 frame.Bitmap.Dispose();
 
-                for (int i = 0; i < pixelsPerFrame && si < flat.Length - 2; i += stepEstimate)
+                int frameBudget = samplesPerFrame;
+                int taken = 0;
+                // Phase offset per frame so we don't always sample the same grid cells
+                int phase = ((framesSeen - 1) * 7) % step;
+
+                for (int i = phase; i < pixelsPerFrame && taken < frameBudget && si < flat.Length - 2; i += step)
                 {
                     int bi = i * 4;
                     flat[si++] = bgra[bi + 2]; // R
                     flat[si++] = bgra[bi + 1]; // G
                     flat[si++] = bgra[bi + 0]; // B
+                    taken++;
                 }
             }
 
             int actualSamples = si / 3;
             Logger.Log($"MediaCutQuantizer.BuildGlobalStreaming: " +
-                       $"samples={actualSamples}, step={stepEstimate}, maxColors={maxColors}");
+                       $"samples={actualSamples}, step={step}, frames={framesSeen}, " +
+                       $"samplesPerFrame~={samplesPerFrame}, maxColors={maxColors}");
             return RunMedianCut(flat, actualSamples, maxColors);
         }
 
