@@ -199,6 +199,7 @@ namespace PluginScreenshot
 
                     prevIndices = indices;
                     written++;
+                    GifEncodingWindow.UpdateProgress(written, cache.Count);
                 }
 
                 bw.Write((byte)0x3B); // GIF trailer

@@ -29,6 +29,12 @@ namespace PluginScreenshot
         public string GifResumeAction { get; private set; }
         public bool GifShowOverlay { get; private set; }
 
+        /// <summary>
+        /// When true, a small encoding-progress window is shown while the GIF
+        /// is being written to disk after recording stops. Default true.
+        /// </summary>
+        public bool GifShowEncodingWindow { get; private set; }
+
         public Settings(API api)
         {
             Api              = api;
@@ -66,7 +72,8 @@ namespace PluginScreenshot
             GifPauseAction       = api.ReadString("GifPauseAction",      "");
             GifResumeAction      = api.ReadString("GifResumeAction",     "");
             OnGifEncodingAction  = api.ReadString("OnGifEncodingAction", "");
-            GifShowOverlay       = api.ReadInt("GifShowOverlay",       1) > 0;
+            GifShowOverlay       = api.ReadInt("GifShowOverlay",        1) > 0;
+            GifShowEncodingWindow= api.ReadInt("GifShowEncodingWindow", 1) > 0;
 
             Logger.DebugEnabled = api.ReadInt("DebugLog", 0) == 1;
             string dbg = api.ReadString("DebugLogPath", "");

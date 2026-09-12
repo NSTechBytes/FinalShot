@@ -394,6 +394,10 @@ namespace PluginScreenshot
                     return;
                 }
 
+                // Show encoding progress window if enabled
+                if (settings.GifShowEncodingWindow)
+                    GifEncodingWindow.Show(frameCount);
+
                 // Encoder reads frames from disk via two streaming passes —
                 // no frame list ever lives in RAM simultaneously.
                 AnimatedGifEncoder.Encode(cache, settings.GifSavePath);
@@ -405,6 +409,9 @@ namespace PluginScreenshot
             }
             finally
             {
+                // Close encoding window (triggers fill + fade-out animation)
+                GifEncodingWindow.Close();
+
                 cache?.Dispose(); // deletes the temp file
                 lock (_stateLock)
                 {
