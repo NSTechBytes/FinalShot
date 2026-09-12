@@ -1,233 +1,300 @@
 using System;
 using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Text;
 using System.Windows.Forms;
-using Microsoft.Win32;
+
+using WinTimer = System.Windows.Forms.Timer;
 
 namespace PluginScreenshot
 {
-    public class NotificationForm : Form
+    /// <summary>
+    /// Borderless toast notification shown after a screenshot or GIF is saved.
+    ///
+    /// Layout (400 × 100):
+    ///   ┌───────────────────────────────────────────────────┐  ← 3px accent bar
+    ///   │ ┌──────┐  FinalShot                           ✕  │
+    ///   │ │cover │  Screenshot Captured!                    │
+    ///   │ │image │  Full Screen                             │
+    ///   │ └──────┘                                          │
+    ///   └───────────────────────────────────────────────────┘
+    ///
+    ///  • Cover image fills the left 80×80 box with object-fit:cover crop.
+    ///  • Themed: Dark / Light / System.
+    ///  • Clicking the body (not ✕) executes OnNotificationClickAction.
+    ///  • Fades in, auto-closes after 4 s, fades out.
+    /// </summary>
+    public sealed class NotificationForm : Form
     {
-        private readonly Timer _autoCloseTimer;
-        private readonly Timer _fadeOutTimer;
-        private readonly string _imagePath;
-        private const int NotificationWidth = 380;
-        private const int NotificationHeight = 120;
-        private const int DisplayDuration = 4000;
-        private const int FadeOutDuration = 500;
-        private double _opacity = 1.0;
-        private readonly bool _isDarkMode;
+        // ------------------------------------------------------------------ //
+        //  Layout constants
+        // ------------------------------------------------------------------ //
+        private const int W           = 400;
+        private const int H           = 100;
+        private const int AccentH     = 3;
+        private const int CoverX      = 12;
+        private const int CoverY      = 12 + AccentH;
+        private const int CoverSize   = 74;   // square cover image
+        private const int TextX       = CoverX + CoverSize + 12;
+        private const int TextW       = W - TextX - 36; // leave room for close btn
+        private const int CloseSize   = 18;
+        private const int DisplayMs   = 4000;
 
-        public NotificationForm(string imagePath, string captureType)
+        // ------------------------------------------------------------------ //
+        //  State
+        // ------------------------------------------------------------------ //
+        private readonly ThemeColors  _t;
+        private readonly string       _imagePath;
+        private readonly string       _captureType;
+        private readonly string       _clickAction;
+        private readonly Settings     _settings;
+        private Bitmap                _cover;       // cropped cover bitmap
+        private bool                  _closeHover;
+        private double                _opacity;
+
+        private readonly WinTimer _fadeInTimer;
+        private readonly WinTimer _holdTimer;
+        private readonly WinTimer _fadeOutTimer;
+
+        // ------------------------------------------------------------------ //
+        //  Construction
+        // ------------------------------------------------------------------ //
+
+        public NotificationForm(string imagePath, string captureType,
+                                Settings settings)
         {
-            _imagePath = imagePath;
-            _isDarkMode = IsWindowsDarkMode();
+            _imagePath   = imagePath;
+            _captureType = captureType;
+            _settings    = settings;
+            _clickAction = settings?.OnNotificationClickAction ?? "";
+            _t           = ThemeColors.Resolve(settings?.UITheme ?? UITheme.Dark);
 
             FormBorderStyle = FormBorderStyle.None;
-            StartPosition = FormStartPosition.Manual;
-            TopMost = false; // set via SetWindowPos in OnHandleCreated
-            ShowInTaskbar = false;
-            Width = NotificationWidth;
-            Height = NotificationHeight;
-            BackColor = _isDarkMode ? Color.FromArgb(30, 30, 30) : Color.FromArgb(240, 240, 240);
-            Opacity = 0;
+            StartPosition   = FormStartPosition.Manual;
+            ShowInTaskbar   = false;
+            TopMost         = false;   // set in OnHandleCreated
+            DoubleBuffered  = true;
+            Width           = W;
+            Height          = H;
+            BackColor       = _t.Background;
+            Opacity         = 0;
+            KeyPreview      = true;
 
-            var workingArea = Screen.PrimaryScreen.WorkingArea;
-            Location = new Point(
-                workingArea.Right - Width - 20,
-                workingArea.Bottom - Height - 20
-            );
+            var wa = Screen.PrimaryScreen.WorkingArea;
+            Location = new Point(wa.Right - W - 20, wa.Bottom - H - 20);
 
-            CreateNotificationUI(captureType);
+            // Load cover image
+            LoadCover();
 
-            _autoCloseTimer = new Timer { Interval = DisplayDuration };
-            _autoCloseTimer.Tick += (s, e) =>
-            {
-                _autoCloseTimer.Stop();
-                StartFadeOut();
-            };
+            // Timers
+            _fadeInTimer        = new WinTimer { Interval = 12 };
+            _fadeInTimer.Tick  += FadeInTick;
 
-            _fadeOutTimer = new Timer { Interval = 20 };
+            _holdTimer          = new WinTimer { Interval = DisplayMs };
+            _holdTimer.Tick    += (s, e) => { _holdTimer.Stop(); _fadeOutTimer.Start(); };
+
+            _fadeOutTimer       = new WinTimer { Interval = 12 };
             _fadeOutTimer.Tick += FadeOutTick;
 
-            Click += (s, e) => StartFadeOut();
+            // Mouse
+            MouseMove  += OnMouseMove;
+            MouseLeave += (s, e) => { _closeHover = false; Invalidate(CloseRect); };
+            MouseDown  += OnMouseDown;
+            KeyDown    += (s, e) => { if (e.KeyCode == Keys.Escape) StartClose(); };
 
-            Load += (s, e) =>
-            {
-                FadeIn();
-                _autoCloseTimer.Start();
-            };
+            Load += (s, e) => { _fadeInTimer.Start(); };
         }
 
-        private bool IsWindowsDarkMode()
+        // ------------------------------------------------------------------ //
+        //  Cover image — crop to fill CoverSize × CoverSize
+        // ------------------------------------------------------------------ //
+
+        private void LoadCover()
         {
             try
             {
-                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"))
+                using (var src = Image.FromFile(_imagePath))
                 {
-                    if (key != null)
+                    _cover = new Bitmap(CoverSize, CoverSize);
+                    using (var g = Graphics.FromImage(_cover))
                     {
-                        object value = key.GetValue("AppsUseLightTheme");
-                        if (value != null)
-                        {
-                            return (int)value == 0;
-                        }
+                        g.InterpolationMode  = InterpolationMode.HighQualityBicubic;
+                        g.SmoothingMode      = SmoothingMode.HighQuality;
+                        g.PixelOffsetMode    = PixelOffsetMode.HighQuality;
+
+                        // Object-fit: cover — scale to fill, crop excess
+                        float scale = Math.Max(
+                            (float)CoverSize / src.Width,
+                            (float)CoverSize / src.Height);
+                        int sw = (int)(src.Width  * scale);
+                        int sh = (int)(src.Height * scale);
+                        int ox = (CoverSize - sw) / 2;
+                        int oy = (CoverSize - sh) / 2;
+
+                        g.Clear(_t.CardBg);
+                        g.DrawImage(src, ox, oy, sw, sh);
                     }
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Log($"Failed to detect Windows theme: {ex.Message}");
-            }
-            return true;
-        }
-
-        private void CreateNotificationUI(string captureType)
-        {
-            Color panelBackColor = _isDarkMode ? Color.FromArgb(40, 40, 40) : Color.FromArgb(250, 250, 250);
-            Color textColor = _isDarkMode ? Color.White : Color.FromArgb(30, 30, 30);
-            Color subtitleColor = _isDarkMode ? Color.FromArgb(180, 180, 180) : Color.FromArgb(100, 100, 100);
-            Color closeButtonColor = _isDarkMode ? Color.FromArgb(150, 150, 150) : Color.FromArgb(100, 100, 100);
-            Color closeButtonHoverColor = _isDarkMode ? Color.White : Color.Black;
-            Color thumbnailBorderColor = _isDarkMode ? Color.FromArgb(60, 60, 60) : Color.FromArgb(200, 200, 200);
-
-            var panel = new Panel
-            {
-                Dock = DockStyle.Fill,
-                Padding = new Padding(10),
-                BackColor = panelBackColor
-            };
-
-            var thumbnail = new PictureBox
-            {
-                Location = new Point(10, 10),
-                Size = new Size(100, 100),
-                SizeMode = PictureBoxSizeMode.Zoom,
-                BorderStyle = BorderStyle.FixedSingle,
-                BackColor = thumbnailBorderColor
-            };
-
-            try
-            {
-                using (var img = Image.FromFile(_imagePath))
-                {
-                    thumbnail.Image = new Bitmap(img, thumbnail.Size);
                 }
             }
             catch
             {
-                thumbnail.BackColor = thumbnailBorderColor;
-            }
-
-            var successLabel = new Label
-            {
-                Text = "FinalShot",
-                Font = new Font("Segoe UI", 12, FontStyle.Bold),
-                ForeColor = Color.FromArgb(0, 200, 100),
-                Location = new Point(120, 10),
-                Size = new Size(200, 30),
-                TextAlign = ContentAlignment.MiddleLeft
-            };
-
-            var titleLabel = new Label
-            {
-                Text = "Screenshot Captured!",
-                Font = new Font("Segoe UI", 11, FontStyle.Bold),
-                ForeColor = textColor,
-                Location = new Point(120, 45),
-                Size = new Size(250, 25),
-                TextAlign = ContentAlignment.MiddleLeft
-            };
-
-            var subtitleLabel = new Label
-            {
-                Text = captureType,
-                Font = new Font("Segoe UI", 9, FontStyle.Regular),
-                ForeColor = subtitleColor,
-                Location = new Point(120, 70),
-                Size = new Size(250, 20),
-                TextAlign = ContentAlignment.MiddleLeft
-            };
-
-            var closeButton = new Label
-            {
-                Text = "✕",
-                Font = new Font("Segoe UI", 12, FontStyle.Bold),
-                ForeColor = closeButtonColor,
-                Location = new Point(NotificationWidth - 35, 5),
-                Size = new Size(25, 25),
-                TextAlign = ContentAlignment.MiddleCenter,
-                Cursor = Cursors.Hand
-            };
-            closeButton.Click += (s, e) => StartFadeOut();
-            closeButton.MouseEnter += (s, e) => closeButton.ForeColor = closeButtonHoverColor;
-            closeButton.MouseLeave += (s, e) => closeButton.ForeColor = closeButtonColor;
-
-            panel.Controls.Add(thumbnail);
-            panel.Controls.Add(successLabel);
-            panel.Controls.Add(titleLabel);
-            panel.Controls.Add(subtitleLabel);
-            panel.Controls.Add(closeButton);
-            Controls.Add(panel);
-
-            foreach (Control ctrl in panel.Controls)
-            {
-                if (ctrl is Label && ctrl != closeButton)
-                {
-                    ctrl.Click += (s, e) => StartFadeOut();
-                }
+                // No image — cover stays null, placeholder is drawn in OnPaint
             }
         }
 
-        private void FadeIn()
-        {
-            var fadeInTimer = new Timer { Interval = 10 };
-            double targetOpacity = 0.95;
-            double step = 0.05;
+        // ------------------------------------------------------------------ //
+        //  Geometry helpers
+        // ------------------------------------------------------------------ //
 
-            fadeInTimer.Tick += (s, e) =>
-            {
-                _opacity += step;
-                if (_opacity >= targetOpacity)
-                {
-                    _opacity = targetOpacity;
-                    Opacity = _opacity;
-                    fadeInTimer.Stop();
-                    fadeInTimer.Dispose();
-                }
-                else
-                {
-                    Opacity = _opacity;
-                }
-            };
-            fadeInTimer.Start();
+        private Rectangle CloseRect =>
+            new Rectangle(W - 28, AccentH + 6, CloseSize, CloseSize);
+
+        private Rectangle BodyRect =>
+            new Rectangle(0, AccentH, W - CloseSize - 8, H - AccentH);
+
+        // ------------------------------------------------------------------ //
+        //  Fade in / out
+        // ------------------------------------------------------------------ //
+
+        private void FadeInTick(object s, EventArgs e)
+        {
+            _opacity += 0.08;
+            if (_opacity >= 0.96) { _opacity = 0.96; _fadeInTimer.Stop(); _holdTimer.Start(); }
+            Opacity = _opacity;
         }
 
-        private void StartFadeOut()
+        private void FadeOutTick(object s, EventArgs e)
         {
-            if (_fadeOutTimer.Enabled) return;
-            _autoCloseTimer.Stop();
-            _fadeOutTimer.Start();
+            _opacity -= 0.06;
+            if (_opacity <= 0) { _opacity = 0; Opacity = 0; _fadeOutTimer.Stop(); Close(); }
+            else Opacity = _opacity;
         }
 
-        private void FadeOutTick(object sender, EventArgs e)
+        private void StartClose()
         {
-            _opacity -= 0.05;
-            if (_opacity <= 0)
+            _fadeInTimer.Stop();
+            _holdTimer.Stop();
+            if (!_fadeOutTimer.Enabled)
+                _fadeOutTimer.Start();
+        }
+
+        // ------------------------------------------------------------------ //
+        //  Mouse
+        // ------------------------------------------------------------------ //
+
+        private void OnMouseMove(object s, MouseEventArgs e)
+        {
+            bool over = CloseRect.Contains(e.Location);
+            if (over != _closeHover) { _closeHover = over; Invalidate(CloseRect); }
+            Cursor = over ? Cursors.Hand : Cursors.Default;
+        }
+
+        private void OnMouseDown(object s, MouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Left) return;
+
+            if (CloseRect.Contains(e.Location))
             {
-                _fadeOutTimer.Stop();
-                Close();
+                StartClose();
+                return;
+            }
+
+            // Click anywhere else → execute action then close
+            if (!string.IsNullOrEmpty(_clickAction))
+            {
+                try { _settings?.Api?.Execute(_clickAction); }
+                catch (Exception ex) { Logger.Log($"NotificationForm: click action error — {ex.Message}"); }
+            }
+            StartClose();
+        }
+
+        // ------------------------------------------------------------------ //
+        //  Paint
+        // ------------------------------------------------------------------ //
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            g.SmoothingMode     = SmoothingMode.AntiAlias;
+            g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+
+            // Background
+            g.Clear(_t.Background);
+
+            // Top accent bar (blue)
+            using (var b = new SolidBrush(_t.AccentBlue))
+                g.FillRectangle(b, 0, 0, W, AccentH);
+
+            // Outer border
+            using (var p = new Pen(_t.Border, 1))
+                g.DrawRectangle(p, 0, 0, W - 1, H - 1);
+
+            // ---- Cover image ----
+            var coverRect = new Rectangle(CoverX, CoverY, CoverSize, CoverSize);
+            if (_cover != null)
+            {
+                g.DrawImage(_cover, coverRect);
+                using (var p = new Pen(_t.Border, 1))
+                    g.DrawRectangle(p, coverRect);
             }
             else
             {
-                Opacity = _opacity;
+                // Placeholder: filled rect with camera icon hint
+                using (var b = new SolidBrush(_t.CardBg))
+                    g.FillRectangle(b, coverRect);
+                using (var p = new Pen(_t.Border, 1))
+                    g.DrawRectangle(p, coverRect);
+                using (var b = new SolidBrush(_t.TextSecondary))
+                using (var f = new Font("Segoe UI", 8f))
+                {
+                    var sf = new StringFormat
+                    { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+                    g.DrawString("No\nPreview", f, b, coverRect, sf);
+                }
+            }
+
+            // ---- App name ----
+            int ty = AccentH + 10;
+            using (var f = new Font("Segoe UI", 9f, FontStyle.Bold))
+            using (var b = new SolidBrush(_t.AccentBlue))
+                g.DrawString("FinalShot", f, b, TextX, ty);
+
+            // ---- Title ----
+            ty += 18;
+            using (var f = new Font("Segoe UI", 10.5f, FontStyle.Bold))
+            using (var b = new SolidBrush(_t.TextPrimary))
+            {
+                var r = new RectangleF(TextX, ty, TextW, 22);
+                g.DrawString("Saved!", f, b, r);
+            }
+
+            // ---- Subtitle (capture type) ----
+            ty += 22;
+            using (var f = new Font("Segoe UI", 8.5f))
+            using (var b = new SolidBrush(_t.TextSecondary))
+            {
+                var r = new RectangleF(TextX, ty, TextW, 18);
+                var sf = new StringFormat { Trimming = StringTrimming.EllipsisCharacter,
+                                            FormatFlags = StringFormatFlags.NoWrap };
+                g.DrawString(_captureType, f, b, r, sf);
+            }
+
+            // ---- Close button ----
+            var cr = CloseRect;
+            using (var f = new Font("Segoe UI", 9f, FontStyle.Bold))
+            using (var b = new SolidBrush(_closeHover ? _t.CloseHover : _t.CloseNormal))
+            {
+                var sf = new StringFormat
+                { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+                g.DrawString("\u2715", f, b, cr, sf);
             }
         }
 
         // ------------------------------------------------------------------ //
-        //  No-activate topmost
+        //  No-activate topmost + WS_EX_NOACTIVATE
         // ------------------------------------------------------------------ //
 
-        protected override System.Windows.Forms.CreateParams CreateParams
+        protected override CreateParams CreateParams
         {
             get
             {
@@ -243,11 +310,17 @@ namespace PluginScreenshot
             NativeMethods.MakeTopMostNoActivate(Handle);
         }
 
+        // ------------------------------------------------------------------ //
+        //  Cleanup
+        // ------------------------------------------------------------------ //
+
         protected override void Dispose(bool disposing)
         {
             if (disposing)
             {
-                _autoCloseTimer?.Dispose();
+                _cover?.Dispose();
+                _fadeInTimer?.Dispose();
+                _holdTimer?.Dispose();
                 _fadeOutTimer?.Dispose();
             }
             base.Dispose(disposing);

@@ -17,6 +17,20 @@ namespace PluginScreenshot
         public bool DetectWindows { get; private set; }
         public bool DetectControls { get; private set; }
 
+        /// <summary>
+        /// Theme for all FinalShot popup windows (Notification, Encoding, Dialog).
+        ///   0 = Dark (default)
+        ///   1 = Light
+        ///   2 = System (follows Windows app theme setting)
+        /// </summary>
+        public UITheme UITheme { get; private set; }
+
+        /// <summary>
+        /// Bang executed when the user clicks the notification toast.
+        /// Leave empty for no action.
+        /// </summary>
+        public string OnNotificationClickAction { get; private set; }
+
         public string GifSavePath { get; private set; }
         public int GifFPS { get; private set; }
         public int GifDuration { get; private set; }
@@ -51,6 +65,9 @@ namespace PluginScreenshot
             JpegQuality      = api.ReadInt("JpgQuality", 70);
             ShowNotification = api.ReadInt("ShowNotification", 0) > 0;
             UsePrintWindow   = api.ReadInt("UsePrintWindow", 0) > 0;
+
+            UITheme = ThemeColors.ParseTheme(api.ReadString("UITheme", "0"));
+            OnNotificationClickAction = api.ReadString("OnNotificationClickAction", "");
 
             int x = api.ReadInt("PredefX", 0);
             int y = api.ReadInt("PredefY", 0);

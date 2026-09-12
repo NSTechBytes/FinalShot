@@ -191,6 +191,10 @@ namespace PluginScreenshot
             string cmd = Marshal.PtrToStringUni(args);
             var settings = (Settings)GCHandle.FromIntPtr(data).Target;
 
+            // Keep popup window themes in sync with current settings
+            GifEncodingWindow.SetTheme(settings.UITheme);
+            GifStateDialog.SetTheme(settings.UITheme);
+
             Logger.Log($"ExecuteBang: {cmd} received.");
 
             if (string.Equals(cmd, "-fs", StringComparison.OrdinalIgnoreCase))

@@ -1,0 +1,134 @@
+using System;
+using System.Drawing;
+using Microsoft.Win32;
+
+namespace PluginScreenshot
+{
+    // ======================================================================
+    //  UITheme  —  shared palette for Notification, EncodingWindow, Dialog
+    // ======================================================================
+
+    /// <summary>
+    /// Three theme modes the user can choose in Main.ini / GIF.ini.
+    ///   0 = Dark   — always dark (default, matches the plugin's design)
+    ///   1 = Light  — always light
+    ///   2 = System — follows the Windows "Apps use light theme" setting
+    /// </summary>
+    public enum UITheme { Dark = 0, Light = 1, System = 2 }
+
+    /// <summary>
+    /// Resolved colour palette for a given UITheme.
+    /// All UI windows obtain colours from here so a single theme change
+    /// propagates everywhere.
+    /// </summary>
+    internal sealed class ThemeColors
+    {
+        // ---- Backgrounds ----
+        public Color Background  { get; }   // main window background
+        public Color CardBg      { get; }   // card / panel background
+        public Color BtnBg       { get; }   // button background
+        public Color BtnHover    { get; }   // button hover
+        public Color BarTrack    { get; }   // progress bar track
+
+        // ---- Borders ----
+        public Color Border      { get; }   // outer window border
+        public Color BtnBorder   { get; }   // button border
+        public Color Divider     { get; }   // internal divider lines
+
+        // ---- Text ----
+        public Color TextPrimary   { get; }
+        public Color TextSecondary { get; }
+        public Color BtnText       { get; }
+
+        // ---- Accents (fixed regardless of theme) ----
+        public Color AccentBlue   { get; } = Color.FromArgb(0, 120, 212);
+        public Color AccentGreen  { get; } = Color.FromArgb(0, 200, 100);
+        public Color AccentAmber  { get; } = Color.FromArgb(255, 160, 30);
+
+        // ---- Close button ----
+        public Color CloseNormal  { get; }
+        public Color CloseHover   { get; }
+
+        private ThemeColors(bool dark)
+        {
+            if (dark)
+            {
+                Background   = Color.FromArgb(16,  18,  22);
+                CardBg       = Color.FromArgb(22,  26,  34);
+                BtnBg        = Color.FromArgb(35,  38,  45);
+                BtnHover     = Color.FromArgb(50,  54,  64);
+                BarTrack     = Color.FromArgb(35,  38,  45);
+                Border       = Color.FromArgb(45,  48,  55);
+                BtnBorder    = Color.FromArgb(60,  64,  74);
+                Divider      = Color.FromArgb(35,  40,  50);
+                TextPrimary  = Color.FromArgb(220, 220, 220);
+                TextSecondary= Color.FromArgb(140, 150, 165);
+                BtnText      = Color.FromArgb(220, 220, 220);
+                CloseNormal  = Color.FromArgb(120, 120, 120);
+                CloseHover   = Color.White;
+            }
+            else
+            {
+                Background   = Color.FromArgb(245, 246, 248);
+                CardBg       = Color.FromArgb(255, 255, 255);
+                BtnBg        = Color.FromArgb(230, 232, 238);
+                BtnHover     = Color.FromArgb(210, 214, 224);
+                BarTrack     = Color.FromArgb(210, 214, 224);
+                Border       = Color.FromArgb(200, 202, 210);
+                BtnBorder    = Color.FromArgb(180, 184, 194);
+                Divider      = Color.FromArgb(220, 222, 228);
+                TextPrimary  = Color.FromArgb(20,  22,  28);
+                TextSecondary= Color.FromArgb(90,  96, 110);
+                BtnText      = Color.FromArgb(20,  22,  28);
+                CloseNormal  = Color.FromArgb(120, 120, 120);
+                CloseHover   = Color.FromArgb(20,  22,  28);
+            }
+        }
+
+        // ------------------------------------------------------------------
+        //  Factory
+        // ------------------------------------------------------------------
+
+        public static ThemeColors Resolve(UITheme theme)
+        {
+            bool dark;
+            switch (theme)
+            {
+                case UITheme.Light:  dark = false; break;
+                case UITheme.Dark:   dark = true;  break;
+                default:             dark = IsSystemDark(); break;
+            }
+            return new ThemeColors(dark);
+        }
+
+        private static bool IsSystemDark()
+        {
+            try
+            {
+                using (var key = Registry.CurrentUser.OpenSubKey(
+                    @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"))
+                {
+                    if (key != null)
+                    {
+                        var v = key.GetValue("AppsUseLightTheme");
+                        if (v != null) return (int)v == 0;
+                    }
+                }
+            }
+            catch { }
+            return true; // default dark
+        }
+
+        // Convenience: parse "dark"/"light"/"system" or "0"/"1"/"2"
+        public static UITheme ParseTheme(string raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return UITheme.Dark;
+            switch (raw.Trim().ToLowerInvariant())
+            {
+                case "1": case "light":  return UITheme.Light;
+                case "2": case "system": return UITheme.System;
+                default:                 return UITheme.Dark;
+            }
+        }
+    }
+}

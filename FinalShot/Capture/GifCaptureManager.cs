@@ -442,6 +442,10 @@ namespace PluginScreenshot
             Logger.Log("GifCaptureManager.EncodeAndFinish: capture thread joined.");
             ExecuteAction(settings, settings.OnGifEncodingAction, "OnGifEncodingAction");
 
+            // Apply theme to all popup windows
+            GifEncodingWindow.SetTheme(settings.UITheme);
+            GifStateDialog.SetTheme(settings.UITheme);
+
             bool success = false;
             try
             {
@@ -492,7 +496,7 @@ namespace PluginScreenshot
                 }
                 catch { }
                 if (settings.ShowNotification && File.Exists(settings.GifSavePath))
-                    ShowGifNotification(settings.GifSavePath);
+                    ShowGifNotification(settings.GifSavePath, settings);
                 ScreenshotManager.ExecuteFinishAction(settings);
             }
         }
@@ -590,17 +594,17 @@ namespace PluginScreenshot
         //  Notification + action helpers
         // ------------------------------------------------------------------ //
 
-        private static void ShowGifNotification(string gifPath)
+        private static void ShowGifNotification(string gifPath, Settings settings)
         {
             try
             {
-                var thread = new Thread(() =>
+                var thread = new System.Threading.Thread(() =>
                 {
-                    try { Application.Run(new NotificationForm(gifPath, "GIF Recording")); }
+                    try { Application.Run(new NotificationForm(gifPath, "GIF Recording", settings)); }
                     catch (Exception ex)
                     { Logger.Log($"GifCaptureManager: notification error — {ex.Message}"); }
                 });
-                thread.SetApartmentState(ApartmentState.STA);
+                thread.SetApartmentState(System.Threading.ApartmentState.STA);
                 thread.IsBackground = true;
                 thread.Start();
             }

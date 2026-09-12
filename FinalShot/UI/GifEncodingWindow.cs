@@ -28,6 +28,10 @@ namespace PluginScreenshot
     {
         private static EncodingForm _form;
         private static Thread       _thread;
+        private static UITheme      _theme = UITheme.Dark;
+
+        /// <summary>Call from Settings load to keep the window themed.</summary>
+        public static void SetTheme(UITheme theme) => _theme = theme;
 
         // ------------------------------------------------------------------ //
         //  Public API
@@ -36,11 +40,12 @@ namespace PluginScreenshot
         /// <summary>Shows the encoding window (non-blocking). Call from any thread.</summary>
         public static void Show(int totalFrames)
         {
+            var theme = _theme;
             _thread = new Thread(() =>
             {
                 try
                 {
-                    _form = new EncodingForm(totalFrames);
+                    _form = new EncodingForm(totalFrames, theme);
                     Application.Run(_form);
                 }
                 catch (Exception ex)
@@ -99,17 +104,8 @@ namespace PluginScreenshot
 
         internal sealed class EncodingForm : Form
         {
-            // ---- colours (dark theme) ----
-            private static readonly Color BgColor      = Color.FromArgb(255,  16,  18,  22);
-            private static readonly Color BorderColor  = Color.FromArgb(255,   0, 120, 212);
-            private static readonly Color AccentColor  = Color.FromArgb(255,   0, 120, 212);
-            private static readonly Color TextPrimary  = Color.FromArgb(255, 220, 220, 220);
-            private static readonly Color TextSecondary= Color.FromArgb(255, 140, 150, 165);
-            private static readonly Color BarBg        = Color.FromArgb(255,  35,  38,  45);
-            private static readonly Color BarFill      = Color.FromArgb(255,   0, 120, 212);
-            private static readonly Color BarFillDone  = Color.FromArgb(255,   0, 200, 100);
-            private static readonly Color CloseHover   = Color.White;
-            private static readonly Color CloseNormal  = Color.FromArgb(255, 120, 120, 120);
+            // ---- colours resolved from theme ----
+            private readonly ThemeColors _t;
 
             // ---- layout ----
             private const int W            = 340;
@@ -124,7 +120,7 @@ namespace PluginScreenshot
             private int      _current;
             private int      _total;
             private bool     _done;
-            private float    _barPos;        // indeterminate bar left edge 0..1
+            private float    _barPos;
             private float    _spinAngle;
             private bool     _closeHover;
             private double   _opacity = 0.0;
@@ -133,13 +129,10 @@ namespace PluginScreenshot
             private readonly WinTimer _fadeInTimer;
             private readonly WinTimer _fadeOutTimer;
 
-            // ---------------------------------------------------------------- //
-            //  Constructor
-            // ---------------------------------------------------------------- //
-
-            public EncodingForm(int totalFrames)
+            public EncodingForm(int totalFrames, UITheme theme)
             {
                 _total = totalFrames;
+                _t     = ThemeColors.Resolve(theme);
 
                 FormBorderStyle = FormBorderStyle.None;
                 ShowInTaskbar   = false;
@@ -147,7 +140,7 @@ namespace PluginScreenshot
                 DoubleBuffered  = true;
                 Width           = W;
                 Height          = H;
-                BackColor       = BgColor;
+                BackColor       = _t.Background;
                 Opacity         = 0.0;
 
                 // Position: bottom-right of primary screen, above taskbar
@@ -247,67 +240,58 @@ namespace PluginScreenshot
                 g.SmoothingMode     = SmoothingMode.AntiAlias;
                 g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
-                // Background
-                g.Clear(BgColor);
+                g.Clear(_t.Background);
 
-                // Top accent line
-                using (var b = new SolidBrush(AccentColor))
+                using (var b = new SolidBrush(_t.AccentBlue))
                     g.FillRectangle(b, 0, 0, W, AccentH);
 
-                // Border
-                using (var p = new Pen(BorderColor, 1))
+                using (var p = new Pen(_t.Border, 1))
                     g.DrawRectangle(p, 0, 0, W - 1, H - 1);
 
-                // ---- Spinner (arc) ----
+                // ---- Spinner ----
                 int sx = Pad;
                 int sy = Pad + 2;
                 var spinRect = new RectangleF(sx, sy, SpinnerSize, SpinnerSize);
-                using (var p = new Pen(BarBg, 2.5f))
+                using (var p = new Pen(_t.BarTrack, 2.5f))
                     g.DrawArc(p, spinRect, 0, 360);
-                using (var p = new Pen(AccentColor, 2.5f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+                using (var p = new Pen(_t.AccentBlue, 2.5f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
                     g.DrawArc(p, spinRect, _spinAngle, 260);
 
                 // ---- Primary label ----
                 int textX = Pad + SpinnerSize + 10;
                 using (var font = new Font("Segoe UI", 10f, FontStyle.Bold))
-                using (var brush = new SolidBrush(TextPrimary))
+                using (var brush = new SolidBrush(_t.TextPrimary))
                     g.DrawString("Encoding GIF\u2026", font, brush, textX, Pad + 1);
 
-                // ---- Secondary label: frame count ----
-                string sub = _total > 0
-                    ? $"Frame {_current} / {_total}"
-                    : "Preparing\u2026";
+                // ---- Frame count ----
+                string sub = _total > 0 ? $"Frame {_current} / {_total}" : "Preparing\u2026";
                 using (var font = new Font("Segoe UI", 8.5f))
-                using (var brush = new SolidBrush(TextSecondary))
+                using (var brush = new SolidBrush(_t.TextSecondary))
                     g.DrawString(sub, font, brush, textX, Pad + 22);
 
-                // ---- Progress bar ----
-                // Background track
+                // ---- Progress bar track ----
                 var trackRect = new Rectangle(Pad, BarY, W - Pad * 2, BarH);
-                using (var b = new SolidBrush(BarBg))
+                using (var b = new SolidBrush(_t.BarTrack))
                     g.FillRectangle(b, trackRect);
 
-                // Fill
                 if (_done)
                 {
-                    // Full bar in green
-                    using (var b = new SolidBrush(BarFillDone))
+                    using (var b = new SolidBrush(_t.AccentGreen))
                         g.FillRectangle(b, trackRect);
                 }
                 else
                 {
-                    // Indeterminate sliding segment (30 % wide)
                     int barInnerW = trackRect.Width;
                     int segW      = (int)(barInnerW * 0.30f);
                     int segLeft   = trackRect.Left + (int)(_barPos * barInnerW) - segW / 2;
                     segLeft = Math.Max(trackRect.Left, Math.Min(trackRect.Right - segW, segLeft));
-                    using (var b = new SolidBrush(BarFill))
+                    using (var b = new SolidBrush(_t.AccentBlue))
                         g.FillRectangle(b, segLeft, BarY, segW, BarH);
                 }
 
                 // ---- Close button ----
                 using (var font = new Font("Segoe UI", 9f, FontStyle.Bold))
-                using (var brush = new SolidBrush(_closeHover ? CloseHover : CloseNormal))
+                using (var brush = new SolidBrush(_closeHover ? _t.CloseHover : _t.CloseNormal))
                     g.DrawString("\u2715", font, brush, CloseRect.Left, CloseRect.Top);
             }
 

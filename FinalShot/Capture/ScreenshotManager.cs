@@ -50,7 +50,7 @@ namespace PluginScreenshot
             if (settings.ShowNotification)
             {
                 Logger.Log("TakeFullScreen: ShowNotification is enabled");
-                ShowNotificationWithImage(settings.SavePath, "Full Screen");
+                ShowNotificationWithImage(settings.SavePath, "Full Screen", settings);
             }
             ExecuteFinishAction(settings);
         }
@@ -73,7 +73,7 @@ namespace PluginScreenshot
             if (settings.ShowNotification)
             {
                 Logger.Log("TakePredefined: ShowNotification is enabled");
-                ShowNotificationWithImage(settings.SavePath, "Predefined Region");
+                ShowNotificationWithImage(settings.SavePath, "Predefined Region", settings);
             }
             ExecuteFinishAction(settings);
         }
@@ -166,7 +166,7 @@ namespace PluginScreenshot
             if (settings.ShowNotification)
             {
                 Logger.Log("TakeWindowScreenshot: ShowNotification is enabled");
-                ShowNotificationWithImage(settings.SavePath, $"Window: {windowTitle}");
+                ShowNotificationWithImage(settings.SavePath, $"Window: {windowTitle}", settings);
             }
             ExecuteFinishAction(settings);
         }
@@ -201,7 +201,7 @@ namespace PluginScreenshot
             if (settings.ShowNotification)
             {
                 Logger.Log("CompositeCapture: ShowNotification is enabled");
-                ShowNotificationWithImage(settings.SavePath, "Custom Region");
+                ShowNotificationWithImage(settings.SavePath, "Custom Region", settings);
             }
         }
         private static void SaveImageSafely(Bitmap source, Settings settings)
@@ -273,7 +273,8 @@ namespace PluginScreenshot
                 Logger.Log("Error running finish action: " + ex.Message);
             }
         }
-        private static void ShowNotificationWithImage(string imagePath, string captureType)
+        private static void ShowNotificationWithImage(string imagePath, string captureType,
+                                                      Settings settings)
         {
             try
             {
@@ -283,21 +284,18 @@ namespace PluginScreenshot
                     return;
                 }
                 Logger.Log($"ShowNotificationWithImage: Creating notification for '{captureType}'");
-                try
-                {
-                    SystemSounds.Asterisk.Play();
-                    Logger.Log("Notification sound played");
-                }
-                catch (Exception ex)
-                {
-                    Logger.Log($"Failed to play notification sound: {ex.Message}");
-                }
+                try { System.Media.SystemSounds.Asterisk.Play(); }
+                catch (Exception ex) { Logger.Log($"Notification sound error: {ex.Message}"); }
+
+                // Apply theme to shared UI windows before showing
+                GifEncodingWindow.SetTheme(settings.UITheme);
+                GifStateDialog.SetTheme(settings.UITheme);
+
                 var notificationThread = new System.Threading.Thread(() =>
                 {
                     try
                     {
-                        Logger.Log("Notification thread started");
-                        Application.Run(new NotificationForm(imagePath, captureType));
+                        Application.Run(new NotificationForm(imagePath, captureType, settings));
                     }
                     catch (Exception ex)
                     {
@@ -307,7 +305,7 @@ namespace PluginScreenshot
                 notificationThread.SetApartmentState(System.Threading.ApartmentState.STA);
                 notificationThread.IsBackground = true;
                 notificationThread.Start();
-                Logger.Log($"Notification thread started for '{captureType}' capture.");
+                Logger.Log($"Notification thread started for '{captureType}'.");
             }
             catch (Exception ex)
             {

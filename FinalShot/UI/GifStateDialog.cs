@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Threading;
@@ -22,6 +22,10 @@ namespace PluginScreenshot
     /// </summary>
     internal static class GifStateDialog
     {
+        private static UITheme _theme = UITheme.Dark;
+
+        /// <summary>Call from Settings load to keep the dialog themed.</summary>
+        public static void SetTheme(UITheme theme) => _theme = theme;
         // ------------------------------------------------------------------ //
         //  Public helpers
         // ------------------------------------------------------------------ //
@@ -61,11 +65,12 @@ namespace PluginScreenshot
 
         private static void Show(DialogKind kind, string title, string message)
         {
+            var theme = _theme;
             var thread = new Thread(() =>
             {
                 try
                 {
-                    using (var dlg = new StateDialogForm(kind, title, message))
+                    using (var dlg = new StateDialogForm(kind, title, message, theme))
                         Application.Run(dlg);
                 }
                 catch (Exception ex)
@@ -85,19 +90,8 @@ namespace PluginScreenshot
 
         private sealed class StateDialogForm : Form
         {
-            // ---- colours ----
-            private static readonly Color BgColor       = Color.FromArgb(255,  16,  18,  22);
-            private static readonly Color BorderColor   = Color.FromArgb(255,  45,  48,  55);
-            private static readonly Color TextPrimary   = Color.FromArgb(255, 220, 220, 220);
-            private static readonly Color TextSecondary = Color.FromArgb(255, 150, 158, 170);
-            private static readonly Color AccentWarn    = Color.FromArgb(255, 255, 160,  30);  // amber
-            private static readonly Color AccentInfo    = Color.FromArgb(255,   0, 120, 212);  // blue
-            private static readonly Color BtnBg         = Color.FromArgb(255,  35,  38,  45);
-            private static readonly Color BtnHover      = Color.FromArgb(255,  50,  54,  64);
-            private static readonly Color BtnText       = Color.FromArgb(255, 220, 220, 220);
-            private static readonly Color BtnBorder     = Color.FromArgb(255,  60,  64,  74);
+            private readonly ThemeColors _t;
 
-            // ---- layout ----
             private const int W       = 360;
             private const int Pad     = 18;
             private const int AccentH = 3;
@@ -116,45 +110,34 @@ namespace PluginScreenshot
             private readonly WinTimer _fadeInTimer;
             private readonly WinTimer _fadeOutTimer;
 
-            // ---------------------------------------------------------------- //
-            //  Constructor
-            // ---------------------------------------------------------------- //
-
-            public StateDialogForm(DialogKind kind, string title, string message)
+            public StateDialogForm(DialogKind kind, string title, string message, UITheme theme)
             {
                 _kind    = kind;
                 _title   = title;
                 _message = message;
+                _t       = ThemeColors.Resolve(theme);
 
-                // Measure required height: AccentH + Pad + icon row + message lines + Pad + BtnH + Pad
-                int msgLines   = message.Split('\n').Length;
-                int msgH       = msgLines * 18 + (msgLines > 1 ? 4 : 0);
-                int H          = AccentH + Pad + IconSize + 8 + msgH + Pad + BtnH + Pad;
+                int msgLines = message.Split('\n').Length;
+                int msgH     = msgLines * 18 + (msgLines > 1 ? 4 : 0);
+                int H        = AccentH + Pad + IconSize + 8 + msgH + Pad + BtnH + Pad;
 
                 FormBorderStyle = FormBorderStyle.None;
                 ShowInTaskbar   = false;
-                TopMost         = false; // set via SetWindowPos in OnHandleCreated
+                TopMost         = false;
                 DoubleBuffered  = true;
                 Width           = W;
                 Height          = H;
-                BackColor       = BgColor;
+                BackColor       = _t.Background;
                 Opacity         = 0;
                 StartPosition   = FormStartPosition.Manual;
                 KeyPreview      = true;
 
-                // Centre on primary screen
-                var wa = Screen.PrimaryScreen.WorkingArea;
-                Location = new Point(
-                    wa.Left + (wa.Width  - W) / 2,
-                    wa.Top  + (wa.Height - H) / 2);
-
-                // OK button rect (bottom-right)
+                var wa   = Screen.PrimaryScreen.WorkingArea;
+                Location = new Point(wa.Left + (wa.Width - W) / 2, wa.Top + (wa.Height - H) / 2);
                 _btnRect = new Rectangle(W - Pad - BtnW, H - Pad - BtnH, BtnW, BtnH);
 
-                // Fade in
                 _fadeInTimer        = new WinTimer { Interval = 12 };
                 _fadeInTimer.Tick  += FadeInTick;
-
                 _fadeOutTimer       = new WinTimer { Interval = 12 };
                 _fadeOutTimer.Tick += FadeOutTick;
 
@@ -162,13 +145,8 @@ namespace PluginScreenshot
                 MouseLeave += (s, e) => { _btnHover = false; Invalidate(_btnRect); };
                 MouseDown  += OnMouseDown;
                 KeyDown    += OnKeyDown;
-
-                Load += (s, e) => _fadeInTimer.Start();
+                Load       += (s, e) => _fadeInTimer.Start();
             }
-
-            // ---------------------------------------------------------------- //
-            //  Fade
-            // ---------------------------------------------------------------- //
 
             private void FadeInTick(object s, EventArgs e)
             {
@@ -184,15 +162,7 @@ namespace PluginScreenshot
                 else Opacity = _opacity;
             }
 
-            private void StartClose()
-            {
-                _fadeInTimer.Stop();
-                _fadeOutTimer.Start();
-            }
-
-            // ---------------------------------------------------------------- //
-            //  Input
-            // ---------------------------------------------------------------- //
+            private void StartClose() { _fadeInTimer.Stop(); _fadeOutTimer.Start(); }
 
             private void OnMouseMove(object s, MouseEventArgs e)
             {
@@ -208,106 +178,79 @@ namespace PluginScreenshot
 
             private void OnKeyDown(object s, KeyEventArgs e)
             {
-                if (e.KeyCode == Keys.Enter || e.KeyCode == Keys.Escape)
-                    StartClose();
+                if (e.KeyCode == Keys.Enter || e.KeyCode == Keys.Escape) StartClose();
             }
-
-            // ---------------------------------------------------------------- //
-            //  Paint
-            // ---------------------------------------------------------------- //
 
             protected override void OnPaint(PaintEventArgs e)
             {
                 Graphics g = e.Graphics;
-                g.SmoothingMode     = SmoothingMode.AntiAlias;
+                g.SmoothingMode     = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
                 g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
-                Color accent = _kind == DialogKind.Warning ? AccentWarn : AccentInfo;
+                Color accent = _kind == DialogKind.Warning ? _t.AccentAmber : _t.AccentBlue;
 
-                // Background
-                g.Clear(BgColor);
+                g.Clear(_t.Background);
 
-                // Top accent bar
                 using (var b = new SolidBrush(accent))
                     g.FillRectangle(b, 0, 0, W, AccentH);
 
-                // Outer border (subtle dark)
-                using (var p = new Pen(BorderColor, 1))
+                using (var p = new Pen(_t.Border, 1))
                     g.DrawRectangle(p, 0, 0, W - 1, Height - 1);
 
-                // ---- Icon ----
                 int iconX = Pad;
                 int iconY = AccentH + Pad;
                 DrawIcon(g, _kind, iconX, iconY, IconSize, accent);
 
-                // ---- Title ----
                 int textX = iconX + IconSize + 10;
                 using (var font = new Font("Segoe UI", 11f, FontStyle.Bold))
-                using (var brush = new SolidBrush(TextPrimary))
+                using (var brush = new SolidBrush(_t.TextPrimary))
                     g.DrawString(_title, font, brush, textX, iconY);
 
-                // ---- Message ----
                 int msgY = iconY + IconSize + 8;
                 using (var font = new Font("Segoe UI", 9f))
-                using (var brush = new SolidBrush(TextSecondary))
-                {
-                    var rect = new RectangleF(Pad, msgY, W - Pad * 2, Height);
-                    g.DrawString(_message, font, brush, rect);
-                }
+                using (var brush = new SolidBrush(_t.TextSecondary))
+                    g.DrawString(_message, font, brush, new RectangleF(Pad, msgY, W - Pad * 2, Height));
 
-                // ---- OK button ----
-                var btnFill = _btnHover ? BtnHover : BtnBg;
-                using (var b = new SolidBrush(btnFill))
+                using (var b = new SolidBrush(_btnHover ? _t.BtnHover : _t.BtnBg))
                     g.FillRectangle(b, _btnRect);
-                using (var p = new Pen(BtnBorder, 1))
+                using (var p = new Pen(_t.BtnBorder, 1))
                     g.DrawRectangle(p, _btnRect.X, _btnRect.Y, _btnRect.Width - 1, _btnRect.Height - 1);
-                using (var font = new Font("Segoe UI", 9f, FontStyle.Regular))
-                using (var brush = new SolidBrush(BtnText))
+                using (var font = new Font("Segoe UI", 9f))
+                using (var brush = new SolidBrush(_t.BtnText))
                 {
                     var sf = new StringFormat
-                    {
-                        Alignment     = StringAlignment.Center,
-                        LineAlignment = StringAlignment.Center
-                    };
+                    { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
                     g.DrawString("OK", font, brush, _btnRect, sf);
                 }
             }
 
-            private static void DrawIcon(Graphics g, DialogKind kind,
-                                         int x, int y, int size, Color color)
+            private static void DrawIcon(Graphics g, DialogKind kind, int x, int y, int size, Color color)
             {
-                var rect = new Rectangle(x, y, size, size);
-
-                // Circle outline
                 using (var p = new Pen(color, 2f))
-                    g.DrawEllipse(p, rect);
-
+                    g.DrawEllipse(p, x, y, size, size);
                 float cx = x + size / 2f;
                 float cy = y + size / 2f;
-
                 if (kind == DialogKind.Warning)
                 {
-                    // Exclamation mark  !
-                    using (var p = new Pen(color, 2f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+                    using (var p = new Pen(color, 2f)
+                           { StartCap = System.Drawing.Drawing2D.LineCap.Round,
+                             EndCap   = System.Drawing.Drawing2D.LineCap.Round })
                     {
-                        g.DrawLine(p, cx, cy - size * 0.22f, cx, cy + size * 0.08f);  // stem
-                        g.DrawLine(p, cx, cy + size * 0.22f, cx, cy + size * 0.24f);  // dot (short line)
+                        g.DrawLine(p, cx, cy - size * 0.22f, cx, cy + size * 0.08f);
+                        g.DrawLine(p, cx, cy + size * 0.22f, cx, cy + size * 0.24f);
                     }
                 }
                 else
                 {
-                    // Info  i
-                    using (var p = new Pen(color, 2f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+                    using (var p = new Pen(color, 2f)
+                           { StartCap = System.Drawing.Drawing2D.LineCap.Round,
+                             EndCap   = System.Drawing.Drawing2D.LineCap.Round })
                     {
-                        g.DrawLine(p, cx, cy - size * 0.04f, cx, cy + size * 0.28f);  // stem
-                        g.DrawLine(p, cx, cy - size * 0.26f, cx, cy - size * 0.24f);  // dot
+                        g.DrawLine(p, cx, cy - size * 0.04f, cx, cy + size * 0.28f);
+                        g.DrawLine(p, cx, cy - size * 0.26f, cx, cy - size * 0.24f);
                     }
                 }
             }
-
-            // ---------------------------------------------------------------- //
-            //  No-activate topmost
-            // ---------------------------------------------------------------- //
 
             protected override System.Windows.Forms.CreateParams CreateParams
             {
@@ -324,10 +267,6 @@ namespace PluginScreenshot
                 base.OnHandleCreated(e);
                 NativeMethods.MakeTopMostNoActivate(Handle);
             }
-
-            // ---------------------------------------------------------------- //
-            //  Cleanup
-            // ---------------------------------------------------------------- //
 
             protected override void Dispose(bool disposing)
             {
