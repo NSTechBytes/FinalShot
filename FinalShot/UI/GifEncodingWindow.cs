@@ -143,7 +143,7 @@ namespace PluginScreenshot
 
                 FormBorderStyle = FormBorderStyle.None;
                 ShowInTaskbar   = false;
-                TopMost         = true;
+                TopMost         = false; // set via SetWindowPos in OnHandleCreated
                 DoubleBuffered  = true;
                 Width           = W;
                 Height          = H;
@@ -309,6 +309,26 @@ namespace PluginScreenshot
                 using (var font = new Font("Segoe UI", 9f, FontStyle.Bold))
                 using (var brush = new SolidBrush(_closeHover ? CloseHover : CloseNormal))
                     g.DrawString("\u2715", font, brush, CloseRect.Left, CloseRect.Top);
+            }
+
+            // ---------------------------------------------------------------- //
+            //  No-activate topmost
+            // ---------------------------------------------------------------- //
+
+            protected override System.Windows.Forms.CreateParams CreateParams
+            {
+                get
+                {
+                    var cp = base.CreateParams;
+                    cp.ExStyle |= NativeMethods.WS_EX_NOACTIVATE | NativeMethods.WS_EX_TOOLWINDOW;
+                    return cp;
+                }
+            }
+
+            protected override void OnHandleCreated(EventArgs e)
+            {
+                base.OnHandleCreated(e);
+                NativeMethods.MakeTopMostNoActivate(Handle);
             }
 
             // ---------------------------------------------------------------- //

@@ -93,6 +93,36 @@ namespace PluginScreenshot
         // PrintWindow flag
         public const uint PW_RENDERFULLCONTENT = 0x00000002;
 
+        // SetWindowPos — Z-order and position control
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter,
+                                               int x, int y, int cx, int cy, uint uFlags);
+
+        // hWndInsertAfter values
+        public static readonly IntPtr HWND_TOPMOST    = new IntPtr(-1);
+        public static readonly IntPtr HWND_NOTOPMOST  = new IntPtr(-2);
+        public static readonly IntPtr HWND_TOP        = new IntPtr(0);
+        public static readonly IntPtr HWND_BOTTOM     = new IntPtr(1);
+
+        // SetWindowPos flags
+        public const uint SWP_NOSIZE       = 0x0001;
+        public const uint SWP_NOMOVE       = 0x0002;
+        public const uint SWP_NOZORDER     = 0x0004;
+        public const uint SWP_NOACTIVATE   = 0x0010;
+        public const uint SWP_SHOWWINDOW   = 0x0040;
+        public const uint SWP_NOOWNERZORDER= 0x0200;
+
+        /// <summary>
+        /// Makes <paramref name="hWnd"/> topmost without activating it or
+        /// stealing focus from the currently active window (e.g. Rainmeter skin).
+        /// </summary>
+        public static void MakeTopMostNoActivate(IntPtr hWnd)
+        {
+            SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0,
+                         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+        }
+
         // Cursor
 
         [DllImport("user32.dll")]

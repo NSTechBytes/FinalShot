@@ -133,7 +133,7 @@ namespace PluginScreenshot
 
                 FormBorderStyle = FormBorderStyle.None;
                 ShowInTaskbar   = false;
-                TopMost         = true;
+                TopMost         = false; // set via SetWindowPos in OnHandleCreated
                 DoubleBuffered  = true;
                 Width           = W;
                 Height          = H;
@@ -303,6 +303,26 @@ namespace PluginScreenshot
                         g.DrawLine(p, cx, cy - size * 0.26f, cx, cy - size * 0.24f);  // dot
                     }
                 }
+            }
+
+            // ---------------------------------------------------------------- //
+            //  No-activate topmost
+            // ---------------------------------------------------------------- //
+
+            protected override System.Windows.Forms.CreateParams CreateParams
+            {
+                get
+                {
+                    var cp = base.CreateParams;
+                    cp.ExStyle |= NativeMethods.WS_EX_NOACTIVATE | NativeMethods.WS_EX_TOOLWINDOW;
+                    return cp;
+                }
+            }
+
+            protected override void OnHandleCreated(EventArgs e)
+            {
+                base.OnHandleCreated(e);
+                NativeMethods.MakeTopMostNoActivate(Handle);
             }
 
             // ---------------------------------------------------------------- //

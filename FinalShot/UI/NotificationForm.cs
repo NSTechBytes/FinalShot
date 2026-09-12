@@ -24,7 +24,7 @@ namespace PluginScreenshot
 
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.Manual;
-            TopMost = true;
+            TopMost = false; // set via SetWindowPos in OnHandleCreated
             ShowInTaskbar = false;
             Width = NotificationWidth;
             Height = NotificationHeight;
@@ -221,6 +221,26 @@ namespace PluginScreenshot
             {
                 Opacity = _opacity;
             }
+        }
+
+        // ------------------------------------------------------------------ //
+        //  No-activate topmost
+        // ------------------------------------------------------------------ //
+
+        protected override System.Windows.Forms.CreateParams CreateParams
+        {
+            get
+            {
+                var cp = base.CreateParams;
+                cp.ExStyle |= NativeMethods.WS_EX_NOACTIVATE | NativeMethods.WS_EX_TOOLWINDOW;
+                return cp;
+            }
+        }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            NativeMethods.MakeTopMostNoActivate(Handle);
         }
 
         protected override void Dispose(bool disposing)

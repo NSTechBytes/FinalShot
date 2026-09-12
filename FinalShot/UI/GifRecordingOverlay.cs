@@ -142,8 +142,13 @@ namespace PluginScreenshot
 
                 FormBorderStyle = FormBorderStyle.None;
                 ShowInTaskbar   = false;
-                TopMost         = true;
+                TopMost         = false; // Z-order set via SetWindowPos in OnHandleCreated
                 DoubleBuffered  = true;
+
+                // Prevent this window from ever stealing focus from Rainmeter.
+                // WS_EX_NOACTIVATE ensures clicks and show events don't activate us.
+                // MakeTopMostNoActivate() in OnHandleCreated sets HWND_TOPMOST without
+                // sending WM_ACTIVATE to any other window, so Rainmeter's Z-pos is safe.
 
                 // ---- geometry ----
                 // Form extends outside the region by formPad on top/left/right.
@@ -349,6 +354,26 @@ namespace PluginScreenshot
                     case 1: _onPause?.Invoke(); break;
                     case 2: _onAbort?.Invoke(); break;
                 }
+            }
+
+            // ---------------------------------------------------------------- //
+            //  No-activate topmost — keeps Rainmeter skin Z-order intact
+            // ---------------------------------------------------------------- //
+
+            protected override System.Windows.Forms.CreateParams CreateParams
+            {
+                get
+                {
+                    var cp = base.CreateParams;
+                    cp.ExStyle |= NativeMethods.WS_EX_NOACTIVATE | NativeMethods.WS_EX_TOOLWINDOW;
+                    return cp;
+                }
+            }
+
+            protected override void OnHandleCreated(EventArgs e)
+            {
+                base.OnHandleCreated(e);
+                NativeMethods.MakeTopMostNoActivate(Handle);
             }
 
             // ---------------------------------------------------------------- //
