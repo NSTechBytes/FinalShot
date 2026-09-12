@@ -111,6 +111,9 @@
     <Compile Include="Core\WindowInfo.cs" />
     <Compile Include="Core\WindowsDetector.cs" />
     <Compile Include="Core\WindowCornerHelper.cs" />
+    <Compile Include="Core\HotkeyChord.cs" />
+    <Compile Include="Core\HotkeyManager.cs" />
+    <Compile Include="Core\CommandDispatcher.cs" />
     <Compile Include="Capture\ScreenshotManager.cs" />
     <Compile Include="Capture\GifCaptureManager.cs" />
     <Compile Include="OCR\OcrHelper.cs" />

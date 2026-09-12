@@ -81,6 +81,16 @@ namespace PluginScreenshot
         /// </summary>
         public bool ShowOcrWindow { get; private set; }
 
+        /// <summary>Master switch for global hotkeys. Default true (chords still must be set).</summary>
+        public bool HotkeysEnabled { get; private set; }
+
+        public string HotkeyFullscreen { get; private set; }
+        public string HotkeyPredefined { get; private set; }
+        public string HotkeyCustom { get; private set; }
+        public string HotkeyOcr { get; private set; }
+        public string HotkeyGifToggle { get; private set; }
+        public string HotkeyGifToggleSnap { get; private set; }
+
         public Settings(API api)
         {
             Api              = api;
@@ -121,6 +131,14 @@ namespace PluginScreenshot
             OcrFinishAction  = api.ReadString("OCRFinishAction", "");
             ShowOcrWindow    = api.ReadInt("ShowOCRWindow", 0) > 0;
 
+            HotkeysEnabled       = api.ReadInt("HotkeysEnabled", 1) > 0;
+            HotkeyFullscreen     = api.ReadString("HotkeyFullscreen", "");
+            HotkeyPredefined     = api.ReadString("HotkeyPredefined", "");
+            HotkeyCustom         = api.ReadString("HotkeyCustom", "");
+            HotkeyOcr            = api.ReadString("HotkeyOCR", "");
+            HotkeyGifToggle      = api.ReadString("HotkeyGifToggle", "");
+            HotkeyGifToggleSnap  = api.ReadString("HotkeyGifToggleSnap", "");
+
             GifSavePath = api.ReadString("GifSavePath", "");
             GifFPS      = api.ReadInt("GifFPS", 10);
             if (GifFPS < 1)  GifFPS = 1;
@@ -157,6 +175,9 @@ namespace PluginScreenshot
                 + "  OcrSingleLine=" + OcrSingleLine
                 + "  ShowOCRWindow=" + ShowOcrWindow
                 + "  OCRFinishAction=" + (string.IsNullOrEmpty(OcrFinishAction) ? "(none)" : "(set)")
+                + "  HotkeysEnabled=" + HotkeysEnabled
+                + "  HotkeyCustom=" + (string.IsNullOrEmpty(HotkeyCustom) ? "(none)" : HotkeyCustom)
+                + "  HotkeyOCR=" + (string.IsNullOrEmpty(HotkeyOcr) ? "(none)" : HotkeyOcr)
                 + "  GifSavePath=" + GifSavePath
                 + "  GifFPS=" + GifFPS
                 + "  GifDuration=" + GifDuration

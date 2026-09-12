@@ -38,6 +38,9 @@ FinalShot supports full‑screen captures, predefined regions, custom selection,
 - **OCR Text Extract** (`-ocr`)  
   Opens the same Smart Window Snap overlay as custom capture. Hover a window or control and click, or drag a free region — then extract text with Windows OCR, copy it to the clipboard, and expose it via `GetLastOCRText()`. Set `ShowOCRWindow=1` to open an editable result window.
 
+- **Global Hotkeys**  
+  Optional low-level keyboard hooks bind chords like `Ctrl+Shift+PrintScreen` to capture/OCR/GIF actions. Blank by default (bang-only, backward compatible).
+
 - **Toast Notifications**  
   Beautiful themed notifications that adapt to Windows Dark/Light mode with screenshot preview.
 
@@ -220,6 +223,13 @@ DebugLog=0
 | `OcrSingleLine`               | Join OCR lines with spaces instead of newlines. (1 = yes, 0 = no)                             | 0       |
 | `ShowOCRWindow`               | Show editable OCR result window after recognition. (1 = yes, 0 = silent clipboard only)       | 0       |
 | `OCRFinishAction`             | Rainmeter bang or command to run after successful OCR.                                        | (empty) |
+| `HotkeysEnabled`              | Master switch for global hotkeys. (1 = on, 0 = ignore all Hotkey* chords)                     | 1       |
+| `HotkeyFullscreen`            | Global chord for full-screen capture (`-fs`), e.g. `Ctrl+Shift+F`.                            | (empty) |
+| `HotkeyPredefined`            | Global chord for predefined region (`-ps`).                                                   | (empty) |
+| `HotkeyCustom`                | Global chord for custom/snap capture (`-cs`), e.g. `Ctrl+Shift+PrintScreen`.                  | (empty) |
+| `HotkeyOCR`                   | Global chord for OCR (`-ocr`).                                                                | (empty) |
+| `HotkeyGifToggle`             | Global chord for GIF toggle full screen (`-gif-toggle`).                                      | (empty) |
+| `HotkeyGifToggleSnap`         | Global chord for GIF toggle snap (`-gif-toggle-snap`).                                        | (empty) |
 | `DebugLog`                    | Enable debug logging? (1 = yes, 0 = no).                                                        | 0       |
 | `DebugLogPath`                | Custom path for the debug log file (overrides default `FinalShotDebug.log`).                   | (empty) |
 
@@ -308,6 +318,25 @@ LeftMouseUpAction=[!CommandMeasure MeasureOCR "-ocr"]
 ```
 Hover a window/control and click, or drag a region. Text is copied to the clipboard.  
 With `ShowOCRWindow=1`, edit the result then Close — `GetLastOCRText()` reflects any edits.
+
+### Global Hotkeys
+```ini
+[MeasureHotkeys]
+Measure=Plugin
+Plugin=FinalShot
+SavePath=#@#Screenshots\Hotkey.png
+GifSavePath=#@#Screenshots\Hotkey.gif
+HotkeysEnabled=1
+HotkeyCustom=Ctrl+Shift+PrintScreen
+HotkeyOCR=Ctrl+Shift+O
+HotkeyGifToggleSnap=Ctrl+Shift+G
+ShowNotification=1
+DetectWindows=1
+DetectControls=1
+```
+Leave all `Hotkey*` empty (or set `HotkeysEnabled=0`) for bang-only behavior.  
+Chords use `+` separators; modifiers: `Ctrl`, `Alt`, `Shift`, `Win`. Keys: `A`–`Z`, `F1`–`F24`, `PrintScreen`, etc.  
+Matched keys are suppressed so the OS does not also handle them. Antivirus software may prompt about the keyboard hook.
 
 ### Window Capture (Exclusive Mode)
 ```ini
