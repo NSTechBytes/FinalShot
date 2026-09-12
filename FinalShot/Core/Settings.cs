@@ -4,7 +4,7 @@ using Rainmeter;
 namespace PluginScreenshot
 {
     /// <summary>
-    /// Resolved encoder parameters derived from the GifQuality level (1–5).
+    /// Resolved encoder parameters derived from the GifQualityLevel level (1–5).
     /// Passed through the encoding pipeline so every call site uses consistent values.
     /// </summary>
     public sealed class GifEncoderQuality
@@ -75,9 +75,9 @@ namespace PluginScreenshot
         ///   4 = High     (256 colors, 80K samples, dither)
         ///   5 = Ultra    (256 colors, 150K samples, dither)
         /// </summary>
-        public int GifQuality { get; private set; }
+        public int GifQualityLevel { get; private set; }
 
-        /// <summary>Resolved encoder parameters for the current GifQuality level.</summary>
+        /// <summary>Resolved encoder parameters for the current GifQualityLevel.</summary>
         public GifEncoderQuality EncoderQuality { get; private set; }
 
         /// <summary>
@@ -92,7 +92,7 @@ namespace PluginScreenshot
         /// Compression is independent of Quality — you can have high quality + high
         /// compression, or low quality + no compression.
         /// </summary>
-        public int GifCompression { get; private set; }
+        public int GifCompressionLevel { get; private set; }
 
         public string GifStartAction { get; private set; }
         public string GifCancelAction { get; private set; }
@@ -133,14 +133,14 @@ namespace PluginScreenshot
             int gh = api.ReadInt("GifPredefHeight", h);
             GifPredefinedRegion = new Rectangle(gx, gy, gw, gh);
 
-            GifQuality     = api.ReadInt("GifQuality", 3);
-            if (GifQuality < 1) GifQuality = 1;
-            if (GifQuality > 5) GifQuality = 5;
-            EncoderQuality = GifEncoderQuality.FromLevel(GifQuality);
+            GifQualityLevel     = api.ReadInt("GifQualityLevel", 3);
+            if (GifQualityLevel < 1) GifQualityLevel = 1;
+            if (GifQualityLevel > 5) GifQualityLevel = 5;
+            EncoderQuality = GifEncoderQuality.FromLevel(GifQualityLevel);
 
-            GifCompression = api.ReadInt("GifCompression", 2);
-            if (GifCompression < 1) GifCompression = 1;
-            if (GifCompression > 3) GifCompression = 3;
+            GifCompressionLevel = api.ReadInt("GifCompressionLevel", 2);
+            if (GifCompressionLevel < 1) GifCompressionLevel = 1;
+            if (GifCompressionLevel > 3) GifCompressionLevel = 3;
 
             GifStartAction       = api.ReadString("GifStartAction",      "");
             GifCancelAction      = api.ReadString("GifCancelAction",     "");
@@ -160,11 +160,11 @@ namespace PluginScreenshot
                 + "  GifSavePath=" + GifSavePath
                 + "  GifFPS=" + GifFPS
                 + "  GifDuration=" + GifDuration
-                + "  GifQuality=" + GifQuality
+                + "  GifQualityLevel=" + GifQualityLevel
                     + " (colors=" + EncoderQuality.Colors
                     + " samples=" + EncoderQuality.MaxSamples
                     + " dither="  + EncoderQuality.Dither + ")"
-                + "  GifCompression=" + GifCompression
+                + "  GifCompressionLevel=" + GifCompressionLevel
                 + "  GifPredefinedRegion=" + GifPredefinedRegion
                 + "  GifStartAction="      + (string.IsNullOrEmpty(GifStartAction)      ? "(none)" : "(set)")
                 + "  GifCancelAction="     + (string.IsNullOrEmpty(GifCancelAction)     ? "(none)" : "(set)")

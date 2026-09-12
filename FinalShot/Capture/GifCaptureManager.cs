@@ -413,7 +413,7 @@ namespace PluginScreenshot
                     }
                     AnimatedGifEncoder.Encode(frames, settings.GifSavePath,
                                               settings.EncoderQuality,
-                                              settings.GifCompression);
+                                              settings.GifCompressionLevel);
                     success = true;
                 }
                 finally
