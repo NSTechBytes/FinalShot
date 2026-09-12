@@ -37,7 +37,9 @@ namespace PluginScreenshot
         //  Public API
         // ------------------------------------------------------------------ //
 
-        public static bool IsActive => _state != State.Idle;
+        public static bool IsActive    => _state != State.Idle;
+        public static bool IsRecording => _state == State.Recording;
+        public static bool IsEncoding  => _state == State.Encoding;
 
         public static void StartRecording(Settings settings,
                                           GifCaptureMode mode = GifCaptureMode.FullScreen,

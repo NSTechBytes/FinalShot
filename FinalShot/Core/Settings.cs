@@ -22,6 +22,13 @@ namespace PluginScreenshot
         public int GifDuration { get; private set; }
         public Rectangle GifPredefinedRegion { get; private set; }
 
+        /// <summary>
+        /// When true, a dialog is shown when the user tries to start a recording
+        /// while one is already active, or tries to stop/cancel when not recording.
+        /// Default true.
+        /// </summary>
+        public bool GifShowStateDialogs { get; private set; }
+
         public string GifStartAction { get; private set; }
         public string GifCancelAction { get; private set; }
         public string OnGifEncodingAction { get; private set; }
@@ -72,8 +79,9 @@ namespace PluginScreenshot
             GifPauseAction       = api.ReadString("GifPauseAction",      "");
             GifResumeAction      = api.ReadString("GifResumeAction",     "");
             OnGifEncodingAction  = api.ReadString("OnGifEncodingAction", "");
-            GifShowOverlay       = api.ReadInt("GifShowOverlay",        1) > 0;
-            GifShowEncodingWindow= api.ReadInt("GifShowEncodingWindow", 1) > 0;
+            GifShowOverlay        = api.ReadInt("GifShowOverlay",        1) > 0;
+            GifShowEncodingWindow = api.ReadInt("GifShowEncodingWindow", 1) > 0;
+            GifShowStateDialogs   = api.ReadInt("GifShowStateDialogs",   1) > 0;
 
             Logger.DebugEnabled = api.ReadInt("DebugLog", 0) == 1;
             string dbg = api.ReadString("DebugLogPath", "");

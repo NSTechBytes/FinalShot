@@ -40,6 +40,8 @@ namespace PluginScreenshot
             string cmd = Marshal.PtrToStringUni(args);
             var settings = (Settings)GCHandle.FromIntPtr(data).Target;
 
+            Logger.Log($"ExecuteBang: {cmd} received.");
+
             if (string.Equals(cmd, "-fs", StringComparison.OrdinalIgnoreCase))
             {
                 ScreenshotManager.TakeFullScreen(settings);
@@ -62,62 +64,94 @@ namespace PluginScreenshot
                 Logger.Log($"ExecuteBang: Window screenshot requested for '{windowTitle}'");
                 ScreenshotManager.TakeWindowScreenshot(settings, windowTitle);
             }
+            // ----------------------------------------------------------------
+            //  GIF start commands — blocked when already recording / encoding
+            // ----------------------------------------------------------------
             else if (string.Equals(cmd, "-gif-start", StringComparison.OrdinalIgnoreCase))
             {
-                Logger.Log("ExecuteBang: -gif-start received.");
-                GifCaptureManager.StartRecording(settings, GifCaptureMode.FullScreen);
+                if (GifCaptureManager.IsActive)
+                { if (settings.GifShowStateDialogs) GifStateDialog.ShowAlreadyRecording(); }
+                else
+                    GifCaptureManager.StartRecording(settings, GifCaptureMode.FullScreen);
             }
             else if (string.Equals(cmd, "-gif-start-snap", StringComparison.OrdinalIgnoreCase))
             {
-                Logger.Log("ExecuteBang: -gif-start-snap received.");
-                GifCaptureManager.StartRecording(settings, GifCaptureMode.Snap);
+                if (GifCaptureManager.IsActive)
+                { if (settings.GifShowStateDialogs) GifStateDialog.ShowAlreadyRecording(); }
+                else
+                    GifCaptureManager.StartRecording(settings, GifCaptureMode.Snap);
             }
             else if (string.Equals(cmd, "-gif-start-predefined", StringComparison.OrdinalIgnoreCase))
             {
-                Logger.Log("ExecuteBang: -gif-start-predefined received.");
-                GifCaptureManager.StartRecording(settings, GifCaptureMode.Predefined);
+                if (GifCaptureManager.IsActive)
+                { if (settings.GifShowStateDialogs) GifStateDialog.ShowAlreadyRecording(); }
+                else
+                    GifCaptureManager.StartRecording(settings, GifCaptureMode.Predefined);
             }
             else if (cmd.StartsWith("-gif-start-window|", StringComparison.OrdinalIgnoreCase))
             {
                 string windowTitle = cmd.Substring("-gif-start-window|".Length);
-                Logger.Log($"ExecuteBang: -gif-start-window received, title='{windowTitle}'.");
-                GifCaptureManager.StartRecording(settings, GifCaptureMode.Window, windowTitle);
+                if (GifCaptureManager.IsActive)
+                { if (settings.GifShowStateDialogs) GifStateDialog.ShowAlreadyRecording(); }
+                else
+                    GifCaptureManager.StartRecording(settings, GifCaptureMode.Window, windowTitle);
             }
+            // ----------------------------------------------------------------
+            //  GIF stop / cancel / pause — blocked when not recording
+            // ----------------------------------------------------------------
             else if (string.Equals(cmd, "-gif-stop", StringComparison.OrdinalIgnoreCase))
             {
-                Logger.Log("ExecuteBang: -gif-stop received.");
-                GifCaptureManager.StopAndSave(settings);
+                if (!GifCaptureManager.IsRecording)
+                { if (settings.GifShowStateDialogs) GifStateDialog.ShowNotRecording("stop"); }
+                else
+                    GifCaptureManager.StopAndSave(settings);
             }
+            else if (string.Equals(cmd, "-gif-cancel", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!GifCaptureManager.IsRecording)
+                { if (settings.GifShowStateDialogs) GifStateDialog.ShowNotRecording("cancel"); }
+                else
+                    GifCaptureManager.CancelRecording(settings);
+            }
+            else if (string.Equals(cmd, "-gif-pause", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!GifCaptureManager.IsRecording)
+                { if (settings.GifShowStateDialogs) GifStateDialog.ShowNotRecording("pause"); }
+                else
+                    GifCaptureManager.PauseRecording();
+            }
+            // ----------------------------------------------------------------
+            //  GIF toggle commands — show dialog only when encoding is in progress
+            //  (toggle handles idle↔recording itself; encoding state can't be interrupted)
+            // ----------------------------------------------------------------
             else if (string.Equals(cmd, "-gif-toggle", StringComparison.OrdinalIgnoreCase))
             {
-                Logger.Log("ExecuteBang: -gif-toggle received.");
-                GifCaptureManager.ToggleRecording(settings, GifCaptureMode.FullScreen);
+                if (GifCaptureManager.IsEncoding)
+                { if (settings.GifShowStateDialogs) GifStateDialog.ShowEncoding(); }
+                else
+                    GifCaptureManager.ToggleRecording(settings, GifCaptureMode.FullScreen);
             }
             else if (string.Equals(cmd, "-gif-toggle-snap", StringComparison.OrdinalIgnoreCase))
             {
-                Logger.Log("ExecuteBang: -gif-toggle-snap received.");
-                GifCaptureManager.ToggleRecording(settings, GifCaptureMode.Snap);
+                if (GifCaptureManager.IsEncoding)
+                { if (settings.GifShowStateDialogs) GifStateDialog.ShowEncoding(); }
+                else
+                    GifCaptureManager.ToggleRecording(settings, GifCaptureMode.Snap);
             }
             else if (string.Equals(cmd, "-gif-toggle-predefined", StringComparison.OrdinalIgnoreCase))
             {
-                Logger.Log("ExecuteBang: -gif-toggle-predefined received.");
-                GifCaptureManager.ToggleRecording(settings, GifCaptureMode.Predefined);
+                if (GifCaptureManager.IsEncoding)
+                { if (settings.GifShowStateDialogs) GifStateDialog.ShowEncoding(); }
+                else
+                    GifCaptureManager.ToggleRecording(settings, GifCaptureMode.Predefined);
             }
             else if (cmd.StartsWith("-gif-toggle-window|", StringComparison.OrdinalIgnoreCase))
             {
                 string windowTitle = cmd.Substring("-gif-toggle-window|".Length);
-                Logger.Log($"ExecuteBang: -gif-toggle-window received, title='{windowTitle}'.");
-                GifCaptureManager.ToggleRecording(settings, GifCaptureMode.Window, windowTitle);
-            }
-            else if (string.Equals(cmd, "-gif-cancel", StringComparison.OrdinalIgnoreCase))
-            {
-                Logger.Log("ExecuteBang: -gif-cancel received.");
-                GifCaptureManager.CancelRecording(settings);
-            }
-            else if (string.Equals(cmd, "-gif-pause", StringComparison.OrdinalIgnoreCase))
-            {
-                Logger.Log("ExecuteBang: -gif-pause received.");
-                GifCaptureManager.PauseRecording();
+                if (GifCaptureManager.IsEncoding)
+                { if (settings.GifShowStateDialogs) GifStateDialog.ShowEncoding(); }
+                else
+                    GifCaptureManager.ToggleRecording(settings, GifCaptureMode.Window, windowTitle);
             }
             else if (cmd.StartsWith("ExecuteBatch ", StringComparison.OrdinalIgnoreCase))
             {
