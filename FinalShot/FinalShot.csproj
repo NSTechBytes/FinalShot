@@ -93,8 +93,8 @@
     <Compile Include="Core\WindowsDetector.cs" />
     <Compile Include="Capture\ScreenshotManager.cs" />
     <Compile Include="Capture\GifCaptureManager.cs" />
-    <Compile Include="Gif\GifFrameBuffer.cs" />
     <Compile Include="Gif\AnimatedGifEncoder.cs" />
+    <Compile Include="Gif\GifDiskCache.cs" />
     <Compile Include="UI\CustomScreenshotForm.cs" />
     <Compile Include="UI\GifRecordingOverlay.cs" />
     <Compile Include="UI\GifSnapSelector.cs" />

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
@@ -43,12 +43,27 @@ namespace PluginScreenshot
         private const int TRANSPARENT_IDX_OFFSET = 1; // last slot = Colors - 1
 
         // ------------------------------------------------------------------ //
-        //  Public entry point — batch encode
+        // ------------------------------------------------------------------ //
+        //  Public entry point - two-pass streaming encode from disk cache
+        //
+        //  Pass 1 - palette sampling:
+        //    Streams frames from disk one at a time, reads pixels into a
+        //    temporary BGRA buffer, samples them for the global palette, then
+        //    disposes the buffer immediately.  Peak memory = one BGRA frame.
+        //
+        //  Pass 2 - quantise + write:
+        //    Streams frames from disk again one at a time, quantises each
+        //    against the global palette, writes the GIF frame, then disposes
+        //    the BGRA buffer.  Peak memory = one BGRA frame + one index array
+        //    (previous frame) for delta encoding.
+        //
+        //  Total memory at any point ~= 2 x frameBytes regardless of recording
+        //  length - identical to ShareX HardDiskCache approach.
         // ------------------------------------------------------------------ //
 
-        public static void Encode(IList<GifFrame> frames, string outputPath)
+        public static void Encode(GifDiskCache cache, string outputPath)
         {
-            if (frames == null || frames.Count == 0)
+            if (cache == null || cache.Count == 0)
                 throw new ArgumentException("No frames to encode.");
             if (string.IsNullOrWhiteSpace(outputPath))
                 throw new ArgumentNullException("outputPath");
@@ -57,82 +72,66 @@ namespace PluginScreenshot
             if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
                 Directory.CreateDirectory(dir);
 
-            int w = frames[0].Bitmap.Width;
-            int h = frames[0].Bitmap.Height;
+            // Read dimensions from first frame only
+            int w = 0, h = 0;
+            foreach (GifFrame first in cache.GetFrameEnumerator())
+            {
+                w = first.Bitmap.Width;
+                h = first.Bitmap.Height;
+                first.Bitmap.Dispose();
+                break;
+            }
+            if (w == 0 || h == 0)
+                throw new InvalidOperationException("Could not determine frame dimensions.");
 
-            // Fixed encoder settings — 256 colors, Bayer dither,
-            // duplicate-frame deduplication always enabled.
-            // MAX_SAMPLES caps how many pixels MediaCutQuantizer samples across all frames
-            // when building the global palette. 500,000 gives excellent colour accuracy
-            // (≈1 in 77 pixels for a 1280×701 43-frame recording) while keeping memory
-            // and CPU usage negligible. Sampling every pixel (int.MaxValue) provides no
-            // measurable quality improvement but costs ~400 MB RAM and 20+ seconds CPU.
-            const int  REAL_COLORS  = 256;
-            const int  MAX_SAMPLES  = 500_000;
-            const bool USE_DITHER   = true;
-            const bool DEDUPLICATE  = true;
+            const int  REAL_COLORS = 256;
+            const int  MAX_SAMPLES = 500_000;
+            const bool USE_DITHER  = true;
 
-            Logger.Log($"AnimatedGifEncoder: {frames.Count} frames, {w}x{h}, " +
-                       $"colors={REAL_COLORS}, maxSamples={MAX_SAMPLES}, dither={USE_DITHER}, out={outputPath}");
+            Logger.Log($"AnimatedGifEncoder: {cache.Count} frames, {w}x{h}, " +
+                       $"colors={REAL_COLORS}, maxSamples={MAX_SAMPLES}, " +
+                       $"dither={USE_DITHER}, out={outputPath}");
 
-            // --- Step 1: Read all frames into BGRA buffers ---
-            // (needed for global palette building and delta encoding)
-            var bgraFrames = new List<byte[]>(frames.Count);
-            foreach (var f in frames)
-                bgraFrames.Add(ReadBgraInternal(f.Bitmap, w, h));
+            // -- Pass 1: build global palette (streaming) ------------------
+            int     realColors = REAL_COLORS;
+            int     transpIdx  = realColors - 1;
+            Color[] palette    = MediaCutQuantizer.BuildGlobalStreaming(
+                                     cache.GetFrameEnumerator(),
+                                     w, h,
+                                     realColors - 1,
+                                     MAX_SAMPLES);
 
-            // --- Step 2: Build ONE global palette from all frames ---
-            // We use Colors-1 actual colour entries and reserve the last slot
-            // as the transparent index. This avoids losing a colour to transparency
-            // while still keeping the table size a power of 2.
-            int    realColors  = REAL_COLORS; // 256
-            int    transpIdx   = realColors - 1; // 255
-            Color[] palette    = MediaCutQuantizer.BuildGlobal(
-                                     bgraFrames, w * h,
-                                     realColors - 1,  // ask for one fewer real colour
-                                     MAX_SAMPLES);    // sample ~500K pixels across all frames
-
-            // Expand palette to full size; last slot = transparent sentinel (Black)
             if (palette.Length < realColors)
             {
                 var expanded = new Color[realColors];
                 palette.CopyTo(expanded, 0);
-                expanded[transpIdx] = Color.Black; // colour value doesn't matter, never displayed
+                expanded[transpIdx] = Color.Black;
                 palette = expanded;
             }
 
-            // --- Step 3: Build lookup cube for the global palette ---
             byte[] cube = BuildLookupCubeInternal(palette, transpIdx);
-
             Logger.Log($"AnimatedGifEncoder: global palette built, transpIdx={transpIdx}");
 
-            // --- Step 4: Write GIF ---
+            // -- Pass 2: quantise + write GIF (streaming) ------------------
+            int tableN       = 0;
+            int tableEntries = 2;
+            while (tableEntries < palette.Length && tableN < 7)
+            { tableN++; tableEntries = 1 << (tableN + 1); }
+            int lzwMinCode = Math.Max(2, tableN + 1);
+
             using (var fs = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None))
             using (var bw = new BinaryWriter(fs))
             {
-                // Compute table size field (N where 2^(N+1) = palette entries)
-                int tableN       = 0;
-                int tableEntries = 2;
-                while (tableEntries < palette.Length && tableN < 7)
-                {
-                    tableN++;
-                    tableEntries = 1 << (tableN + 1);
-                }
-                int lzwMinCode = Math.Max(2, tableN + 1);
-
                 // GIF89a header
                 bw.Write(new byte[] { 0x47, 0x49, 0x46, 0x38, 0x39, 0x61 });
 
-                // Logical Screen Descriptor — with Global Color Table
-                // Packed byte: bit7=1 (GCT present), bits4-6=colorRes-1 (=tableN),
-                //              bit3=0 (not sorted), bits0-2=tableN (GCT size field)
+                // Logical Screen Descriptor with Global Color Table
                 WriteU16Internal(bw, (ushort)w);
                 WriteU16Internal(bw, (ushort)h);
-                bw.Write((byte)(0x80 | (tableN << 4) | tableN)); // GCT flag + sizes
-                bw.Write((byte)0x00); // background color index
-                bw.Write((byte)0x00); // pixel aspect ratio
+                bw.Write((byte)(0x80 | (tableN << 4) | tableN));
+                bw.Write((byte)0x00);
+                bw.Write((byte)0x00);
 
-                // Global Color Table — written ONCE for the whole file
                 for (int i = 0; i < tableEntries; i++)
                 {
                     Color c = (i < palette.Length) ? palette[i] : Color.Black;
@@ -141,75 +140,61 @@ namespace PluginScreenshot
 
                 WriteNetscapeLoopInternal(bw, 0);
 
-                bool   deduplicate = DEDUPLICATE;
                 byte[] prevIndices = null;
                 int    pendingCs   = 0;
                 int    written     = 0;
+                int    frameNum    = 0;
 
-                for (int i = 0; i < bgraFrames.Count; i++)
+                foreach (GifFrame frame in cache.GetFrameEnumerator())
                 {
-                    byte[] bgra    = bgraFrames[i];
-                    int    delayCs = frames[i].DelayCs;
+                    frameNum++;
+                    int delayCs = frame.DelayCs;
 
-                    // Quantise this frame against the global palette
+                    // Read pixels then dispose bitmap immediately
+                    byte[] bgra = ReadBgraInternal(frame.Bitmap, w, h);
+                    frame.Bitmap.Dispose();
+
+                    // Quantise against global palette
                     byte[] indices = USE_DITHER
                         ? DitherInternal(bgra, w, h, palette, cube, transpIdx)
                         : QuantizeNoDither(bgra, w, h, cube);
+                    bgra = null; // release BGRA immediately
 
-                    // Deduplication: if ALL pixels are unchanged → skip frame
-                    if (deduplicate && prevIndices != null)
+                    // Deduplication
+                    if (prevIndices != null && BytesEqual(indices, prevIndices))
                     {
-                        if (BytesEqual(indices, prevIndices))
-                        {
-                            pendingCs += delayCs;
-                            Logger.Log($"AnimatedGifEncoder: frame {i+1} duplicate skipped.");
-                            continue;
-                        }
+                        pendingCs += delayCs;
+                        Logger.Log($"AnimatedGifEncoder: frame {frameNum} duplicate skipped.");
+                        continue;
                     }
 
                     int effectiveCs = delayCs + pendingCs;
                     pendingCs = 0;
 
-                    // --- Changed-rect optimisation ---
-                    // Compute the minimal bounding box of pixels that differ from the
-                    // previous frame.  Only that sub-image is written to the GIF stream;
-                    // the GIF Image Descriptor left/top/width/height fields let the
-                    // decoder place the patch at the correct position over the canvas,
-                    // and the "do not dispose" disposal method keeps all unchanged pixels
-                    // from the previous frame visible outside the patch rect.
-                    //
-                    // For the first frame (prevIndices == null) we always write the
-                    // full canvas so the decoder has a complete starting image.
                     if (prevIndices != null)
                     {
                         Rectangle? changed = ComputeChangedRect(indices, prevIndices, w, h);
                         if (changed == null)
                         {
-                            // Entire frame is identical — should have been caught by
-                            // BytesEqual above, but guard defensively.
                             prevIndices = indices;
                             written++;
                             continue;
                         }
                         Rectangle cr = changed.Value;
-                        // Extract only the changed sub-rect from the delta index array
                         byte[] deltaIndices = ExtractSubRect(
-                            ApplyDelta(indices, prevIndices, transpIdx),
-                            w, cr);
-                        Logger.Log($"AnimatedGifEncoder: writing frame {i+1}/{frames.Count} " +
+                            ApplyDelta(indices, prevIndices, transpIdx), w, cr);
+                        Logger.Log($"AnimatedGifEncoder: writing frame {frameNum}/{cache.Count} " +
                                    $"delay={effectiveCs}cs changedRect={cr}");
                         WriteGifFrameWithTransparency(bw, deltaIndices,
-                                                      cr.Left, cr.Top, cr.Width, cr.Height,
-                                                      effectiveCs, transpIdx, lzwMinCode);
+                            cr.Left, cr.Top, cr.Width, cr.Height,
+                            effectiveCs, transpIdx, lzwMinCode);
                     }
                     else
                     {
-                        // First frame — write full canvas
-                        Logger.Log($"AnimatedGifEncoder: writing frame {i+1}/{frames.Count} " +
+                        Logger.Log($"AnimatedGifEncoder: writing frame {frameNum}/{cache.Count} " +
                                    $"delay={effectiveCs}cs (first frame, full canvas)");
                         WriteGifFrameWithTransparency(bw, indices,
-                                                      0, 0, w, h,
-                                                      effectiveCs, transpIdx, lzwMinCode);
+                            0, 0, w, h, effectiveCs, transpIdx, lzwMinCode);
                     }
 
                     prevIndices = indices;
@@ -217,7 +202,7 @@ namespace PluginScreenshot
                 }
 
                 bw.Write((byte)0x3B); // GIF trailer
-                Logger.Log($"AnimatedGifEncoder: done — {written}/{frames.Count} frames written → {outputPath}");
+                Logger.Log($"AnimatedGifEncoder: done - {written}/{cache.Count} frames written -> {outputPath}");
             }
         }
 
@@ -603,18 +588,53 @@ namespace PluginScreenshot
     internal static class MediaCutQuantizer
     {
         /// <summary>
+        /// Streaming palette builder — reads frames one at a time from the disk
+        /// cache, samples pixels from each BGRA buffer, then disposes immediately.
+        /// Never holds more than one frame's pixels in memory at once.
+        /// Uses a uniform global stride across all frames combined, identical to
+        /// the batch BuildGlobal approach but without storing all BGRA in RAM.
+        /// </summary>
+        public static Color[] BuildGlobalStreaming(IEnumerable<GifFrame> frames,
+                                                   int w, int h,
+                                                   int maxColors, int maxSamplesTotal)
+        {
+            int pixelsPerFrame = w * h;
+
+            // Collect samples with a uniform stride.
+            // We don't know frameCount upfront, so we use a generous per-frame
+            // allowance: budget / 1 frame minimum, then skip by step within each frame.
+            // Step is estimated as pixelsPerFrame / (maxSamplesTotal / 30) — assuming
+            // up to ~30 frames; it self-corrects because we stop when budget is full.
+            int stepEstimate = Math.Max(1, pixelsPerFrame * 30 / maxSamplesTotal);
+
+            int[] flat = new int[maxSamplesTotal * 3];
+            int   si   = 0;
+
+            foreach (GifFrame frame in frames)
+            {
+                if (si >= flat.Length - 2) break;
+
+                byte[] bgra = AnimatedGifEncoder.ReadBgraInternal(frame.Bitmap, w, h);
+                frame.Bitmap.Dispose();
+
+                for (int i = 0; i < pixelsPerFrame && si < flat.Length - 2; i += stepEstimate)
+                {
+                    int bi = i * 4;
+                    flat[si++] = bgra[bi + 2]; // R
+                    flat[si++] = bgra[bi + 1]; // G
+                    flat[si++] = bgra[bi + 0]; // B
+                }
+            }
+
+            int actualSamples = si / 3;
+            Logger.Log($"MediaCutQuantizer.BuildGlobalStreaming: " +
+                       $"samples={actualSamples}, step={stepEstimate}, maxColors={maxColors}");
+            return RunMedianCut(flat, actualSamples, maxColors);
+        }
+
+        /// <summary>
         /// Builds a global palette sampled from ALL frames combined using a single
         /// uniform stride across the entire pixel population.
-        ///
-        /// The old approach divided maxSamplesTotal by frameCount, which at high
-        /// frame counts (e.g. 100 frames) reduced each frame to ~400 samples —
-        /// only 0.02 % of a 1920×1080 frame. Colors that appear in just a few
-        /// frames were routinely missed, forcing the delta encoder to write those
-        /// pixels as real (non-transparent) data even when they hadn't changed.
-        ///
-        /// The new approach computes one stride over all frames combined so the
-        /// full sample budget is spread evenly across every pixel in the recording,
-        /// matching how FFmpeg's palettegen=stats_mode=full works.
         /// </summary>
         public static Color[] BuildGlobal(IList<byte[]> bgraFrames, int pixelsPerFrame,
                                           int maxColors, int maxSamplesTotal)

@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
@@ -7,6 +6,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
+
 namespace PluginScreenshot
 {
     public enum GifCaptureMode
@@ -16,20 +16,29 @@ namespace PluginScreenshot
         Predefined,
         Window,
     }
+
     public static class GifCaptureManager
     {
         private enum State { Idle, Recording, Encoding }
+
         private static readonly object _stateLock = new object();
         private static volatile State  _state      = State.Idle;
         private static Thread          _captureThread;
-        private static GifFrameBuffer  _buffer;
+        private static GifDiskCache    _cache;          // ← disk-backed, not in-memory
         private static volatile bool   _stopRequested;
         private static volatile bool   _pauseRequested;
-        private static Settings _activeSettings;
-        private static GifCaptureMode _captureMode;
-        private static Rectangle _captureRegion;
-        private static IntPtr _captureHwnd;
-        private static string _captureWindowTitle;
+        private static Settings        _activeSettings;
+        private static GifCaptureMode  _captureMode;
+        private static Rectangle       _captureRegion;
+        private static IntPtr          _captureHwnd;
+        private static string          _captureWindowTitle;
+
+        // ------------------------------------------------------------------ //
+        //  Public API
+        // ------------------------------------------------------------------ //
+
+        public static bool IsActive => _state != State.Idle;
+
         public static void StartRecording(Settings settings,
                                           GifCaptureMode mode = GifCaptureMode.FullScreen,
                                           string windowTitle  = null)
@@ -39,6 +48,7 @@ namespace PluginScreenshot
                 Logger.Log("GifCaptureManager.StartRecording: GifSavePath is empty, aborting.");
                 return;
             }
+
             if (mode == GifCaptureMode.Snap)
             {
                 lock (_stateLock)
@@ -77,8 +87,10 @@ namespace PluginScreenshot
                 snapThread.Start();
                 return;
             }
+
             Rectangle captureRegion = Rectangle.Empty;
             IntPtr    captureHwnd   = IntPtr.Zero;
+
             if (mode == GifCaptureMode.Predefined)
             {
                 captureRegion = settings.GifPredefinedRegion;
@@ -108,10 +120,11 @@ namespace PluginScreenshot
                     return;
                 }
             }
-            else 
+            else
             {
                 captureRegion = SystemInformation.VirtualScreen;
             }
+
             lock (_stateLock)
             {
                 if (_state != State.Idle)
@@ -121,47 +134,15 @@ namespace PluginScreenshot
                 }
                 _state = State.Recording;
             }
+
             StartRecordingInternal(settings, mode, captureRegion, captureHwnd, windowTitle);
         }
-        private static void StartRecordingInternal(Settings settings,
-                                                   GifCaptureMode mode,
-                                                   Rectangle captureRegion,
-                                                   IntPtr captureHwnd,
-                                                   string windowTitle)
-        {
-            lock (_stateLock)
-            {
-                _stopRequested      = false;
-                _pauseRequested     = false;
-                _buffer             = new GifFrameBuffer();
-                _captureMode        = mode;
-                _captureRegion      = captureRegion;
-                _captureHwnd        = captureHwnd;
-                _captureWindowTitle = windowTitle;
-                _activeSettings     = settings;
-                Logger.Log($"GifCaptureManager.StartRecordingInternal: mode={mode}, " +
-                           $"region={captureRegion}, fps={settings.GifFPS}, " +
-                           $"duration={settings.GifDuration}s, " +
-                           $"path={settings.GifSavePath}");
-                _captureThread = new Thread(() => CaptureLoop(settings));
-                _captureThread.IsBackground = true;
-                _captureThread.Name = "FinalShot-GifCapture";
-                _captureThread.Start();
-            }
-            if (settings.GifShowOverlay)
-            {
-                GifRecordingOverlay.Show(
-                    captureRegion,
-                    onStop:  () => ThreadPool.QueueUserWorkItem(_ => StopAndSave(_activeSettings)),
-                    onPause: () => ThreadPool.QueueUserWorkItem(_ => PauseRecording()),
-                    onAbort: () => ThreadPool.QueueUserWorkItem(_ => CancelRecording(_activeSettings)));
-            }
-            ExecuteAction(settings, settings.GifStartAction, "GifStartAction");
-        }
+
         public static void StopAndSave(Settings settings)
         {
-            Thread           captureThreadSnapshot;
-            GifFrameBuffer   bufferSnapshot;
+            Thread       captureThreadSnapshot;
+            GifDiskCache cacheSnapshot;
+
             lock (_stateLock)
             {
                 if (_state != State.Recording)
@@ -169,20 +150,22 @@ namespace PluginScreenshot
                     Logger.Log("GifCaptureManager.StopAndSave: not currently recording, ignoring.");
                     return;
                 }
-                _state         = State.Encoding;
-                _stopRequested = true;
+                _state                = State.Encoding;
+                _stopRequested        = true;
                 captureThreadSnapshot = _captureThread;
-                bufferSnapshot        = _buffer;
+                cacheSnapshot         = _cache;
             }
+
             Logger.Log("GifCaptureManager.StopAndSave: signalled capture thread to stop.");
             GifRecordingOverlay.CloseOverlay();
+
             var finishThread = new Thread(() =>
-                EncodeAndFinish(settings, captureThreadSnapshot, bufferSnapshot));
+                EncodeAndFinish(settings, captureThreadSnapshot, cacheSnapshot));
             finishThread.IsBackground = true;
             finishThread.Name = "FinalShot-GifEncode";
             finishThread.Start();
         }
-        public static bool IsActive => _state != State.Idle;
+
         public static void PauseRecording()
         {
             lock (_stateLock)
@@ -197,6 +180,7 @@ namespace PluginScreenshot
             else
                 ExecuteAction(_activeSettings, _activeSettings.GifResumeAction, "GifResumeAction");
         }
+
         public static void ToggleRecording(Settings settings,
                                            GifCaptureMode mode = GifCaptureMode.FullScreen,
                                            string windowTitle  = null)
@@ -218,10 +202,12 @@ namespace PluginScreenshot
                     break;
             }
         }
+
         public static void CancelRecording(Settings settings)
         {
-            Thread           captureThreadSnapshot;
-            GifFrameBuffer   bufferSnapshot;
+            Thread       captureThreadSnapshot;
+            GifDiskCache cacheSnapshot;
+
             lock (_stateLock)
             {
                 if (_state != State.Recording)
@@ -229,22 +215,24 @@ namespace PluginScreenshot
                     Logger.Log($"GifCaptureManager.CancelRecording: state is {_state}, nothing to cancel.");
                     return;
                 }
-                _state         = State.Idle;
-                _stopRequested = true;
+                _state                = State.Idle;
+                _stopRequested        = true;
                 captureThreadSnapshot = _captureThread;
-                bufferSnapshot        = _buffer;
-                _captureThread = null;
-                _buffer        = null;
+                cacheSnapshot         = _cache;
+                _captureThread        = null;
+                _cache                = null;
             }
+
             Logger.Log("GifCaptureManager.CancelRecording: signalled stop, discarding frames.");
             GifRecordingOverlay.CloseOverlay();
+
             var cleanupThread = new Thread(() =>
             {
                 try
                 {
                     captureThreadSnapshot?.Join();
                     Logger.Log("GifCaptureManager.CancelRecording: capture thread joined.");
-                    bufferSnapshot?.Dispose();
+                    cacheSnapshot?.Dispose(); // deletes the temp file
                     Logger.Log("GifCaptureManager.CancelRecording: done, state is Idle.");
                 }
                 catch (Exception ex)
@@ -260,25 +248,82 @@ namespace PluginScreenshot
             cleanupThread.Name = "FinalShot-GifCancel";
             cleanupThread.Start();
         }
+
+        // ------------------------------------------------------------------ //
+        //  Internal — start
+        // ------------------------------------------------------------------ //
+
+        private static void StartRecordingInternal(Settings settings,
+                                                   GifCaptureMode mode,
+                                                   Rectangle captureRegion,
+                                                   IntPtr captureHwnd,
+                                                   string windowTitle)
+        {
+            lock (_stateLock)
+            {
+                _stopRequested      = false;
+                _pauseRequested     = false;
+                _cache              = new GifDiskCache(); // opens temp file on disk
+                _captureMode        = mode;
+                _captureRegion      = captureRegion;
+                _captureHwnd        = captureHwnd;
+                _captureWindowTitle = windowTitle;
+                _activeSettings     = settings;
+
+                Logger.Log($"GifCaptureManager.StartRecordingInternal: mode={mode}, " +
+                           $"region={captureRegion}, fps={settings.GifFPS}, " +
+                           $"duration={settings.GifDuration}s, " +
+                           $"path={settings.GifSavePath}");
+
+                _captureThread = new Thread(() => CaptureLoop(settings));
+                _captureThread.IsBackground = true;
+                _captureThread.Name = "FinalShot-GifCapture";
+                _captureThread.Start();
+            }
+
+            if (settings.GifShowOverlay)
+            {
+                GifRecordingOverlay.Show(
+                    captureRegion,
+                    onStop:  () => ThreadPool.QueueUserWorkItem(_ => StopAndSave(_activeSettings)),
+                    onPause: () => ThreadPool.QueueUserWorkItem(_ => PauseRecording()),
+                    onAbort: () => ThreadPool.QueueUserWorkItem(_ => CancelRecording(_activeSettings)));
+            }
+
+            ExecuteAction(settings, settings.GifStartAction, "GifStartAction");
+        }
+
+        // ------------------------------------------------------------------ //
+        //  Capture loop — runs on FinalShot-GifCapture thread
+        //  Each frame is handed to GifDiskCache which writes it to disk on a
+        //  background thread and disposes the Bitmap immediately.
+        //  Memory stays flat: only one Bitmap is ever live at a time.
+        // ------------------------------------------------------------------ //
+
         private static void CaptureLoop(Settings settings)
         {
             int fps        = settings.GifFPS;
-            int maxSeconds = settings.GifDuration; 
+            int maxSeconds = settings.GifDuration;
             int targetMs   = 1000 / fps;
             int maxFrames  = maxSeconds > 0 ? fps * maxSeconds : int.MaxValue;
-            GifFrameBuffer localBuffer = _buffer;
+
+            GifDiskCache localCache = _cache;
+
             Logger.Log($"GifCaptureManager.CaptureLoop: starting, mode={_captureMode}, fps={fps}, " +
                        $"maxFrames={maxFrames}, targetMs={targetMs}");
-            if (localBuffer == null)
+
+            if (localCache == null)
             {
-                Logger.Log("GifCaptureManager.CaptureLoop: buffer is null at start, aborting.");
+                Logger.Log("GifCaptureManager.CaptureLoop: cache is null at start, aborting.");
                 return;
             }
+
             IntPtr oldCtx = NativeMethods.SetThreadDpiAwarenessContext(
                                 NativeMethods.DPI_PER_MONITOR_AWARE_V2);
             try
             {
                 var frameClock = Stopwatch.StartNew();
+
                 for (int i = 0; !_stopRequested && i < maxFrames; i++)
                 {
                     if (_pauseRequested)
@@ -288,21 +333,26 @@ namespace PluginScreenshot
                         frameClock.Restart();
                         if (_stopRequested) break;
                     }
+
                     var captureSw = Stopwatch.StartNew();
                     try
                     {
-                        Bitmap bmp = CaptureFrame(settings.ShowCursor);
-                        int elapsedMs = (int)frameClock.ElapsedMilliseconds;
+                        Bitmap bmp      = CaptureFrame(settings.ShowCursor);
+                        int elapsedMs   = (int)frameClock.ElapsedMilliseconds;
                         frameClock.Restart();
-                        int delayCs = (int)Math.Round(elapsedMs / 10.0);
+                        int delayCs     = (int)Math.Round(elapsedMs / 10.0);
                         if (delayCs < 2) delayCs = 2;
-                        localBuffer.Add(new GifFrame(bmp, delayCs));
+
+                        // Hand off to disk cache — bitmap is written to disk and
+                        // disposed by the cache's background writer thread.
+                        localCache.Add(new GifFrame(bmp, delayCs));
                     }
                     catch (Exception ex)
                     {
                         Logger.Log($"GifCaptureManager.CaptureLoop: frame {i} error — {ex.Message}");
                         frameClock.Restart();
                     }
+
                     int sleep = targetMs - (int)captureSw.ElapsedMilliseconds;
                     if (sleep > 0)
                         Thread.Sleep(sleep);
@@ -311,10 +361,73 @@ namespace PluginScreenshot
             finally
             {
                 NativeMethods.SetThreadDpiAwarenessContext(oldCtx);
-                localBuffer.Complete();   
+                // Complete() blocks until the writer thread has flushed every
+                // frame to disk and closed the write stream.
+                localCache.Complete();
                 Logger.Log("GifCaptureManager.CaptureLoop: finished.");
             }
         }
+
+        // ------------------------------------------------------------------ //
+        //  Encode — runs on FinalShot-GifEncode thread
+        //  Passes the disk cache directly to the encoder. The encoder reads
+        //  frames back from disk one at a time via GetFrameEnumerator().
+        // ------------------------------------------------------------------ //
+
+        private static void EncodeAndFinish(Settings     settings,
+                                            Thread       captureThread,
+                                            GifDiskCache cache)
+        {
+            captureThread?.Join();
+            Logger.Log("GifCaptureManager.EncodeAndFinish: capture thread joined.");
+            ExecuteAction(settings, settings.OnGifEncodingAction, "OnGifEncodingAction");
+
+            bool success = false;
+            try
+            {
+                int frameCount = cache.Count;
+                Logger.Log($"GifCaptureManager.EncodeAndFinish: {frameCount} frames on disk.");
+
+                if (frameCount == 0)
+                {
+                    Logger.Log("GifCaptureManager.EncodeAndFinish: no frames, skipping save.");
+                    return;
+                }
+
+                // Encoder reads frames from disk via two streaming passes —
+                // no frame list ever lives in RAM simultaneously.
+                AnimatedGifEncoder.Encode(cache, settings.GifSavePath);
+                success = true;
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"GifCaptureManager.EncodeAndFinish: error — {ex}");
+            }
+            finally
+            {
+                cache?.Dispose(); // deletes the temp file
+                lock (_stateLock)
+                {
+                    _state         = State.Idle;
+                    _captureThread = null;
+                    _cache         = null;
+                }
+                Logger.Log("GifCaptureManager.EncodeAndFinish: state reset to Idle.");
+            }
+
+            if (success)
+            {
+                Logger.Log($"GifCaptureManager.EncodeAndFinish: GIF saved → {settings.GifSavePath}");
+                if (settings.ShowNotification && File.Exists(settings.GifSavePath))
+                    ShowGifNotification(settings.GifSavePath);
+                ScreenshotManager.ExecuteFinishAction(settings);
+            }
+        }
+
+        // ------------------------------------------------------------------ //
+        //  Frame capture helpers
+        // ------------------------------------------------------------------ //
+
         private static Bitmap CaptureFrame(bool showCursor)
         {
             switch (_captureMode)
@@ -323,10 +436,11 @@ namespace PluginScreenshot
                     return CaptureWindow(showCursor);
                 case GifCaptureMode.Predefined:
                     return CaptureRegion(_captureRegion, showCursor);
-                default: 
+                default:
                     return CaptureRegion(SystemInformation.VirtualScreen, showCursor);
             }
         }
+
         private static Bitmap CaptureRegion(Rectangle region, bool showCursor)
         {
             var bmp = new Bitmap(region.Width, region.Height);
@@ -338,6 +452,7 @@ namespace PluginScreenshot
             }
             return bmp;
         }
+
         private static Bitmap CaptureWindow(bool showCursor)
         {
             Rectangle bounds = GetWindowBounds(_captureHwnd);
@@ -352,6 +467,11 @@ namespace PluginScreenshot
             }
             return bmp;
         }
+
+        // ------------------------------------------------------------------ //
+        //  Window helpers
+        // ------------------------------------------------------------------ //
+
         private static IntPtr FindWindowByTitle(string title)
         {
             IntPtr found = IntPtr.Zero;
@@ -369,17 +489,19 @@ namespace PluginScreenshot
                 if (sb.ToString().ToLowerInvariant().Contains(lower))
                 {
                     found = hWnd;
-                    return false; 
+                    return false;
                 }
                 return true;
             }, IntPtr.Zero);
             return found;
         }
+
         private static Rectangle GetWindowBounds(IntPtr hWnd)
         {
             if (NativeMethods.DwmGetWindowAttribute(hWnd,
                     NativeMethods.DWMWA_EXTENDED_FRAME_BOUNDS,
-                    out NativeMethods.RECT r, Marshal.SizeOf(typeof(NativeMethods.RECT))) == 0)
+                    out NativeMethods.RECT r,
+                    Marshal.SizeOf(typeof(NativeMethods.RECT))) == 0)
             {
                 return new Rectangle(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top);
             }
@@ -387,61 +509,14 @@ namespace PluginScreenshot
                 return new Rectangle(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top);
             return Rectangle.Empty;
         }
+
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
-        private static void EncodeAndFinish(
-            Settings         settings,
-            Thread           captureThread,
-            GifFrameBuffer   buffer)
-        {
-            captureThread?.Join();
-            Logger.Log("GifCaptureManager.EncodeAndFinish: capture thread joined.");
-            ExecuteAction(settings, settings.OnGifEncodingAction, "OnGifEncodingAction");
-            bool success = false;
-            try
-            {
-                var frames = new List<GifFrame>();
-                try
-                {
-                    foreach (GifFrame frame in buffer.Drain())
-                        frames.Add(frame);
-                    Logger.Log($"GifCaptureManager.EncodeAndFinish: {frames.Count} frames collected.");
-                    if (frames.Count == 0)
-                    {
-                        Logger.Log("GifCaptureManager.EncodeAndFinish: no frames, skipping save.");
-                        return;
-                    }
-                    AnimatedGifEncoder.Encode(frames, settings.GifSavePath);
-                    success = true;
-                }
-                finally
-                {
-                    foreach (GifFrame f in frames) f?.Bitmap?.Dispose();
-                    buffer.Dispose();
-                }
-                if (success)
-                {
-                    Logger.Log($"GifCaptureManager.EncodeAndFinish: GIF saved → {settings.GifSavePath}");
-                    if (settings.ShowNotification && File.Exists(settings.GifSavePath))
-                        ShowGifNotification(settings.GifSavePath);
-                    ScreenshotManager.ExecuteFinishAction(settings);
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Log($"GifCaptureManager.EncodeAndFinish: error — {ex}");
-            }
-            finally
-            {
-                lock (_stateLock)
-                {
-                    _state         = State.Idle;
-                    _captureThread = null;
-                    _buffer        = null;
-                }
-                Logger.Log("GifCaptureManager.EncodeAndFinish: state reset to Idle.");
-            }
-        }
+
+        // ------------------------------------------------------------------ //
+        //  Notification + action helpers
+        // ------------------------------------------------------------------ //
+
         private static void ShowGifNotification(string gifPath)
         {
             try
@@ -461,6 +536,7 @@ namespace PluginScreenshot
                 Logger.Log($"GifCaptureManager.ShowGifNotification: {ex.Message}");
             }
         }
+
         private static void ExecuteAction(Settings settings, string action, string actionName)
         {
             if (string.IsNullOrEmpty(action)) return;
