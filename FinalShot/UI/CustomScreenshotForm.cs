@@ -238,9 +238,14 @@ namespace PluginScreenshot
             {
                 _pendingWindowCapture = false;
                 Rectangle captureRect = _hoveredWindow.Rectangle;
-                Logger.Log("Window capture: " + captureRect);
+                // Only mask Win11 rounded corners for full top-level window snaps
+                // (not client-area / child-control snaps).
+                IntPtr roundHwnd = (_hoveredWindow.IsTopLevel && _settings.RoundWindowCorners)
+                    ? _hoveredWindow.Handle
+                    : IntPtr.Zero;
+                Logger.Log("Window capture: " + captureRect + " roundCorners=" + (roundHwnd != IntPtr.Zero));
                 Hide();
-                ScreenshotManager.CompositeCapture(captureRect, _settings);
+                ScreenshotManager.CompositeCapture(captureRect, _settings, roundHwnd);
                 _finishCallback();
                 Close();
                 return;

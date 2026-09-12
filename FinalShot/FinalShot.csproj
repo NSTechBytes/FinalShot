@@ -110,6 +110,7 @@
     <Compile Include="Core\NativeMethods.cs" />
     <Compile Include="Core\WindowInfo.cs" />
     <Compile Include="Core\WindowsDetector.cs" />
+    <Compile Include="Core\WindowCornerHelper.cs" />
     <Compile Include="Capture\ScreenshotManager.cs" />
     <Compile Include="Capture\GifCaptureManager.cs" />
     <Compile Include="OCR\OcrHelper.cs" />

@@ -84,6 +84,9 @@ namespace PluginScreenshot
         // DWMWA_EXTENDED_FRAME_BOUNDS = 9, the visible DWM frame rect excluding shadow pixels
         public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
 
+        // DWMWA_WINDOW_CORNER_PREFERENCE = 33 (Windows 11)
+        public const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+
         // GWL and extended-style constants
 
         public const int GWL_EXSTYLE      = -20;

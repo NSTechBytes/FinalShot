@@ -535,13 +535,34 @@ namespace PluginScreenshot
             Rectangle bounds = GetWindowBounds(_captureHwnd);
             if (bounds.Width <= 0 || bounds.Height <= 0)
                 bounds = _captureRegion;
-            var bmp = new Bitmap(bounds.Width, bounds.Height);
+            Bitmap bmp = new Bitmap(bounds.Width, bounds.Height);
             using (Graphics g = Graphics.FromImage(bmp))
             {
                 g.CopyFromScreen(bounds.Location, Point.Empty, bounds.Size);
                 if (showCursor)
                     ScreenshotManager.DrawCursor(g, bounds);
             }
+
+            if (_activeSettings != null && _activeSettings.RoundWindowCorners)
+            {
+                bmp = WindowCornerHelper.ApplyRoundedCornersIfNeeded(bmp, _captureHwnd);
+
+                // GIF has no alpha — flatten transparent corners to black
+                if (bmp != null &&
+                    (bmp.PixelFormat == System.Drawing.Imaging.PixelFormat.Format32bppArgb ||
+                     bmp.PixelFormat == System.Drawing.Imaging.PixelFormat.Format32bppPArgb))
+                {
+                    var flat = new Bitmap(bmp.Width, bmp.Height, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+                    using (Graphics g = Graphics.FromImage(flat))
+                    {
+                        g.Clear(Color.Black);
+                        g.DrawImage(bmp, 0, 0, bmp.Width, bmp.Height);
+                    }
+                    bmp.Dispose();
+                    return flat;
+                }
+            }
+
             return bmp;
         }
 

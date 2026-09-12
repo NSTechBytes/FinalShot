@@ -83,6 +83,12 @@ When you trigger custom capture, FinalShot enumerates every visible window and c
 - The client area of each window as a separate snap target (useful for capturing content without the title bar).
 - Controls like the Windows Explorer navigation pane, address bar, and file list are each independently detectable.
 
+**Windows 11 rounded corners**
+
+Top-level window captures can mask Win11 rounded corners so desktop pixels in the sharp rectangle corners are removed (transparent in PNG; black when saving JPEG — prefer `.png` for window shots).
+
+Opt in with `RoundWindowCorners=1` (default `0` keeps the old rectangular capture for backward compatibility).
+
 **Detection quality**
 
 FinalShot uses DWM extended frame bounds (`DWMWA_EXTENDED_FRAME_BOUNDS`) for top-level window rectangles, which gives the visually rendered frame without invisible shadow pixels. Child controls are enumerated without the `IsWindowVisible` parent-chain restriction that would otherwise miss controls like Explorer's sidebar panels.
@@ -208,6 +214,7 @@ DebugLog=0
 | `PredefWidth`, `PredefHeight` | Width & height of the predefined capture region.                                                | 0       |
 | `DetectWindows`               | Enable Smart Window Snap in custom capture mode. (1 = on, 0 = off)                             | 1       |
 | `DetectControls`              | Detect child controls (toolbars, sidebars, panels) in addition to top-level windows. Has no effect when `DetectWindows=0`. | 1       |
+| `RoundWindowCorners`          | Mask Win11 rounded corners on top-level window captures. (1 = on, 0 = off / legacy)           | 0       |
 | `OcrLanguage`                 | Windows OCR language tag (e.g. `en`, `en-US`, `de`). Pack must be installed.                  | `en`    |
 | `OcrScaleFactor`              | Upscale factor before OCR (1–4). Higher can improve small text.                               | 2       |
 | `OcrSingleLine`               | Join OCR lines with spaces instead of newlines. (1 = yes, 0 = no)                             | 0       |

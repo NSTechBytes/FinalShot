@@ -108,18 +108,18 @@ namespace PluginScreenshot
                     Logger.Log($"TakeWindowScreenshot: Window '{windowTitle}' not found.");
                     return;
                 }
-                if (NativeMethods.GetWindowRect(hWnd, out NativeMethods.RECT rect))
+
+                Rectangle bounds = GetWindowBounds(hWnd);
+                if (bounds.Width <= 0 || bounds.Height <= 0)
                 {
-                    int width = rect.Right - rect.Left;
-                    int height = rect.Bottom - rect.Top;
-                    if (width <= 0 || height <= 0)
-                    {
-                        Logger.Log($"TakeWindowScreenshot: Invalid window dimensions {width}x{height}");
-                        return;
-                    }
-                    Rectangle bounds = new Rectangle(rect.Left, rect.Top, width, height);
-                    Logger.Log($"TakeWindowScreenshot: Capturing window at {bounds}");
-                    using (var bmp = new Bitmap(width, height))
+                    Logger.Log($"TakeWindowScreenshot: Invalid window dimensions {bounds.Width}x{bounds.Height}");
+                    return;
+                }
+
+                Logger.Log($"TakeWindowScreenshot: Capturing window at {bounds}");
+                Bitmap bmp = new Bitmap(bounds.Width, bounds.Height);
+                try
+                {
                     using (var g = Graphics.FromImage(bmp))
                     {
                         if (settings.UsePrintWindow)
@@ -155,12 +155,17 @@ namespace PluginScreenshot
                         }
                         if (settings.ShowCursor)
                             DrawCursor(g, bounds);
-                        SaveImageSafely(bmp, settings);
                     }
+
+                    bmp = settings.RoundWindowCorners
+                        ? WindowCornerHelper.ApplyRoundedCornersIfNeeded(bmp, hWnd)
+                        : bmp;
+                    SaveImageSafely(bmp, settings);
                 }
-                else
+                finally
                 {
-                    Logger.Log($"TakeWindowScreenshot: Failed to get window rect for '{windowTitle}'");
+                    if (bmp != null)
+                        bmp.Dispose();
                 }
             });
             if (settings.ShowNotification)
@@ -170,11 +175,37 @@ namespace PluginScreenshot
             }
             ExecuteFinishAction(settings);
         }
+
+        private static Rectangle GetWindowBounds(IntPtr hWnd)
+        {
+            int hr = NativeMethods.DwmGetWindowAttribute(
+                hWnd,
+                NativeMethods.DWMWA_EXTENDED_FRAME_BOUNDS,
+                out NativeMethods.RECT dwmRect,
+                Marshal.SizeOf(typeof(NativeMethods.RECT)));
+            if (hr == 0)
+            {
+                int w = dwmRect.Right - dwmRect.Left;
+                int h = dwmRect.Bottom - dwmRect.Top;
+                if (w > 0 && h > 0)
+                    return new Rectangle(dwmRect.Left, dwmRect.Top, w, h);
+            }
+
+            if (NativeMethods.GetWindowRect(hWnd, out NativeMethods.RECT rect))
+            {
+                return new Rectangle(rect.Left, rect.Top,
+                    rect.Right - rect.Left, rect.Bottom - rect.Top);
+            }
+            return Rectangle.Empty;
+        }
         /// <summary>
         /// Captures a screen rectangle into a new bitmap (multi-monitor stitch).
+        /// When <paramref name="roundCornersForWindow"/> is a top-level Win11 window,
+        /// rounded corners are masked so desktop pixels do not appear in the corners.
         /// Caller owns and must dispose the returned bitmap. Returns null on failure.
         /// </summary>
-        public static Bitmap CaptureRegionToBitmap(Rectangle rect, Settings settings)
+        public static Bitmap CaptureRegionToBitmap(Rectangle rect, Settings settings,
+            IntPtr roundCornersForWindow = default(IntPtr))
         {
             if (rect.Width <= 0 || rect.Height <= 0)
             {
@@ -205,6 +236,11 @@ namespace PluginScreenshot
                         }
                     }
                 }
+
+                if (roundCornersForWindow != IntPtr.Zero &&
+                    settings != null && settings.RoundWindowCorners)
+                    finalBmp = WindowCornerHelper.ApplyRoundedCornersIfNeeded(finalBmp, roundCornersForWindow);
+
                 return finalBmp;
             }
             catch (Exception ex)
@@ -216,14 +252,15 @@ namespace PluginScreenshot
             }
         }
 
-        public static void CompositeCapture(Rectangle rect, Settings settings)
+        public static void CompositeCapture(Rectangle rect, Settings settings,
+            IntPtr roundCornersForWindow = default(IntPtr))
         {
             if (settings == null || string.IsNullOrWhiteSpace(settings.SavePath))
             {
                 Logger.Log("CompositeCapture: no SavePath, skipping.");
                 return;
             }
-            using (var finalBmp = CaptureRegionToBitmap(rect, settings))
+            using (var finalBmp = CaptureRegionToBitmap(rect, settings, roundCornersForWindow))
             {
                 if (finalBmp == null)
                 {
@@ -253,38 +290,64 @@ namespace PluginScreenshot
                 string dir = Path.GetDirectoryName(path);
                 if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
                     Directory.CreateDirectory(dir);
-                using (var clone = new Bitmap(source.Width, source.Height, source.PixelFormat))
+
+                var fmt = GetImageFormat(path);
+
+                // JPEG has no alpha — flatten transparent rounded corners onto black.
+                if (fmt.Guid == ImageFormat.Jpeg.Guid &&
+                    (source.PixelFormat == PixelFormat.Format32bppArgb ||
+                     source.PixelFormat == PixelFormat.Format32bppPArgb))
+                {
+                    using (var opaque = new Bitmap(source.Width, source.Height, PixelFormat.Format24bppRgb))
+                    using (var g = Graphics.FromImage(opaque))
+                    {
+                        g.Clear(Color.Black);
+                        g.DrawImage(source, 0, 0, source.Width, source.Height);
+                        SaveBitmapToStream(opaque, path, fmt, settings);
+                    }
+                    return;
+                }
+
+                using (var clone = new Bitmap(source.Width, source.Height, PixelFormat.Format32bppArgb))
                 using (var g = Graphics.FromImage(clone))
                 {
+                    g.Clear(Color.Transparent);
+                    g.CompositingMode = CompositingMode.SourceCopy;
                     g.DrawImageUnscaled(source, 0, 0);
-                    var fmt = GetImageFormat(path);
-                    using var fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
-                    if (fmt.Guid == ImageFormat.Jpeg.Guid)
-                    {
-                        var enc = ImageCodecInfo
-                                    .GetImageEncoders()
-                                    .FirstOrDefault(e => e.FormatID == ImageFormat.Jpeg.Guid);
-                        if (enc == null)
-                        {
-                            Logger.Log("SaveImageSafely: JPEG encoder not found, falling back to PNG");
-                            clone.Save(fs, ImageFormat.Png);
-                        }
-                        else
-                        {
-                            var pars = new EncoderParameters(1);
-                            pars.Param[0] = new EncoderParameter(Encoder.Quality, settings.JpegQuality);
-                            clone.Save(fs, enc, pars);
-                        }
-                    }
-                    else
-                    {
-                        clone.Save(fs, fmt);
-                    }
+                    SaveBitmapToStream(clone, path, fmt, settings);
                 }
             }
             catch (Exception ex)
             {
                 Logger.Log("Error saving screenshot: " + ex.ToString());
+            }
+        }
+
+        private static void SaveBitmapToStream(Bitmap bitmap, string path, ImageFormat fmt, Settings settings)
+        {
+            using (var fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                if (fmt.Guid == ImageFormat.Jpeg.Guid)
+                {
+                    var enc = ImageCodecInfo
+                                .GetImageEncoders()
+                                .FirstOrDefault(e => e.FormatID == ImageFormat.Jpeg.Guid);
+                    if (enc == null)
+                    {
+                        Logger.Log("SaveImageSafely: JPEG encoder not found, falling back to PNG");
+                        bitmap.Save(fs, ImageFormat.Png);
+                    }
+                    else
+                    {
+                        var pars = new EncoderParameters(1);
+                        pars.Param[0] = new EncoderParameter(Encoder.Quality, settings.JpegQuality);
+                        bitmap.Save(fs, enc, pars);
+                    }
+                }
+                else
+                {
+                    bitmap.Save(fs, fmt);
+                }
             }
         }
         private static ImageFormat GetImageFormat(string path)

@@ -18,6 +18,13 @@ namespace PluginScreenshot
         public bool DetectControls { get; private set; }
 
         /// <summary>
+        /// When true, mask Windows 11 rounded corners on top-level window captures
+        /// so desktop pixels in the sharp rectangle corners are removed.
+        /// Default false for backward compatibility.
+        /// </summary>
+        public bool RoundWindowCorners { get; private set; }
+
+        /// <summary>
         /// Theme for all FinalShot popup windows (Notification, Encoding, Dialog).
         ///   0 = Dark (default)
         ///   1 = Light
@@ -95,6 +102,7 @@ namespace PluginScreenshot
 
             DetectWindows  = api.ReadInt("DetectWindows",  1) > 0;
             DetectControls = api.ReadInt("DetectControls", 1) > 0;
+            RoundWindowCorners = api.ReadInt("RoundWindowCorners", 0) > 0;
 
             OcrLanguage = api.ReadString("OcrLanguage", "en");
             if (string.IsNullOrWhiteSpace(OcrLanguage))
@@ -143,6 +151,7 @@ namespace PluginScreenshot
             Logger.Log("Settings reloaded. SavePath=" + SavePath
                 + "  DetectWindows=" + DetectWindows
                 + "  DetectControls=" + DetectControls
+                + "  RoundWindowCorners=" + RoundWindowCorners
                 + "  OcrLanguage=" + OcrLanguage
                 + "  OcrScaleFactor=" + OcrScaleFactor
                 + "  OcrSingleLine=" + OcrSingleLine
