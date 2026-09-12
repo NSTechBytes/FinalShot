@@ -411,9 +411,7 @@ namespace PluginScreenshot
                         Logger.Log("GifCaptureManager.EncodeAndFinish: no frames, skipping save.");
                         return;
                     }
-                    AnimatedGifEncoder.Encode(frames, settings.GifSavePath,
-                                              settings.EncoderQuality,
-                                              settings.GifCompressionLevel);
+                    AnimatedGifEncoder.Encode(frames, settings.GifSavePath);
                     success = true;
                 }
                 finally
