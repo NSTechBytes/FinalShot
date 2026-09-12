@@ -17,7 +17,7 @@ namespace PluginScreenshot
 
         /// <summary>
         /// Last successfully recognized text (empty after cancel/failure).
-        /// Exposed to Rainmeter via GetOCRText().
+        /// Exposed to Rainmeter via GetLastOCRText().
         /// </summary>
         public static string LastOcrText
         {
@@ -117,8 +117,17 @@ namespace PluginScreenshot
                     }
                 }
 
-                if (settings.ShowNotification)
+                if (settings.ShowOcrWindow)
+                {
+                    Logger.Log("OcrManager: showing OCR result window.");
+                    string edited = OcrResultWindow.ShowDialog(LastOcrText, bmp, settings.UITheme);
+                    LastOcrText = edited ?? "";
+                    Logger.Log("OcrManager: OCR window closed, text length=" + LastOcrText.Length);
+                }
+                else if (settings.ShowNotification)
+                {
                     ShowOcrNotification(bmp, settings);
+                }
 
                 ExecuteOcrFinishAction(settings);
             }

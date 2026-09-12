@@ -36,7 +36,7 @@ FinalShot supports full‑screen captures, predefined regions, custom selection,
   Supports two modes: exclusive window capture (using `PrintWindow` API) or screen-based capture (includes overlapping windows).
 
 - **OCR Text Extract** (`-ocr`)  
-  Opens the same Smart Window Snap overlay as custom capture. Hover a window or control and click, or drag a free region — then extract text with Windows OCR, copy it to the clipboard, and expose it via `GetOCRText()`.
+  Opens the same Smart Window Snap overlay as custom capture. Hover a window or control and click, or drag a free region — then extract text with Windows OCR, copy it to the clipboard, and expose it via `GetLastOCRText()`. Set `ShowOCRWindow=1` to open an editable result window.
 
 - **Toast Notifications**  
   Beautiful themed notifications that adapt to Windows Dark/Light mode with screenshot preview.
@@ -182,7 +182,8 @@ DebugLog=0
   [!CommandMeasure MeasureScreenshot "-ocr"]
   ```
   Opens the snap overlay. Click a highlighted window/control or drag a region.  
-  Text is copied to the clipboard and available as `[&MeasureScreenshot:GetOCRText()]`.
+  Text is copied to the clipboard and available as `[&MeasureScreenshot:GetLastOCRText()]`.  
+  With `ShowOCRWindow=1`, an editable result window is shown first.
 
 - **Batch Execution**  
   ```ini
@@ -210,6 +211,7 @@ DebugLog=0
 | `OcrLanguage`                 | Windows OCR language tag (e.g. `en`, `en-US`, `de`). Pack must be installed.                  | `en`    |
 | `OcrScaleFactor`              | Upscale factor before OCR (1–4). Higher can improve small text.                               | 2       |
 | `OcrSingleLine`               | Join OCR lines with spaces instead of newlines. (1 = yes, 0 = no)                             | 0       |
+| `ShowOCRWindow`               | Show editable OCR result window after recognition. (1 = yes, 0 = silent clipboard only)       | 0       |
 | `OCRFinishAction`             | Rainmeter bang or command to run after successful OCR.                                        | (empty) |
 | `DebugLog`                    | Enable debug logging? (1 = yes, 0 = no).                                                        | 0       |
 | `DebugLogPath`                | Custom path for the debug log file (overrides default `FinalShotDebug.log`).                   | (empty) |
@@ -279,15 +281,15 @@ Plugin=FinalShot
 OcrLanguage=en
 OcrScaleFactor=2
 OcrSingleLine=0
+ShowOCRWindow=1
 DetectWindows=1
 DetectControls=1
-ShowNotification=1
+ShowNotification=0
 OCRFinishAction=[!UpdateMeter MeterOCRResult][!Redraw]
 
 [MeterOCRResult]
 Meter=String
-MeasureName=MeasureOCR
-Text=OCR: [&MeasureOCR:GetOCRText()]
+Text=OCR: [&MeasureOCR:GetLastOCRText()]
 DynamicVariables=1
 ClipString=1
 W=400
@@ -297,7 +299,8 @@ Meter=String
 Text=Extract Text
 LeftMouseUpAction=[!CommandMeasure MeasureOCR "-ocr"]
 ```
-Hover a window/control and click, or drag a region. Text is copied to the clipboard.
+Hover a window/control and click, or drag a region. Text is copied to the clipboard.  
+With `ShowOCRWindow=1`, edit the result then Close — `GetLastOCRText()` reflects any edits.
 
 ### Window Capture (Exclusive Mode)
 ```ini

@@ -187,10 +187,11 @@ namespace PluginScreenshot
 
         /// <summary>
         /// Returns the last OCR result text (empty if none / cancelled / failed).
-        /// Usage: [&Measure_FinalShot:GetOCRText()]
+        /// After ShowOCRWindow=1, this reflects any edits made in the result window.
+        /// Usage: [&Measure_FinalShot:GetLastOCRText()]
         /// </summary>
         [DllExport]
-        public static IntPtr GetOCRText(IntPtr data, int argc,
+        public static IntPtr GetLastOCRText(IntPtr data, int argc,
             [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr, SizeParamIndex = 1)] string[] argv)
         {
             return Rainmeter.StringBuffer.Update(OcrManager.LastOcrText);

@@ -68,6 +68,12 @@ namespace PluginScreenshot
         /// <summary>Bang executed after successful OCR (not on cancel).</summary>
         public string OcrFinishAction { get; private set; }
 
+        /// <summary>
+        /// When true, show an OCR result window after recognition (edit / copy / close).
+        /// Default false (silent clipboard mode).
+        /// </summary>
+        public bool ShowOcrWindow { get; private set; }
+
         public Settings(API api)
         {
             Api              = api;
@@ -105,6 +111,7 @@ namespace PluginScreenshot
 
             OcrSingleLine    = api.ReadInt("OcrSingleLine", 0) > 0;
             OcrFinishAction  = api.ReadString("OCRFinishAction", "");
+            ShowOcrWindow    = api.ReadInt("ShowOCRWindow", 0) > 0;
 
             GifSavePath = api.ReadString("GifSavePath", "");
             GifFPS      = api.ReadInt("GifFPS", 10);
@@ -139,6 +146,7 @@ namespace PluginScreenshot
                 + "  OcrLanguage=" + OcrLanguage
                 + "  OcrScaleFactor=" + OcrScaleFactor
                 + "  OcrSingleLine=" + OcrSingleLine
+                + "  ShowOCRWindow=" + ShowOcrWindow
                 + "  OCRFinishAction=" + (string.IsNullOrEmpty(OcrFinishAction) ? "(none)" : "(set)")
                 + "  GifSavePath=" + GifSavePath
                 + "  GifFPS=" + GifFPS
