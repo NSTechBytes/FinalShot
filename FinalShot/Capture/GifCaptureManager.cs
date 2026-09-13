@@ -475,31 +475,48 @@ namespace PluginScreenshot
             }
         }
 
-        // Fast FNV-1a over BGRA pixels. Used only to detect exact still frames.
+        // Sampled FNV-1a for still-frame coalesce. Full-pixel hash dominated CPU vs
+        // CopyFromScreen; a ~48×48 grid + corners is enough to catch motionless content.
         private static ulong HashBitmapPixels(Bitmap bmp)
         {
-            var bd = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height),
+            int w = bmp.Width;
+            int h = bmp.Height;
+            var bd = bmp.LockBits(new Rectangle(0, 0, w, h),
                                   ImageLockMode.ReadOnly,
                                   PixelFormat.Format32bppArgb);
             try
             {
                 ulong hash = 14695981039346656037UL;
-                int h = bmp.Height;
-                int rowBytes = bmp.Width * 4;
-                byte[] row = new byte[rowBytes];
-                for (int y = 0; y < h; y++)
+                IntPtr scan0 = bd.Scan0;
+                int stride = bd.Stride;
+                int stepX = Math.Max(1, w / 48);
+                int stepY = Math.Max(1, h / 48);
+
+                for (int y = 0; y < h; y += stepY)
                 {
-                    Marshal.Copy(IntPtr.Add(bd.Scan0, y * bd.Stride), row, 0, rowBytes);
-                    for (int i = 0; i < rowBytes; i++)
+                    int row = y * stride;
+                    for (int x = 0; x < w; x += stepX)
                     {
-                        hash ^= row[i];
+                        hash ^= (uint)Marshal.ReadInt32(scan0, row + x * 4);
                         hash *= 1099511628211UL;
                     }
                 }
-                // Mix dimensions so same pixels at different sizes never collide
-                hash ^= (uint)bmp.Width;
+
+                // Corners + center catch chrome/cursor the coarse grid might miss
+                hash ^= (uint)Marshal.ReadInt32(scan0, 0);
                 hash *= 1099511628211UL;
-                hash ^= (uint)bmp.Height;
+                hash ^= (uint)Marshal.ReadInt32(scan0, (w - 1) * 4);
+                hash *= 1099511628211UL;
+                hash ^= (uint)Marshal.ReadInt32(scan0, (h - 1) * stride);
+                hash *= 1099511628211UL;
+                hash ^= (uint)Marshal.ReadInt32(scan0, (h - 1) * stride + (w - 1) * 4);
+                hash *= 1099511628211UL;
+                hash ^= (uint)Marshal.ReadInt32(scan0, (h / 2) * stride + (w / 2) * 4);
+                hash *= 1099511628211UL;
+
+                hash ^= (uint)w;
+                hash *= 1099511628211UL;
+                hash ^= (uint)h;
                 hash *= 1099511628211UL;
                 return hash;
             }

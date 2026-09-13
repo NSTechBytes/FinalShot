@@ -160,17 +160,17 @@ namespace PluginScreenshot
                         : QuantizeNoDither(bgra, w, h, cube);
                     bgra = null;
 
-                    if (prevIndices != null && BytesEqual(indices, prevIndices))
+                    if (prevIndices != null)
                     {
-                        pendingCs += delayCs;
-                        Logger.Log($"AnimatedGifEncoder: frame {frameNum} duplicate skipped.");
-                        continue;
-                    }
-
-                    if (prevIndices != null && nearDupeThreshold > 0)
-                    {
+                        // One pass: exact dupe + near-dupe (was BytesEqual then CountChangedPixels)
                         long changedCount = CountChangedPixels(indices, prevIndices);
-                        if (changedCount < nearDupeThreshold)
+                        if (changedCount == 0)
+                        {
+                            pendingCs += delayCs;
+                            Logger.Log($"AnimatedGifEncoder: frame {frameNum} duplicate skipped.");
+                            continue;
+                        }
+                        if (nearDupeThreshold > 0 && changedCount < nearDupeThreshold)
                         {
                             pendingCs += delayCs;
                             nearDupes++;
@@ -253,30 +253,7 @@ namespace PluginScreenshot
             return delta;
         }
 
-        //  Changed-rect: bounding box of differing pixels between two frames
-
-        // Returns the minimal axis-aligned bounding box of pixels whose palette
-        // index differs between current and previous, or null when every pixel
-        // is identical (the frame should be skipped entirely).
-        private static Rectangle? ComputeChangedRect(byte[] current, byte[] previous,
-                                                      int w, int h)
-        {
-            int minX = w, maxX = -1, minY = h, maxY = -1;
-            for (int y = 0; y < h; y++)
-            {
-                int rowBase = y * w;
-                for (int x = 0; x < w; x++)
-                {
-                    if (current[rowBase + x] == previous[rowBase + x]) continue;
-                    if (x < minX) minX = x;
-                    if (x > maxX) maxX = x;
-                    if (y < minY) minY = y;
-                    if (y > maxY) maxY = y;
-                }
-            }
-            if (maxX < 0) return null; // nothing changed
-            return new Rectangle(minX, minY, maxX - minX + 1, maxY - minY + 1);
-        }
+        //  Changed-rect helpers
 
         private static long CountChangedPixels(byte[] current, byte[] previous)
         {
@@ -296,7 +273,7 @@ namespace PluginScreenshot
                                                          int bandAreaPercent = 85,
                                                          int maxBands = 6)
         {
-            const int MergeGapRows = 8; // merge bands separated by tiny quiet gaps
+            const int MergeGapRows = 8;
             if (bandAreaPercent < 50) bandAreaPercent = 50;
             if (bandAreaPercent > 100) bandAreaPercent = 100;
             if (maxBands < 1) maxBands = 1;
@@ -320,7 +297,6 @@ namespace PluginScreenshot
             if (dirtyRowCount == 0)
                 return null;
 
-            // Build row-run bands, merging runs separated by <= MergeGapRows
             var rawBands = new List<(int y0, int y1)>();
             int i = 0;
             while (i < h)
@@ -344,6 +320,7 @@ namespace PluginScreenshot
 
             var bands = new List<Rectangle>(rawBands.Count);
             long bandArea = 0;
+            int aabbMinX = w, aabbMaxX = -1, aabbMinY = h, aabbMaxY = -1;
             foreach (var (y0, y1) in rawBands)
             {
                 int minX = w, maxX = -1;
@@ -361,33 +338,36 @@ namespace PluginScreenshot
                 var r = new Rectangle(minX, y0, maxX - minX + 1, y1 - y0 + 1);
                 bands.Add(r);
                 bandArea += (long)r.Width * r.Height;
+                if (minX < aabbMinX) aabbMinX = minX;
+                if (maxX > aabbMaxX) aabbMaxX = maxX;
+                if (y0 < aabbMinY) aabbMinY = y0;
+                if (y1 > aabbMaxY) aabbMaxY = y1;
             }
 
             if (bands.Count == 0)
                 return null;
 
-            // If banding barely helps vs one AABB, keep a single rect (simpler LZW).
-            Rectangle? aabb = ComputeChangedRect(current, previous, w, h);
-            if (aabb != null && bands.Count > 1)
+            // AABB built during band scan — no second full-frame ComputeChangedRect pass
+            var aabb = new Rectangle(aabbMinX, aabbMinY,
+                aabbMaxX - aabbMinX + 1, aabbMaxY - aabbMinY + 1);
+
+            if (bands.Count > 1)
             {
-                long aabbArea = (long)aabb.Value.Width * aabb.Value.Height;
+                long aabbArea = (long)aabb.Width * aabb.Height;
                 if (bandArea >= aabbArea * bandAreaPercent / 100)
-                    return new List<Rectangle> { aabb.Value };
+                    return new List<Rectangle> { aabb };
             }
             else if (bands.Count == 1)
             {
                 return bands;
             }
 
-            // Cap band count to avoid GCE overhead on noisy frames
-            if (bands.Count > maxBands && aabb != null)
-                return new List<Rectangle> { aabb.Value };
+            if (bands.Count > maxBands)
+                return new List<Rectangle> { aabb };
 
             return bands;
         }
 
-        // Copies the pixels inside rect from the flat (stride = fullW) index array
-        // into a compact row-major array of size rect.Width x rect.Height.
         private static byte[] ExtractSubRect(byte[] indices, int fullW, Rectangle rect)
         {
             byte[] sub = new byte[rect.Width * rect.Height];
@@ -400,26 +380,12 @@ namespace PluginScreenshot
             return sub;
         }
 
-        //  Fast byte-array equality check
-
+        // Allocation-free equality (kept for callers outside the encode hot path)
         internal static bool BytesEqual(byte[] a, byte[] b)
         {
-            if (a.Length != b.Length) return false;
-            int chunks = a.Length / 8;
-            int rem    = a.Length % 8;
-            if (chunks > 0)
-            {
-                long[] la = new long[chunks];
-                long[] lb = new long[chunks];
-                Buffer.BlockCopy(a, 0, la, 0, chunks * 8);
-                Buffer.BlockCopy(b, 0, lb, 0, chunks * 8);
-                for (int i = 0; i < chunks; i++)
-                    if (la[i] != lb[i]) return false;
-            }
-            int off = chunks * 8;
-            for (int i = 0; i < rem; i++)
-                if (a[off + i] != b[off + i]) return false;
-            return true;
+            if (ReferenceEquals(a, b)) return true;
+            if (a == null || b == null || a.Length != b.Length) return false;
+            return CountChangedPixels(a, b) == 0;
         }
 
         //  Read raw BGRA bytes from bitmap

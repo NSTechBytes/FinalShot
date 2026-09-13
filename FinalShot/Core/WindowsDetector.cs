@@ -139,7 +139,8 @@ namespace PluginScreenshot
                     _parentHandles.Add(hWnd);
                     Rectangle parentRect = rect;
 
-                    // Store delegate in a named local to prevent GC during P/Invoke
+                    // EnumChildWindows already walks all descendants — call once
+                    // from the top-level only (nested calls duplicated HWNDs).
                     NativeMethods.EnumWindowsProc childCb =
                         (childHwnd, _lp) => CheckHandle(childHwnd, parentRect);
                     NativeMethods.EnumChildWindows(hWnd, childCb, IntPtr.Zero);
@@ -157,19 +158,7 @@ namespace PluginScreenshot
                     });
                 }
             }
-            else
-            {
-                // Track child containers so we don't recurse into the same handle twice
-                if (IncludeChildWindows && !_parentHandles.Contains(hWnd))
-                {
-                    _parentHandles.Add(hWnd);
-                    Rectangle childRect = rect;
-
-                    NativeMethods.EnumWindowsProc grandChildCb =
-                        (grandChild, _lp) => CheckHandle(grandChild, childRect);
-                    NativeMethods.EnumChildWindows(hWnd, grandChildCb, IntPtr.Zero);
-                }
-            }
+            // Child path: do not nest EnumChildWindows — parent enum already covers descendants.
 
             // Add self last so all children appear before this entry in _results
             _results.Add(new WindowInfo
