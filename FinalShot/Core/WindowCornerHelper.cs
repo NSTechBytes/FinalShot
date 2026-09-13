@@ -17,22 +17,25 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace PluginScreenshot
 {
-    // Clears Windows 11 rounded-corner "desktop bleed" from rectangular window captures
-    // by masking outside the DWM rounded path to transparent pixels.
+    /// <summary>
+    /// Windows 11 rounded-corner mask (CaptureGraphicsWin2D-compatible).
+    /// Clears desktop bleed outside the DWM rounded rect to transparent pixels.
+    /// </summary>
     internal static class WindowCornerHelper
     {
-        // DWM_WINDOW_CORNER_PREFERENCE
+        // DWM_WINDOW_CORNER_PREFERENCE (same as CaptureGraphicsWin2D)
         private const int DWMWCP_DEFAULT    = 0;
         private const int DWMWCP_DONOTROUND = 1;
         private const int DWMWCP_ROUND      = 2;
         private const int DWMWCP_ROUNDSMALL = 3;
 
-        // Design-time radii at 96 DPI (Win11 system chrome)
-        private const float RoundRadiusDip      = 8f;
-        private const float RoundSmallRadiusDip = 4f;
+        private const string ClassDesktop = "Progman";
+        private const string ClassTaskbar = "Shell_TrayWnd";
+        private const float ScaleFactor1 = 96.0f;
 
         private static readonly Version Windows11Version = new Version(10, 0, 22000);
 
@@ -40,7 +43,6 @@ namespace PluginScreenshot
         {
             try
             {
-                // Prefer build number via RtlGetVersion -- Environment.OSVersion is often capped.
                 var info = new OSVERSIONINFOEX
                 {
                     dwOSVersionInfoSize = Marshal.SizeOf(typeof(OSVERSIONINFOEX))
@@ -63,82 +65,108 @@ namespace PluginScreenshot
             }
         }
 
-        // Returns the pixel corner radius for hWnd, or 0 if no rounding.
-        public static int GetCornerRadiusPixels(IntPtr hWnd)
+        /// <summary>
+        /// CaptureGraphicsWin2D-compatible corner radius in pixels (float).
+        /// Maximized / desktop / taskbar / DONOTROUND → 0.
+        /// ROUND / DEFAULT → 8 × (DPI/96); ROUNDSMALL → 4 × (DPI/96).
+        /// </summary>
+        public static float GetWindowCornerRadius(IntPtr hwnd)
         {
-            if (hWnd == IntPtr.Zero || !IsWindows11OrGreater())
-                return 0;
+            if (hwnd == IntPtr.Zero || !IsWindows11OrGreater())
+                return 0f;
 
             try
             {
-                if (IsZoomed(hWnd))
-                    return 0; // Maximized windows are square on Win11
+                // Maximized windows never have rounded corners
+                if (IsZoomed(hwnd))
+                    return 0f;
 
-                int preference = DWMWCP_DEFAULT;
+                string cls = GetWindowClassName(hwnd);
+                if (string.Equals(cls, ClassDesktop, StringComparison.Ordinal)
+                    || string.Equals(cls, ClassTaskbar, StringComparison.Ordinal))
+                {
+                    return 0f;
+                }
+
+                int preference;
                 int hr = NativeMethods.DwmGetWindowAttribute(
-                    hWnd,
+                    hwnd,
                     NativeMethods.DWMWA_WINDOW_CORNER_PREFERENCE,
                     out preference,
                     sizeof(int));
 
+                // Match CaptureGraphicsWin2D: only trust S_OK; otherwise no rounding
                 if (hr != 0)
-                    preference = DWMWCP_DEFAULT;
+                    return 0f;
 
-                float dipRadius;
+                float scale = GetWindowScaleFactor(hwnd);
                 switch (preference)
                 {
                     case DWMWCP_DONOTROUND:
-                        return 0;
+                        return 0f;
                     case DWMWCP_ROUNDSMALL:
-                        dipRadius = RoundSmallRadiusDip;
-                        break;
+                        return scale * 4f; // context menus / small popups
                     case DWMWCP_ROUND:
+                        return scale * 8f;
                     case DWMWCP_DEFAULT:
+                        return scale * 8f; // Win11 default for top-level windows
                     default:
-                        // Most top-level app windows use standard rounding under DEFAULT.
-                        dipRadius = RoundRadiusDip;
-                        break;
+                        return 0f;
                 }
-
-                uint dpi = 96;
-                try { dpi = GetDpiForWindow(hWnd); }
-                catch { dpi = 96; }
-                if (dpi == 0) dpi = 96;
-
-                int px = (int)Math.Round(dipRadius * dpi / 96.0);
-                return Math.Max(0, px);
             }
             catch (Exception ex)
             {
-                Logger.Log("WindowCornerHelper.GetCornerRadiusPixels: " + ex.Message);
-                return 0;
+                Logger.Log("WindowCornerHelper.GetWindowCornerRadius: " + ex.Message);
+                return 0f;
             }
         }
 
-        // If the window has rounded corners, returns a new 32bpp ARGB bitmap with
-        // outside-corner pixels cleared. Otherwise returns source unchanged.
-        // When a new bitmap is returned, source is disposed.
+        /// <summary>DPI / 96 — same as CaptureGraphicsWin2D.GetWindowScaleFactor.</summary>
+        public static float GetWindowScaleFactor(IntPtr hwnd)
+        {
+            try
+            {
+                uint dpi = GetDpiForWindow(hwnd);
+                if (dpi == 0) dpi = 96;
+                return dpi / ScaleFactor1;
+            }
+            catch
+            {
+                return 1f;
+            }
+        }
+
+        /// <summary>
+        /// If the window has rounded corners, returns a new 32bpp ARGB bitmap
+        /// clipped to the rounded rect (transparent outside). Otherwise returns
+        /// <paramref name="source"/> unchanged. When a new bitmap is returned,
+        /// <paramref name="source"/> is disposed.
+        /// </summary>
         public static Bitmap ApplyRoundedCornersIfNeeded(Bitmap source, IntPtr hWnd)
         {
             if (source == null || hWnd == IntPtr.Zero)
                 return source;
 
-            int radius = GetCornerRadiusPixels(hWnd);
-            if (radius <= 0)
+            float radius = GetWindowCornerRadius(hWnd);
+            if (radius <= 0f)
                 return source;
 
-            Logger.Log("WindowCornerHelper: applying rounded corners, radius=" + radius + "px");
+            Logger.Log("WindowCornerHelper: applying rounded corners (Win2D-style), radius="
+                       + radius.ToString("0.##") + "px");
             Bitmap rounded = ApplyRoundedCorners(source, radius);
             source.Dispose();
             return rounded;
         }
 
-        // Draws source clipped to a rounded rectangle onto a transparent canvas.
-        public static Bitmap ApplyRoundedCorners(Bitmap source, int cornerRadius)
+        /// <summary>
+        /// Win2D CreateLayer(roundedRect) equivalent:
+        /// clear transparent → clip to rounded rect → draw source.
+        /// </summary>
+        public static Bitmap ApplyRoundedCorners(Bitmap source, float cornerRadius)
         {
             if (source == null)
                 return null;
-            if (cornerRadius <= 0)
+            if (cornerRadius <= 0f)
                 return new Bitmap(source);
 
             int w = source.Width;
@@ -148,23 +176,31 @@ namespace PluginScreenshot
             var result = new Bitmap(w, h, PixelFormat.Format32bppArgb);
             using (var g = Graphics.FromImage(result))
             {
+                // Match Win2D: Clear(0,0,0,0) then DrawImage inside rounded geometry
                 g.Clear(Color.Transparent);
                 g.SmoothingMode = SmoothingMode.AntiAlias;
                 g.PixelOffsetMode = PixelOffsetMode.HighQuality;
-                g.CompositingMode = CompositingMode.SourceCopy;
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.CompositingMode = CompositingMode.SourceOver;
                 g.CompositingQuality = CompositingQuality.HighQuality;
 
                 using (var path = CreateRoundedRectanglePath(new RectangleF(0, 0, w, h), radius))
-                using (var brush = new TextureBrush(source))
                 {
-                    g.FillPath(brush, path);
+                    g.SetClip(path);
+                    g.DrawImage(source, 0, 0, w, h);
+                    g.ResetClip();
                 }
             }
             return result;
         }
 
+        // Kept for call sites that pass an integer radius
+        public static Bitmap ApplyRoundedCorners(Bitmap source, int cornerRadius)
+            => ApplyRoundedCorners(source, (float)cornerRadius);
+
         private static GraphicsPath CreateRoundedRectanglePath(RectangleF rect, float radius)
         {
+            // Same construction as CanvasGeometry.CreateRoundedRectangle
             var path = new GraphicsPath();
             if (radius <= 0.5f)
             {
@@ -180,20 +216,22 @@ namespace PluginScreenshot
             }
 
             var arc = new RectangleF(rect.Location, new SizeF(diameter, diameter));
-
-            // Top-left
-            path.AddArc(arc, 180, 90);
-            // Top-right
+            path.AddArc(arc, 180, 90); // top-left
             arc.X = rect.Right - diameter;
-            path.AddArc(arc, 270, 90);
-            // Bottom-right
+            path.AddArc(arc, 270, 90); // top-right
             arc.Y = rect.Bottom - diameter;
-            path.AddArc(arc, 0, 90);
-            // Bottom-left
+            path.AddArc(arc, 0, 90);   // bottom-right
             arc.X = rect.Left;
-            path.AddArc(arc, 90, 90);
+            path.AddArc(arc, 90, 90);  // bottom-left
             path.CloseFigure();
             return path;
+        }
+
+        private static string GetWindowClassName(IntPtr hwnd)
+        {
+            var sb = new StringBuilder(256);
+            NativeMethods.GetClassName(hwnd, sb, sb.Capacity);
+            return sb.ToString();
         }
 
         [DllImport("ntdll.dll")]
