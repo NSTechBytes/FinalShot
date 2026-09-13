@@ -101,6 +101,8 @@ namespace PluginScreenshot
         public string HotkeyFullscreen { get; private set; }
         public string HotkeyPredefined { get; private set; }
         public string HotkeyCustom { get; private set; }
+        public string HotkeyWindowHandle { get; private set; }
+        public string HotkeyStoredWindow { get; private set; }
         public string HotkeyOcr { get; private set; }
         public string HotkeyGifToggle { get; private set; }
         public string HotkeyGifToggleSnap { get; private set; }
@@ -150,6 +152,8 @@ namespace PluginScreenshot
             HotkeyFullscreen     = api.ReadString("HotkeyFullscreen", "");
             HotkeyPredefined     = api.ReadString("HotkeyPredefined", "");
             HotkeyCustom         = api.ReadString("HotkeyCustom", "");
+            HotkeyWindowHandle   = api.ReadString("HotkeyWindowHandle", "");
+            HotkeyStoredWindow   = api.ReadString("HotkeyStoredWindow", "");
             HotkeyOcr            = api.ReadString("HotkeyOCR", "");
             HotkeyGifToggle      = api.ReadString("HotkeyGifToggle", "");
             HotkeyGifToggleSnap  = api.ReadString("HotkeyGifToggleSnap", "");
@@ -200,6 +204,8 @@ namespace PluginScreenshot
                 + "  OCRFinishAction=" + (string.IsNullOrEmpty(OcrFinishAction) ? "(none)" : "(set)")
                 + "  HotkeysEnabled=" + HotkeysEnabled
                 + "  HotkeyCustom=" + (string.IsNullOrEmpty(HotkeyCustom) ? "(none)" : HotkeyCustom)
+                + "  HotkeyWindowHandle=" + (string.IsNullOrEmpty(HotkeyWindowHandle) ? "(none)" : HotkeyWindowHandle)
+                + "  HotkeyStoredWindow=" + (string.IsNullOrEmpty(HotkeyStoredWindow) ? "(none)" : HotkeyStoredWindow)
                 + "  HotkeyOCR=" + (string.IsNullOrEmpty(HotkeyOcr) ? "(none)" : HotkeyOcr)
                 + "  GifSavePath=" + GifSavePath
                 + "  GifFPS=" + GifFPS

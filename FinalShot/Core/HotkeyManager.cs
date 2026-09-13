@@ -106,6 +106,8 @@ namespace PluginScreenshot
             TryAdd(list, settings, settings.HotkeyFullscreen, HotkeyAction.Fullscreen);
             TryAdd(list, settings, settings.HotkeyPredefined, HotkeyAction.Predefined);
             TryAdd(list, settings, settings.HotkeyCustom, HotkeyAction.Custom);
+            TryAdd(list, settings, settings.HotkeyWindowHandle, HotkeyAction.WindowHandle);
+            TryAdd(list, settings, settings.HotkeyStoredWindow, HotkeyAction.StoredWindow);
             TryAdd(list, settings, settings.HotkeyOcr, HotkeyAction.Ocr);
             TryAdd(list, settings, settings.HotkeyGifToggle, HotkeyAction.GifToggle);
             TryAdd(list, settings, settings.HotkeyGifToggleSnap, HotkeyAction.GifToggleSnap);

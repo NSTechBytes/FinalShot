@@ -15,16 +15,23 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Drawing.Drawing2D;
 using System.Threading;
 using System.Windows.Forms;
 
 namespace PluginScreenshot
 {
+    public enum CustomScreenshotMode
+    {
+        Capture = 0,
+        WindowHandlePick = 1
+    }
+
     public class CustomScreenshotForm : Form
     {
         private readonly Settings _settings;
         private readonly Action   _finishCallback;
+        private readonly CustomScreenshotMode _mode;
+        private readonly bool _detectWindows;
 
         // Desktop snapshot -- shown dimmed; the hovered/selected region is shown undimmed.
         private Bitmap _desktopSnapshot;
@@ -44,13 +51,14 @@ namespace PluginScreenshot
 
         // Spawns a fresh STA thread and blocks until the form closes.
         // Using a new thread every time prevents the Rainmeter crash on the second call.
-        public static void RunModal(Settings settings, Action finishCallback)
+        public static void RunModal(Settings settings, Action finishCallback,
+            CustomScreenshotMode mode = CustomScreenshotMode.Capture)
         {
             var thread = new Thread(() =>
             {
                 try
                 {
-                    Application.Run(new CustomScreenshotForm(settings, finishCallback));
+                    Application.Run(new CustomScreenshotForm(settings, finishCallback, mode));
                 }
                 catch (Exception ex)
                 {
@@ -66,11 +74,15 @@ namespace PluginScreenshot
 
         //  Constructor
 
-        public CustomScreenshotForm(Settings settings, Action finishCallback)
+        public CustomScreenshotForm(Settings settings, Action finishCallback,
+            CustomScreenshotMode mode = CustomScreenshotMode.Capture)
         {
             NativeMethods.SetThreadDpiAwarenessContext(NativeMethods.DPI_PER_MONITOR_AWARE_V2);
             _settings       = settings;
             _finishCallback = finishCallback;
+            _mode           = mode;
+            // Window-handle pick always enables detection (plan: window-only select).
+            _detectWindows  = mode == CustomScreenshotMode.WindowHandlePick || settings.DetectWindows;
 
             // Snapshot the desktop before the overlay appears so we can render
             // the dimmed background and the undimmed highlighted region ourselves.
@@ -99,11 +111,13 @@ namespace PluginScreenshot
             Paint     += OnPaint;
         }
 
+        private bool IsHandlePick => _mode == CustomScreenshotMode.WindowHandlePick;
+
         //  Form Load -- enumerate windows on a background thread
 
         private void OnFormLoad(object sender, EventArgs e)
         {
-            if (!_settings.DetectWindows) return;
+            if (!_detectWindows) return;
 
             var form = this;
             ThreadPool.QueueUserWorkItem(_ =>
@@ -112,7 +126,9 @@ namespace PluginScreenshot
                 {
                     var detector = new WindowsDetector
                     {
-                        IncludeChildWindows = _settings.DetectControls
+                        // Handle-pick prefers top-level windows; still allow controls
+                        // then walk to GA_ROOT on confirm.
+                        IncludeChildWindows = !IsHandlePick && _settings.DetectControls
                     };
                     detector.IgnoreHandles.Add(form.Handle);
 
@@ -156,9 +172,15 @@ namespace PluginScreenshot
 
             _start = e.Location;
 
-            if (_windowsLoaded && _hoveredWindow != null && _settings.DetectWindows)
+            if (_windowsLoaded && _hoveredWindow != null && _detectWindows)
             {
                 _pendingWindowCapture = true;
+                _dragging             = false;
+            }
+            else if (IsHandlePick)
+            {
+                // Window-only mode: ignore free-drag clicks with no hover target.
+                _pendingWindowCapture = false;
                 _dragging             = false;
             }
             else
@@ -173,6 +195,7 @@ namespace PluginScreenshot
         private void OnMouseMove(object s, MouseEventArgs e)
         {
             // Switch from pending-capture to free-drag if the user moves > 4 px.
+            // In handle-pick mode, free-drag is disabled — cancel the pending click.
             if (_pendingWindowCapture)
             {
                 double dist = Math.Sqrt(
@@ -182,8 +205,14 @@ namespace PluginScreenshot
                 if (dist >= 4)
                 {
                     _pendingWindowCapture = false;
-                    _hoveredWindow        = null;
-                    _dragging             = true;
+                    if (IsHandlePick)
+                    {
+                        _hoveredWindow = null;
+                        Invalidate();
+                        return;
+                    }
+                    _hoveredWindow = null;
+                    _dragging      = true;
                 }
                 else
                 {
@@ -193,6 +222,8 @@ namespace PluginScreenshot
 
             if (_dragging)
             {
+                if (IsHandlePick) return;
+
                 _selection = new Rectangle(
                     Math.Min(_start.X, e.X),
                     Math.Min(_start.Y, e.Y),
@@ -203,7 +234,7 @@ namespace PluginScreenshot
             }
 
             // Idle hover: find the topmost window under the cursor.
-            if (_windowsLoaded && _settings.DetectWindows)
+            if (_windowsLoaded && _detectWindows)
             {
                 Point      screenPt = PointToScreen(e.Location);
                 WindowInfo found    = null;
@@ -231,10 +262,29 @@ namespace PluginScreenshot
         {
             if (e.Button != MouseButtons.Left) return;
 
-            // Window-snap capture
+            // Window-snap: capture or store handle
             if (_pendingWindowCapture && _hoveredWindow != null)
             {
                 _pendingWindowCapture = false;
+
+                if (IsHandlePick)
+                {
+                    IntPtr target = NativeMethods.GetTopLevelWindow(_hoveredWindow.Handle);
+                    string title = NativeMethods.GetWindowTitle(target);
+                    if (string.IsNullOrEmpty(title))
+                        title = NativeMethods.GetWindowTitle(_hoveredWindow.Handle);
+
+                    StoredWindowTarget.Set(target, title);
+                    if (_settings.PlayNotificationSound)
+                        NotificationSound.Play();
+
+                    Logger.Log("WindowHandlePick: stored '" + title + "' HWND=" + target.ToInt64());
+                    Hide();
+                    _finishCallback?.Invoke();
+                    Close();
+                    return;
+                }
+
                 Rectangle captureRect = _hoveredWindow.Rectangle;
                 // Only mask Win11 rounded corners for full top-level window snaps
                 // (not client-area / child-control snaps).
@@ -244,8 +294,15 @@ namespace PluginScreenshot
                 Logger.Log("Window capture: " + captureRect + " roundCorners=" + (roundHwnd != IntPtr.Zero));
                 Hide();
                 ScreenshotManager.CompositeCapture(captureRect, _settings, roundHwnd);
-                _finishCallback();
+                _finishCallback?.Invoke();
                 Close();
+                return;
+            }
+
+            if (IsHandlePick)
+            {
+                _dragging             = false;
+                _pendingWindowCapture = false;
                 return;
             }
 
@@ -267,7 +324,7 @@ namespace PluginScreenshot
                 _selection.Height);
 
             ScreenshotManager.CompositeCapture(absRect, _settings);
-            _finishCallback();
+            _finishCallback?.Invoke();
             Close();
         }
 
@@ -283,7 +340,7 @@ namespace PluginScreenshot
             using (var dim = new SolidBrush(GifSnapSelector.DimColor))
                 g.FillRectangle(dim, client);
 
-            if (_dragging && _selection.Width > 1 && _selection.Height > 1)
+            if (!IsHandlePick && _dragging && _selection.Width > 1 && _selection.Height > 1)
             {
                 Rectangle sel = _selection;
 

@@ -220,6 +220,8 @@ namespace PluginScreenshot
         Fullscreen,
         Predefined,
         Custom,
+        WindowHandle,
+        StoredWindow,
         Ocr,
         GifToggle,
         GifToggleSnap

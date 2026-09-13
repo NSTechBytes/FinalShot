@@ -55,6 +55,37 @@ namespace PluginScreenshot
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool IsWindowVisible(IntPtr hWnd);
 
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool IsWindow(IntPtr hWnd);
+
+        // GetAncestor -- walk to root top-level window
+        public const uint GA_ROOT = 2;
+
+        [DllImport("user32.dll")]
+        public static extern IntPtr GetAncestor(IntPtr hwnd, uint gaFlags);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        public static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder lpString, int nMaxCount);
+
+        public static string GetWindowTitle(IntPtr hWnd)
+        {
+            if (hWnd == IntPtr.Zero)
+                return "";
+            var sb = new System.Text.StringBuilder(512);
+            GetWindowText(hWnd, sb, sb.Capacity);
+            return sb.ToString();
+        }
+
+        // Prefer the top-level root when a child control was snapped.
+        public static IntPtr GetTopLevelWindow(IntPtr hWnd)
+        {
+            if (hWnd == IntPtr.Zero)
+                return IntPtr.Zero;
+            IntPtr root = GetAncestor(hWnd, GA_ROOT);
+            return root != IntPtr.Zero ? root : hWnd;
+        }
+
         // Window style and class -- runtime branch handles x86 vs x64
 
         [DllImport("user32.dll", EntryPoint = "GetWindowLong")]

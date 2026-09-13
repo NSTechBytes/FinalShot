@@ -101,6 +101,25 @@ namespace PluginScreenshot
             }
             CustomScreenshotForm.RunModal(settings, finishCallback);
         }
+
+        // Open Smart Window Snap overlay to store a HWND only (no capture).
+        public static void PickWindowHandle(Settings settings)
+        {
+            Logger.Log("PickWindowHandle() called.");
+            CustomScreenshotForm.RunModal(settings, null, CustomScreenshotMode.WindowHandlePick);
+        }
+
+        // Capture previously stored HWND from -wh. Clears store if invalid.
+        public static void TakeStoredWindowScreenshot(Settings settings)
+        {
+            if (!StoredWindowTarget.TryGetValid(out IntPtr hWnd, out string title))
+            {
+                Logger.Log("TakeStoredWindowScreenshot: no valid stored window; aborting.");
+                return;
+            }
+            TakeWindowScreenshot(settings, hWnd, string.IsNullOrEmpty(title) ? "Stored Window" : title);
+        }
+
         public static void TakeWindowScreenshot(Settings settings, string windowTitle)
         {
             Logger.Log($"TakeWindowScreenshot() called. WindowTitle='{windowTitle}', UsePrintWindow={settings.UsePrintWindow}");
@@ -114,12 +133,41 @@ namespace PluginScreenshot
                 Logger.Log("TakeWindowScreenshot: WindowTitle is empty, aborting.");
                 return;
             }
+
+            IntPtr hWnd = IntPtr.Zero;
             WithHighDpiContext(() =>
             {
-                IntPtr hWnd = NativeMethods.FindWindow(null, windowTitle);
-                if (hWnd == IntPtr.Zero)
+                hWnd = NativeMethods.FindWindow(null, windowTitle);
+            });
+
+            if (hWnd == IntPtr.Zero)
+            {
+                Logger.Log($"TakeWindowScreenshot: Window '{windowTitle}' not found.");
+                return;
+            }
+
+            TakeWindowScreenshot(settings, hWnd, windowTitle);
+        }
+
+        public static void TakeWindowScreenshot(Settings settings, IntPtr hWnd, string displayName)
+        {
+            Logger.Log($"TakeWindowScreenshot(HWND) called. HWND={hWnd.ToInt64()}, DisplayName='{displayName}', UsePrintWindow={settings.UsePrintWindow}");
+            if (string.IsNullOrEmpty(settings.SavePath))
+            {
+                Logger.Log("TakeWindowScreenshot: SavePath is empty, aborting.");
+                return;
+            }
+            if (hWnd == IntPtr.Zero || !NativeMethods.IsWindow(hWnd))
+            {
+                Logger.Log("TakeWindowScreenshot: HWND is invalid, aborting.");
+                return;
+            }
+
+            WithHighDpiContext(() =>
+            {
+                if (!NativeMethods.IsWindow(hWnd))
                 {
-                    Logger.Log($"TakeWindowScreenshot: Window '{windowTitle}' not found.");
+                    Logger.Log("TakeWindowScreenshot: HWND became invalid before capture.");
                     return;
                 }
 
@@ -185,7 +233,9 @@ namespace PluginScreenshot
             if (settings.ShowNotification)
             {
                 Logger.Log("TakeWindowScreenshot: ShowNotification is enabled");
-                ShowNotificationWithImage(settings.SavePath, $"Window: {windowTitle}", settings);
+                ShowNotificationWithImage(settings.SavePath,
+                    string.IsNullOrEmpty(displayName) ? "Window" : $"Window: {displayName}",
+                    settings);
             }
             ExecuteFinishAction(settings);
         }

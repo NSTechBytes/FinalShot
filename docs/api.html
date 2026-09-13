@@ -547,6 +547,28 @@
 
                 <div class="api-block">
                     <div class="api-block-header">
+                        <span class="api-name">HotkeyWindowHandle</span>
+                        <span class="api-default">Default: (empty)</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">string</span>
+                        <p>Global hotkey chord to pick and store a window handle (<code>-wh</code>) without capturing yet.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">HotkeyStoredWindow</span>
+                        <span class="api-default">Default: (empty)</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">string</span>
+                        <p>Global hotkey chord to capture the window previously stored by <code>-wh</code> (<code>-ws|</code> with empty title).</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
                         <span class="api-name">HotkeyOCR</span>
                         <span class="api-default">Default: (empty)</span>
                     </div>
@@ -654,11 +676,22 @@
 
                 <div class="api-block">
                     <div class="api-block-header">
+                        <span class="api-name">-wh</span>
+                        <span class="api-default">Store Window Handle</span>
+                    </div>
+                    <div class="api-block-content">
+                        <p>Open the Smart Window Snap overlay (window-only; no free-drag capture). Click a window to store its HWND for later capture. Does not save an image. Title is available via <a href="#section-variables"><code>GetLastStoredWindow()</code></a>.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
                         <span class="api-name">-ws|windowtitle</span>
                         <span class="api-default">Window Capture</span>
                     </div>
                     <div class="api-block-content">
                         <p>Capture a specific window by its exact title. The pipe <code>|</code> separator is followed by the window title string. Use <a href="#screenshot-settings"><code>UsePrintWindow=1</code></a> for exclusive capture.</p>
+                        <p>With an empty title (<code>-ws|</code>), captures the window previously stored by <code>-wh</code>. If that handle is no longer valid, the command aborts and clears the store.</p>
                     </div>
                 </div>
 
@@ -903,6 +936,16 @@
                     </div>
                 </div>
 
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">GetLastStoredWindow()</span>
+                        <span class="api-default">Returns: string</span>
+                    </div>
+                    <div class="api-block-content">
+                        <p>Returns the title of the window stored by <code>-wh</code>. Empty if none has been selected, or if the store was cleared after an invalid <code>-ws|</code> capture attempt.</p>
+                    </div>
+                </div>
+
                 <div class="note">
                     <p><strong>Default measure string:</strong> When the measure is referenced without a function name (e.g. <code>[&amp;Measure_FinalShot]</code>), it returns the current status: <code>Idle</code>, <code>Recording</code>, or <code>Encoding</code>.</p>
                 </div>
@@ -957,6 +1000,8 @@ OCRFinishAction=[!UpdateMeter MeterOCR][!Redraw]
 ; Hotkeys
 HotkeysEnabled=1
 HotkeyCustom=Ctrl+Shift+PrintScreen
+HotkeyWindowHandle=Ctrl+Shift+H
+HotkeyStoredWindow=Ctrl+Shift+W
 HotkeyOCR=Ctrl+Shift+O
 HotkeyGifToggleSnap=Ctrl+Shift+G
 

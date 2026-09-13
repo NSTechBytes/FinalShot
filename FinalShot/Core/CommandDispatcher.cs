@@ -45,6 +45,10 @@ namespace PluginScreenshot
                     ScreenshotManager.ExecuteFinishAction(settings);
                 });
             }
+            else if (string.Equals(cmd, "-wh", StringComparison.OrdinalIgnoreCase))
+            {
+                ScreenshotManager.PickWindowHandle(settings);
+            }
             else if (string.Equals(cmd, "-ocr", StringComparison.OrdinalIgnoreCase))
             {
                 OcrManager.CaptureAndRecognize(settings);
@@ -52,7 +56,10 @@ namespace PluginScreenshot
             else if (cmd.StartsWith("-ws|", StringComparison.OrdinalIgnoreCase))
             {
                 string windowTitle = cmd.Substring(4);
-                ScreenshotManager.TakeWindowScreenshot(settings, windowTitle);
+                if (string.IsNullOrWhiteSpace(windowTitle))
+                    ScreenshotManager.TakeStoredWindowScreenshot(settings);
+                else
+                    ScreenshotManager.TakeWindowScreenshot(settings, windowTitle);
             }
             else if (string.Equals(cmd, "-gif-start", StringComparison.OrdinalIgnoreCase))
             {
@@ -139,12 +146,14 @@ namespace PluginScreenshot
         {
             switch (action)
             {
-                case HotkeyAction.Fullscreen:    return "-fs";
-                case HotkeyAction.Predefined:    return "-ps";
-                case HotkeyAction.Custom:        return "-cs";
-                case HotkeyAction.Ocr:           return "-ocr";
-                case HotkeyAction.GifToggle:     return "-gif-toggle";
-                case HotkeyAction.GifToggleSnap: return "-gif-toggle-snap";
+                case HotkeyAction.Fullscreen:      return "-fs";
+                case HotkeyAction.Predefined:      return "-ps";
+                case HotkeyAction.Custom:          return "-cs";
+                case HotkeyAction.WindowHandle:    return "-wh";
+                case HotkeyAction.StoredWindow:    return "-ws|";
+                case HotkeyAction.Ocr:             return "-ocr";
+                case HotkeyAction.GifToggle:       return "-gif-toggle";
+                case HotkeyAction.GifToggleSnap:   return "-gif-toggle-snap";
                 default: return null;
             }
         }

@@ -190,6 +190,15 @@ namespace PluginScreenshot
             return Rainmeter.StringBuffer.Update(OcrManager.LastOcrText);
         }
 
+        // Returns the title of the window stored by -wh (empty if none / cleared / invalid).
+        // Usage: [&Measure_FinalShot:GetLastStoredWindow()]
+        [DllExport]
+        public static IntPtr GetLastStoredWindow(IntPtr data, int argc,
+            [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr, SizeParamIndex = 1)] string[] argv)
+        {
+            return Rainmeter.StringBuffer.Update(StoredWindowTarget.Title);
+        }
+
         [DllExport]
         public static void ExecuteBang(IntPtr data, IntPtr args)
         {
