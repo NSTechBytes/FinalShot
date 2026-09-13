@@ -613,22 +613,50 @@ namespace PluginScreenshot
 
         private static Bitmap CaptureWindow(bool showCursor)
         {
-            Rectangle bounds = GetWindowBounds(_captureHwnd);
-            if (bounds.Width <= 0 || bounds.Height <= 0)
-                bounds = _captureRegion;
-            Bitmap bmp = new Bitmap(bounds.Width, bounds.Height);
-            using (Graphics g = Graphics.FromImage(bmp))
+            // Lock canvas to the size chosen when recording started so mid-record
+            // resize/maximize cannot change frame dimensions (encoder assumes fixed w×h).
+            int fixedW = _captureRegion.Width;
+            int fixedH = _captureRegion.Height;
+
+            Rectangle live = GetWindowBounds(_captureHwnd);
+            if (live.Width <= 0 || live.Height <= 0)
+                live = _captureRegion;
+
+            if (fixedW <= 0 || fixedH <= 0)
             {
-                g.CopyFromScreen(bounds.Location, Point.Empty, bounds.Size);
-                if (showCursor)
-                    ScreenshotManager.DrawCursor(g, bounds);
+                fixedW = live.Width;
+                fixedH = live.Height;
             }
 
-            if (_activeSettings != null && _activeSettings.RoundWindowCorners)
+            if (fixedW <= 0 || fixedH <= 0)
+                return new Bitmap(1, 1);
+
+            var bmp = new Bitmap(fixedW, fixedH);
+            using (Graphics g = Graphics.FromImage(bmp))
+            {
+                g.Clear(Color.Black);
+                int copyW = Math.Min(fixedW, live.Width);
+                int copyH = Math.Min(fixedH, live.Height);
+                if (copyW > 0 && copyH > 0)
+                {
+                    using (var part = new Bitmap(copyW, copyH))
+                    using (var pg = Graphics.FromImage(part))
+                    {
+                        pg.CopyFromScreen(live.Location, Point.Empty, new Size(copyW, copyH));
+                        if (showCursor)
+                            ScreenshotManager.DrawCursor(pg,
+                                new Rectangle(live.X, live.Y, copyW, copyH));
+                        g.DrawImageUnscaled(part, 0, 0);
+                    }
+                }
+            }
+
+            // Rounded corners only when live size still matches the fixed canvas.
+            if (_activeSettings != null && _activeSettings.RoundWindowCorners
+                && live.Width == fixedW && live.Height == fixedH)
             {
                 bmp = WindowCornerHelper.ApplyRoundedCornersIfNeeded(bmp, _captureHwnd);
 
-                // GIF has no alpha -- flatten transparent corners to black
                 if (bmp != null &&
                     (bmp.PixelFormat == System.Drawing.Imaging.PixelFormat.Format32bppArgb ||
                      bmp.PixelFormat == System.Drawing.Imaging.PixelFormat.Format32bppPArgb))
@@ -683,6 +711,12 @@ namespace PluginScreenshot
                 NativeMethods.DwmGetWindowAttribute(hWnd, NativeMethods.DWMWA_CLOAKED,
                                                     out int cloaked, sizeof(int));
                 if (cloaked != 0)
+                    return true;
+
+                // Skip tooltips / tool windows (Rainmeter ToolTipText can contain the
+                // search title and was matching first via Contains — e.g. 384x45).
+                int ex = NativeMethods.GetWindowLong(hWnd, NativeMethods.GWL_EXSTYLE);
+                if ((ex & NativeMethods.WS_EX_TOOLWINDOW) != 0)
                     return true;
 
                 var sb = new StringBuilder(512);

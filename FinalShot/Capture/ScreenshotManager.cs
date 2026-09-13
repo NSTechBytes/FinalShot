@@ -308,7 +308,7 @@ namespace PluginScreenshot
                         {
                             g.CopyFromScreen(inter.Location, Point.Empty, inter.Size);
                             if (settings != null && settings.ShowCursor)
-                                DrawCursor(g, new Rectangle(Point.Empty, inter.Size));
+                                DrawCursor(g, inter); // screen-space bounds for hotspot math
                             finalG.DrawImage(part,
                                              inter.Left - rect.Left,
                                              inter.Top - rect.Top);

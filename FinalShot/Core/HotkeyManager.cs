@@ -343,9 +343,19 @@ namespace PluginScreenshot
                 Settings settings = entry.Settings;
                 HotkeyAction action = entry.Action;
                 string cmd = CommandDispatcher.CommandFor(action);
-                Logger.Log("HotkeyManager: matched '" + entry.Chord.Source + "' -> " + cmd);
+                if (string.IsNullOrEmpty(cmd))
+                    return false;
 
-                ThreadPool.QueueUserWorkItem(_ => Dispatch(settings, cmd));
+                // Only suppress the key when we actually accept the dispatch.
+                // Previously we suppressed first, then Dispatch could no-op if busy.
+                if (Interlocked.CompareExchange(ref _dispatchBusy, 1, 0) != 0)
+                {
+                    Logger.Log("HotkeyManager: '" + cmd + "' not suppressed -- another action is busy.");
+                    return false;
+                }
+
+                Logger.Log("HotkeyManager: matched '" + entry.Chord.Source + "' -> " + cmd);
+                ThreadPool.QueueUserWorkItem(_ => DispatchAccepted(settings, cmd));
                 return true;
             }
 
@@ -357,20 +367,13 @@ namespace PluginScreenshot
             return (NativeMethods.GetAsyncKeyState(vKey) & 0x8000) != 0;
         }
 
-        private static void Dispatch(Settings settings, string cmd)
+        // Busy flag already taken by the hook thread before queueing.
+        private static void DispatchAccepted(Settings settings, string cmd)
         {
-            if (settings == null || string.IsNullOrEmpty(cmd))
-                return;
-
-            if (Interlocked.CompareExchange(ref _dispatchBusy, 1, 0) != 0)
-            {
-                Logger.Log("HotkeyManager: ignored '" + cmd + "' -- another hotkey action is busy.");
-                return;
-            }
-
             try
             {
-                CommandDispatcher.Execute(settings, cmd);
+                if (settings != null && !string.IsNullOrEmpty(cmd))
+                    CommandDispatcher.Execute(settings, cmd);
             }
             catch (Exception ex)
             {

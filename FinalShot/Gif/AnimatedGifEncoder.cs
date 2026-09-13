@@ -223,8 +223,19 @@ namespace PluginScreenshot
                     GifEncodingWindow.UpdateProgress(written, cache.Count);
                 }
 
-                // Trailing pending delay: append to last written frame is not possible
-                // after the fact; if we ended on skips only, ignore leftover delay.
+                // Trailing coalesce delay: GIF delay is per-frame GCE, so append a
+                // 1x1 transparent keep-previous patch carrying leftover pendingCs.
+                if (pendingCs > 0 && prevIndices != null && transpIdx >= 0)
+                {
+                    byte[] one = { (byte)transpIdx };
+                    WriteGifFrameWithTransparency(bw, one,
+                        0, 0, 1, 1, pendingCs, transpIdx, lzwMinCode);
+                    written++;
+                    Logger.Log("AnimatedGifEncoder: applied trailing pending delay "
+                        + pendingCs + "cs as transparent keep frame.");
+                    pendingCs = 0;
+                }
+
                 bw.Write((byte)0x3B); // GIF trailer
                 Logger.Log($"AnimatedGifEncoder: done - {written}/{cache.Count} frames written, " +
                            $"nearDupes={nearDupes}, multiBandFrames={multiBandFrames} -> {outputPath}");
