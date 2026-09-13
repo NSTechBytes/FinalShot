@@ -24,12 +24,13 @@
         <main class="main">
             <div class="content">
                 <h1>API Reference</h1>
-                <p class="subtitle">Complete documentation for all FinalShot measure settings, bang commands, and section variables.</p>
+                <p class="subtitle">A complete, beginner-friendly guide to every FinalShot setting, command, and variable.</p>
 
                 <!-- ============================================ -->
-                <!-- Screenshot Settings                          -->
+                <!-- Table of Contents                            -->
                 <!-- ============================================ -->
                 <nav class="page-nav">
+                    <a href="#overview">Overview</a>
                     <a href="#screenshot-settings">Screenshot</a>
                     <a href="#predefined-region">Predefined Region</a>
                     <a href="#smart-window-snap">Window Snap</a>
@@ -44,9 +45,52 @@
 
                 <hr class="section-divider">
 
+                <!-- ============================================ -->
+                <!-- Overview                                     -->
+                <!-- ============================================ -->
+                <h2 id="overview">Overview: How FinalShot Works</h2>
+
+                <p>Before diving into individual settings, it helps to understand how FinalShot works at a high level.</p>
+
+                <p>FinalShot is a <strong>Rainmeter plugin</strong>. In Rainmeter, a "plugin" is an extension that adds new capabilities to your skins. A "skin" is a widget or gadget that lives on your desktop. To use FinalShot, you define a <strong>measure</strong> in your skin's <code>.ini</code> file. A measure is a block of configuration that tells Rainmeter what the plugin should do.</p>
+
+                <p>Here is the basic structure of a FinalShot measure:</p>
+
+<pre><code>[MeasureFinalShot]
+Measure=Plugin
+Plugin=FinalShot
+SavePath=C:\Users\YourName\Pictures\shot.png</code></pre>
+
+                <p>Let's break this down:</p>
+                <ul>
+                    <li><strong><code>[MeasureFinalShot]</code></strong>: This is the name you give to the measure. You can call it anything you like (e.g. <code>[MyScreenshot]</code>, <code>[FS_Capture]</code>). You will use this name when sending commands to FinalShot.</li>
+                    <li><strong><code>Measure=Plugin</code></strong>: Tells Rainmeter this measure uses a plugin (not a built-in measure type).</li>
+                    <li><strong><code>Plugin=FinalShot</code></strong>: Tells Rainmeter to use the FinalShot plugin for this measure.</li>
+                    <li><strong><code>SavePath=...</code></strong>: This is a <em>setting</em>. Settings are configuration options that you add under the measure heading. Each setting controls some aspect of FinalShot's behavior.</li>
+                </ul>
+
+                <p>Once the measure is defined, you <strong>trigger actions</strong> using something called <strong>bang commands</strong>. A bang command is a short instruction you send to a measure. For example:</p>
+
+<pre><code>[!CommandMeasure MeasureFinalShot "-fs"]</code></pre>
+
+                <p>This tells Rainmeter: "Send the <code>-fs</code> command to the measure named <code>MeasureFinalShot</code>." The <code>-fs</code> command tells FinalShot to take a full-screen screenshot.</p>
+
+                <p>Some actions (like GIF recording) also expose <strong>section variables</strong>, which are values you can read from the measure to check the current state (e.g. "Is it recording right now?"). These are used like <code>[&amp;MeasureFinalShot:GetStatus()]</code>.</p>
+
+                <div class="note">
+                    <p><strong>In summary:</strong> You configure FinalShot with <em>settings</em>, trigger actions with <em>bang commands</em>, and read back information with <em>section variables</em>. All three are explained in detail on this page.</p>
+                </div>
+
+                <hr class="section-divider">
+
+                <!-- ============================================ -->
+                <!-- Screenshot Settings                          -->
+                <!-- ============================================ -->
                 <div class="category-header">
                     <h3 id="screenshot-settings">Screenshot Settings</h3>
                 </div>
+
+                <p>These settings control how FinalShot captures and saves screenshots. They apply to all screenshot commands (<code>-fs</code>, <code>-ps</code>, <code>-cs</code>, <code>-ws</code>).</p>
 
                 <div class="api-block">
                     <div class="api-block-header">
@@ -55,7 +99,34 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">string</span>
-                        <p>Full path including filename and extension where the screenshot will be saved. Supported formats: .png, .jpg, .jpeg, .bmp, .tiff. If empty, captures are silently discarded.</p>
+                        <p>The full file path where screenshots are saved. This must include the folder path, the filename, and the file extension.</p>
+                        <p><strong>Supported file formats:</strong></p>
+                        <ul>
+                            <li><code>.png</code>: Best quality, supports transparency. Recommended for most uses.</li>
+                            <li><code>.jpg</code> / <code>.jpeg</code>: Smaller file size, controlled by <code>JpgQuality</code>. Good for photos.</li>
+                            <li><code>.bmp</code>: Uncompressed bitmap. Very large files, rarely needed.</li>
+                            <li><code>.tiff</code>: High-quality format often used in print workflows.</li>
+                        </ul>
+                        <p>If left empty, screenshots are silently discarded (not saved anywhere). No error is shown.</p>
+
+                        <p><strong>Examples:</strong></p>
+<pre><code>; Save to the Pictures folder
+SavePath=C:\Users\YourName\Pictures\shot.png
+
+; Use a Rainmeter variable for the config folder
+SavePath=#@#Screenshots\capture.jpg
+
+; Use a date-stamped path (Rainmeter evaluates variables)
+SavePath=#@#Screenshots\shot_#DATE#.png</code></pre>
+
+                        <p><strong>Common mistakes to avoid:</strong></p>
+                        <ul>
+                            <li>Forgetting the file extension (e.g. <code>SavePath=C:\shots\photo</code>): this will cause the save to fail.</li>
+                            <li>Using a folder that doesn't exist: make sure the directory is created beforehand.</li>
+                            <li>Using UNC paths (e.g. <code>\\server\share</code>): these are not supported.</li>
+                        </ul>
+
+                        <p><strong>Related settings:</strong> <a href="#screenshot-settings"><code>JpgQuality</code></a> (for JPEG compression), <a href="#screenshot-settings"><code>ShowNotification</code></a> (to see a preview after capture).</p>
                     </div>
                 </div>
 
@@ -66,7 +137,18 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">int (0 or 1)</span>
-                        <p>Include the mouse cursor in screenshots and GIF frames. Set to 1 to draw the cursor at its screen position.</p>
+                        <p>Controls whether the mouse cursor is visible in screenshots and GIF frames.</p>
+                        <ul>
+                            <li><code>0</code>: The mouse cursor is <strong>not</strong> captured. The screenshot shows only what is behind the cursor.</li>
+                            <li><code>1</code>: The mouse cursor <strong>is</strong> drawn onto the screenshot at its current screen position. This is useful when you need to show where you clicked or pointed.</li>
+                        </ul>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>ShowCursor=1</code></pre>
+
+                        <p><strong>Why use this?</strong> If you are creating a tutorial or need to point to something on screen, set this to <code>1</code> so the cursor appears in the capture. For clean screenshots (e.g. wallpaper captures), leave it at <code>0</code>.</p>
+
+                        <p><strong>Related settings:</strong> This applies to all screenshot modes and GIF recording.</p>
                     </div>
                 </div>
 
@@ -77,7 +159,20 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">int (0 or 1)</span>
-                        <p>Show a themed toast notification with image preview after a successful capture or GIF save.</p>
+                        <p>Show a toast notification after a successful screenshot or GIF save. A toast notification is a small popup that appears briefly on your screen (typically in the corner) and then fades away.</p>
+                        <ul>
+                            <li><code>0</code>: No notification is shown after capture.</li>
+                            <li><code>1</code>: A themed notification popup appears with a small preview of the captured image. You can click the notification body to trigger <code>NotificationClickAction</code> if one is set.</li>
+                        </ul>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>ShowNotification=1
+NotificationSound=1
+NotificationClickAction=[!Log "User clicked the notification"]</code></pre>
+
+                        <p><strong>What the notification looks like:</strong> It shows a small thumbnail of your screenshot, the file path, and the capture mode used. The notification theme follows the <a href="#screenshot-settings"><code>UITheme</code></a> setting.</p>
+
+                        <p><strong>Related settings:</strong> <a href="#screenshot-settings"><code>NotificationSound</code></a>, <a href="#screenshot-settings"><code>NotificationClickAction</code></a>, <a href="#screenshot-settings"><code>UITheme</code></a>.</p>
                     </div>
                 </div>
 
@@ -88,7 +183,16 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">int (0 or 1)</span>
-                        <p>Play a Windows Media notify WAV when the toast appears (e.g. <code>Windows Notify System Generic.wav</code>). Independent of the Windows sound-scheme Asterisk event, which is often set to silent.</p>
+                        <p>Play a Windows notification sound when the toast notification appears (see <a href="#screenshot-settings"><code>ShowNotification</code></a>).</p>
+                        <ul>
+                            <li><code>0</code>: No sound is played.</li>
+                            <li><code>1</code>: A notification sound plays (specifically the <em>Windows Notify System Generic</em> WAV file).</li>
+                        </ul>
+
+                        <p><strong>Technical note:</strong> This uses a specific Windows WAV file, which is independent of the Windows sound scheme's "Asterisk" event. The Asterisk event is often set to silent in Windows settings, so FinalShot uses its own sound file instead.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>NotificationSound=1</code></pre>
                     </div>
                 </div>
 
@@ -99,7 +203,20 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">int (0 or 1)</span>
-                        <p>Window capture mode for <a href="#bang-commands"><code>-ws</code></a> commands. When 1, uses the PrintWindow API for exclusive window capture (no overlapping windows). When 0, uses screen-based capture which may include overlapping content.</p>
+                        <p>Controls the window capture method used by the <a href="#bang-commands"><code>-ws</code></a> (window capture) command.</p>
+                        <ul>
+                            <li><code>0</code>: Uses <strong>screen-based capture</strong>. The window is captured from what is visible on screen. Other windows that overlap on top will appear in the capture. This is the default and works on all windows.</li>
+                            <li><code>1</code>: Uses the <strong>PrintWindow API</strong>. This captures the window <em>exclusively</em>: overlapping windows are not included. The capture shows only the target window, even if other windows are in front of it.</li>
+                        </ul>
+
+                        <p><strong>When to use PrintWindow:</strong> Use <code>UsePrintWindow=1</code> when you need a clean capture of a single window without other windows getting in the way. This is especially useful for capturing background windows or overlapping windows.</p>
+
+                        <p><strong>Limitations:</strong> Some applications may not render correctly with PrintWindow (e.g. certain hardware-accelerated apps). If the capture looks blank or wrong, try switching to <code>0</code>.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>UsePrintWindow=1</code></pre>
+
+                        <p><strong>Related:</strong> <a href="#bang-commands"><code>-ws|windowtitle</code></a> command, <a href="#bang-commands"><code>-wh</code></a> (store window handle).</p>
                     </div>
                 </div>
 
@@ -109,8 +226,22 @@
                         <span class="api-default">Default: 70</span>
                     </div>
                     <div class="api-block-content">
-                        <span class="api-type">int (0-100)</span>
-                        <p>JPEG compression quality. Only applies when <a href="#screenshot-settings"><code>SavePath</code></a> ends in <code>.jpg</code> or <code>.jpeg</code>.</p>
+                        <span class="api-type">int (0–100)</span>
+                        <p>Controls the compression quality of JPEG screenshots. This setting only applies when the <a href="#screenshot-settings"><code>SavePath</code></a> ends in <code>.jpg</code> or <code>.jpeg</code>. It has no effect on PNG, BMP, or TIFF files.</p>
+                        <ul>
+                            <li><code>0</code>: Lowest quality. Very small file size, but images look blocky and blurry.</li>
+                            <li><code>50</code>: Medium quality. A good balance between file size and visual quality.</li>
+                            <li><code>70</code>: Default. Good quality for most purposes.</li>
+                            <li><code>100</code>: Highest quality. Largest file size, but nearly lossless.</li>
+                        </ul>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>SavePath=C:\Screenshots\photo.jpg
+JpgQuality=85</code></pre>
+
+                        <p><strong>Why use this?</strong> If you need to email screenshots or keep file sizes small, lower the quality (e.g. <code>50</code>). If quality matters more than file size (e.g. for printing or archiving), raise it (e.g. <code>95</code>).</p>
+
+                        <p><strong>Tip:</strong> For screenshots with text or sharp edges, PNG (via <code>.png</code> extension) is often better than JPEG regardless of quality setting, because JPEG can introduce blurriness around text.</p>
                     </div>
                 </div>
 
@@ -121,7 +252,22 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">string</span>
-                        <p>Rainmeter bang or external command to execute after a screenshot is saved. Leave empty for no action.</p>
+                        <p>A Rainmeter bang command (or any valid Rainmeter bang) to execute automatically after a screenshot is saved. This is called a "callback": it lets you run code in response to an event. Does not run after GIF saves. Use <a href="#gif-recording-settings"><code>GifFinishAction</code></a> for that.</p>
+                        <p>Leave empty for no action after capture.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>; After saving, update a meter that shows the last screenshot path
+ScreenshotFinishAction=[!UpdateMeter MeterLastShot][!Redraw]
+
+; Or log a message
+ScreenshotFinishAction=[!Log "Screenshot saved successfully"]
+
+; Or play a sound
+ScreenshotFinishAction=["#PlayerMediaControls#" "Play"]</code></pre>
+
+                        <p><strong>Important:</strong> This action runs after the file is written to disk. If the save fails (e.g. invalid path), the action is not executed.</p>
+
+                        <p><strong>Related:</strong> This applies to <a href="#bang-commands"><code>-fs</code></a>, <a href="#bang-commands"><code>-ps</code></a>, <a href="#bang-commands"><code>-cs</code></a>, and <a href="#bang-commands"><code>-ws</code></a> commands. GIF recording has its own separate actions (see <a href="#gif-recording-settings">GIF Recording Settings</a>).</p>
                     </div>
                 </div>
 
@@ -132,7 +278,17 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">string</span>
-                        <p>Rainmeter bang to execute when the user clicks the notification toast body (not the close button). Leave empty for no action.</p>
+                        <p>A Rainmeter bang command to execute when the user clicks the body of the toast notification (not the close button). This lets you open the saved file, switch to a folder, or perform any other action when the user interacts with the notification.</p>
+                        <p>Leave empty for no action when the notification is clicked.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>; Open the saved screenshot in the default image viewer
+NotificationClickAction=["C:\Users\YourName\Pictures\shot.png"]
+
+; Or switch to the folder where screenshots are saved
+NotificationClickAction=["C:\Users\YourName\Pictures"]</code></pre>
+
+                        <p><strong>Note:</strong> This setting requires <a href="#screenshot-settings"><code>ShowNotification</code></a> to be <code>1</code> for the notification to appear in the first place.</p>
                     </div>
                 </div>
 
@@ -142,17 +298,33 @@
                         <span class="api-default">Default: 0</span>
                     </div>
                     <div class="api-block-content">
-                        <span class="api-type">int (0-2) or string</span>
-                        <p>Theme for all FinalShot popup windows (notification, encoding progress, state dialog). Accepts: <code>0</code> or <code>dark</code>, <code>1</code> or <code>light</code>, <code>2</code> or <code>system</code>. System mode follows the Windows "Apps use light theme" setting.</p>
+                        <span class="api-type">int (0–2) or string</span>
+                        <p>Controls the visual theme (color scheme) of all FinalShot popup windows, including the notification toast, GIF encoding progress window, and state dialogs.</p>
+                        <ul>
+                            <li><code>0</code> or <code>dark</code>: Dark theme. Uses dark backgrounds with light text. Good for dark-mode desktops.</li>
+                            <li><code>1</code> or <code>light</code>: Light theme. Uses light backgrounds with dark text. Good for light-mode desktops.</li>
+                            <li><code>2</code> or <code>system</code>: System theme. Automatically follows the Windows <em>"Apps use light theme"</em> setting (found in Settings &rarr; Personalization &rarr; Colors).</li>
+                        </ul>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>UITheme=system</code></pre>
+
+                        <p><strong>Why use this?</strong> Match FinalShot's popups to your desktop theme so they look consistent with the rest of your system.</p>
                     </div>
                 </div>
+
+                <hr class="section-divider">
 
                 <!-- ============================================ -->
                 <!-- Predefined Region                            -->
                 <!-- ============================================ -->
                 <div class="category-header">
-                    <h3 id="predefined-region">Predefined Region</h3>
+                    <h3 id="predefined-region">Predefined Region Settings</h3>
                 </div>
+
+                <p>These settings define a fixed rectangular area on your screen that you want to capture. When you use the <a href="#bang-commands"><code>-ps</code></a> command, FinalShot captures exactly this rectangle. No overlay, no dragging, no user interaction needed.</p>
+
+                <p><strong>How screen coordinates work:</strong> Your screen is a grid of pixels. The top-left corner of your primary monitor is position <code>(0, 0)</code>. The X value increases going right, and the Y value increases going down. For multi-monitor setups, coordinates can be negative (for monitors to the left of or above the primary monitor).</p>
 
                 <div class="api-block">
                     <div class="api-block-header">
@@ -161,7 +333,11 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">int</span>
-                        <p>X coordinate (left) of the predefined capture region in screen pixels.</p>
+                        <p>The left edge of the predefined capture region, in screen pixels from the left edge of the virtual screen.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>PredefX=200</code></pre>
+                        <p>This means the capture region starts 200 pixels from the left edge of the screen.</p>
                     </div>
                 </div>
 
@@ -172,7 +348,11 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">int</span>
-                        <p>Y coordinate (top) of the predefined capture region in screen pixels.</p>
+                        <p>The top edge of the predefined capture region, in screen pixels from the top edge of the virtual screen.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>PredefY=150</code></pre>
+                        <p>This means the capture region starts 150 pixels from the top of the screen.</p>
                     </div>
                 </div>
 
@@ -183,7 +363,13 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">int</span>
-                        <p>Width of the predefined capture region in screen pixels.</p>
+                        <p>The width of the predefined capture region, in pixels. This is how many pixels wide the captured area will be.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>PredefWidth=1024</code></pre>
+                        <p>This captures a region that is 1024 pixels wide.</p>
+
+                        <p><strong>Note:</strong> A width of <code>0</code> means the region has no area: the <a href="#bang-commands"><code>-ps</code></a> command will capture nothing useful.</p>
                     </div>
                 </div>
 
@@ -194,16 +380,37 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">int</span>
-                        <p>Height of the predefined capture region in screen pixels.</p>
+                        <p>The height of the predefined capture region, in pixels. This is how many pixels tall the captured area will be.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>PredefHeight=768</code></pre>
+                        <p>This captures a region that is 768 pixels tall.</p>
                     </div>
                 </div>
+
+                <p><strong>Full example of a predefined region:</strong></p>
+<pre><code>; This captures a 1024x768 rectangle starting at position (200, 150)
+PredefX=200
+PredefY=150
+PredefWidth=1024
+PredefHeight=768</code></pre>
+
+                <p><strong>How to find the coordinates:</strong> You can use a tool like <em>ShareX</em>, <em>Pick Color</em>, or even the built-in Windows Snipping Tool to identify the pixel coordinates of the area you want to capture. Alternatively, use the <a href="#bang-commands"><code>-cs</code></a> custom selection command to visually select a region and note the coordinates from the overlay.</p>
+
+                <div class="note">
+                    <p><strong>GIF predefined region:</strong> GIF recording has its own separate predefined region settings (<a href="#gif-recording-settings"><code>GifPredefX</code></a>, <a href="#gif-recording-settings"><code>GifPredefY</code></a>, <a href="#gif-recording-settings"><code>GifPredefWidth</code></a>, <a href="#gif-recording-settings"><code>GifPredefHeight</code></a>). If those are not set, GIF recording falls back to these screenshot predefined region values. See the <a href="#gif-recording-settings">GIF Recording Settings</a> section for details.</p>
+                </div>
+
+                <hr class="section-divider">
 
                 <!-- ============================================ -->
                 <!-- Smart Window Snap                            -->
                 <!-- ============================================ -->
                 <div class="category-header">
-                    <h3 id="smart-window-snap">Smart Window Snap</h3>
+                    <h3 id="smart-window-snap">Smart Window Snap Settings</h3>
                 </div>
+
+                <p>Smart Window Snap helps you capture specific windows or UI controls without manually dragging a rectangle. When you use the <a href="#bang-commands"><code>-cs</code></a> (custom selection) command, a full-screen overlay appears. As you move your mouse, FinalShot automatically detects windows and controls underneath the cursor and highlights them. Click to capture the highlighted area instantly.</p>
 
                 <div class="api-block">
                     <div class="api-block-header">
@@ -212,7 +419,18 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">int (0 or 1)</span>
-                        <p>Enable Smart Window Snap in <a href="#bang-commands"><code>-cs</code></a> custom capture mode. When enabled, the overlay detects visible top-level windows and child controls for instant snap-to-window capture. Set to 0 for drag-only mode.</p>
+                        <p>Enable or disable window detection in the <a href="#bang-commands"><code>-cs</code></a> custom selection overlay.</p>
+                        <ul>
+                            <li><code>1</code>: Enabled. When you hover over a window in the overlay, it is highlighted with a border. Click to capture that window instantly. This also detects <em>child controls</em> (like toolbars, sidebars, panels, buttons) inside windows, if <code>DetectControls</code> is also enabled.</li>
+                            <li><code>0</code>: Disabled. No window detection occurs. You can only capture by <em>dragging</em> a rectangle (free selection). This is useful if the detection is distracting or if you only ever need free-form selections.</li>
+                        </ul>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>DetectWindows=1</code></pre>
+
+                        <p><strong>Tip:</strong> If you find that window detection is highlighting the wrong things (e.g. transparent overlays), set this to <code>0</code> to use drag-only mode.</p>
+
+                        <p><strong>Related:</strong> <a href="#bang-commands"><code>-cs</code></a> command, <a href="#smart-window-snap"><code>DetectControls</code></a>.</p>
                     </div>
                 </div>
 
@@ -223,7 +441,26 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">int (0 or 1)</span>
-                        <p>Detect child controls inside windows (toolbars, sidebars, panels, list views, buttons). Has no effect when <code>DetectWindows=0</code>. Set to 0 to detect top-level windows only.</p>
+                        <p>Enable or disable child control detection inside windows. Child controls are the smaller UI elements inside a window, such as:</p>
+                        <ul>
+                            <li>Toolbars and ribbon bars</li>
+                            <li>Sidebar panels</li>
+                            <li>List views and tree views</li>
+                            <li>Individual buttons or input fields</li>
+                            <li>Panels and group boxes</li>
+                        </ul>
+                        <ul>
+                            <li><code>1</code>: Enabled. The overlay highlights both windows <em>and</em> their child controls. You can capture a specific panel inside a window, not just the whole window.</li>
+                            <li><code>0</code>: Disabled. Only top-level windows are detected. Child controls are ignored.</li>
+                        </ul>
+
+                        <p><strong>Important:</strong> This setting has <strong>no effect</strong> when <code>DetectWindows=0</code>. Child control detection is a refinement of window detection, so the parent feature must be on.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>DetectWindows=1
+DetectControls=1</code></pre>
+
+                        <p><strong>Practical use case:</strong> You want to capture just the navigation pane of File Explorer, not the entire window. With both settings enabled, hover over the navigation pane until it highlights, then click to capture just that pane.</p>
                     </div>
                 </div>
 
@@ -234,9 +471,24 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">int (0 or 1)</span>
-                        <p>Mask Windows 11 rounded corners on top-level window captures. When enabled, desktop pixels in the sharp rectangle corners are removed (transparent in PNG, black in JPEG). Requires DWM corner preference detection.</p>
+                        <p>Remove the rounded corners from Windows 11 window captures. Windows 11 applies rounded corners to most application windows. When this setting is enabled, FinalShot masks (removes) those rounded corner areas so the captured image has sharp, square corners instead.</p>
+                        <ul>
+                            <li><code>0</code>: Disabled. Rounded corners are captured as-is (the default behavior).</li>
+                            <li><code>1</code>: Enabled. The rounded corner pixels are removed. In PNG files, these areas become transparent. In JPEG files, they become black.</li>
+                        </ul>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>RoundWindowCorners=1</code></pre>
+
+                        <p><strong>Technical detail:</strong> This uses DWM (Desktop Window Manager) corner preference detection to identify which corners are rounded. It only applies to top-level window captures, not to free-form selections or full-screen captures.</p>
+
+                        <p><strong>Why use this?</strong> If you are preparing screenshots for documentation or design work where consistent square corners are preferred, this setting gives you clean window captures without rounded edges.</p>
+
+                        <p><strong>Limitations:</strong> Only works on Windows 11. On Windows 10, windows already have square corners, so this setting has no visible effect.</p>
                     </div>
                 </div>
+
+                <hr class="section-divider">
 
                 <!-- ============================================ -->
                 <!-- GIF Recording Settings                       -->
@@ -245,6 +497,16 @@
                     <h3 id="gif-recording-settings">GIF Recording Settings</h3>
                 </div>
 
+                <p>These settings control how FinalShot records animated GIF files. GIF recording captures a series of screen frames and combines them into an animated image. You can record the full screen, a predefined region, a specific window, or use the snap overlay to select an area.</p>
+
+                <p><strong>How GIF recording works:</strong></p>
+                <ol>
+                    <li>You start recording with a <a href="#bang-commands">GIF command</a> (e.g. <code>-gif-start</code>).</li>
+                    <li>FinalShot captures frames at the rate specified by <a href="#gif-recording-settings"><code>GifFPS</code></a>.</li>
+                    <li>You stop recording with <code>-gif-stop</code> (or it stops automatically after <a href="#gif-recording-settings"><code>GifDuration</code></a> seconds).</li>
+                    <li>FinalShot encodes all captured frames into an animated GIF file and saves it to <a href="#gif-recording-settings"><code>GifSavePath</code></a>.</li>
+                </ol>
+
                 <div class="api-block">
                     <div class="api-block-header">
                         <span class="api-name">GifSavePath</span>
@@ -252,7 +514,15 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">string</span>
-                        <p>Full path including filename where the recorded GIF will be saved. If empty, <a href="#bang-commands">GIF recording commands</a> are aborted.</p>
+                        <p>The full file path where the recorded GIF will be saved. Must include the folder path, filename, and the <code>.gif</code> extension.</p>
+                        <p><strong>What happens if empty?</strong> All GIF recording commands are silently aborted: nothing happens when you try to start a recording. No error is shown.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>GifSavePath=C:\Users\YourName\Pictures\recording.gif</code></pre>
+
+                        <p><strong>Tip:</strong> If you want to record multiple GIFs without overwriting, you can use Rainmeter variables like <code>#DATE#</code> or <code>#TIME#</code> in the path to generate unique filenames.</p>
+
+                        <p><strong>Common mistake:</strong> Forgetting the <code>.gif</code> extension. The path <code>GifSavePath=C:\recordings\mygif</code> will not work correctly.</p>
                     </div>
                 </div>
 
@@ -262,8 +532,21 @@
                         <span class="api-default">Default: 10</span>
                     </div>
                     <div class="api-block-content">
-                        <span class="api-type">int (1-30)</span>
-                        <p>Frames per second for GIF recording. Values outside 1-30 are clamped.</p>
+                        <span class="api-type">int (1–30)</span>
+                        <p>The frames per second (FPS) for GIF recording. This controls how many screenshots are taken each second during recording. More frames = smoother animation, but larger file size and more CPU usage.</p>
+                        <ul>
+                            <li><code>1</code>: One frame per second. Very choppy, but smallest file size. Good for time-lapse style recordings.</li>
+                            <li><code>5</code>: Five frames per second. Acceptable for slow-moving content.</li>
+                            <li><code>10</code>: Default. A good balance between smoothness and file size.</li>
+                            <li><code>15</code>: Fifteen frames per second. Smoother, but larger files.</li>
+                            <li><code>30</code>: Maximum. Very smooth, but largest files and highest CPU usage.</li>
+                        </ul>
+                        <p>Values outside the range 1–30 are automatically adjusted to the nearest valid value.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>GifFPS=15</code></pre>
+
+                        <p><strong>Rule of thumb:</strong> For most use cases, <code>10</code> is a good default. Use <code>15</code> or higher for capturing fast-moving content (e.g. animations, gameplay). Use <code>5</code> or lower for slow-changing content (e.g. clock updates, progress bars) to keep file sizes small.</p>
                     </div>
                 </div>
 
@@ -273,8 +556,24 @@
                         <span class="api-default">Default: 100</span>
                     </div>
                     <div class="api-block-content">
-                        <span class="api-type">int (0-100)</span>
-                        <p>GIF encode quality. Higher values use more palette colours and stronger dithering for smoother gradients (larger files). Lower values reduce colour count for smaller files. Values outside 0-100 are clamped. Approximate mapping: <code>85–100</code> → 256 colours, <code>65–84</code> → 128, <code>45–64</code> → 64, <code>25–44</code> → 32, <code>0–24</code> → 16. Dither is disabled below <code>15</code>.</p>
+                        <span class="api-type">int (0–100)</span>
+                        <p>Controls the color quality of the GIF. GIF files can only use up to 256 colors, so FinalShot must reduce (quantize) the colors in each frame. Higher quality values preserve more colors and use dithering (a technique that blends colors to create the illusion of more colors).</p>
+                        <ul>
+                            <li><code>85–100</code>: 256 colors. Best visual quality. Larger files.</li>
+                            <li><code>65–84</code>: 128 colors. Good quality. Moderate file size.</li>
+                            <li><code>45–64</code>: 64 colors. Noticeable color reduction. Smaller files.</li>
+                            <li><code>25–44</code>: 32 colors. Significant color reduction. Small files.</li>
+                            <li><code>0–24</code>: 16 colors. Very limited palette. Dithering is disabled below <code>15</code>. Smallest files.</li>
+                        </ul>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>; High quality for presentations
+GifQuality=95
+
+; Smaller files for web sharing
+GifQuality=60</code></pre>
+
+                        <p><strong>Common mistake:</strong> Confusing <code>GifQuality</code> with <a href="#gif-recording-settings"><code>GifCompression</code></a>. <code>GifQuality</code> controls <em>color fidelity</em> (how many colors are used). <code>GifCompression</code> controls <em>inter-frame optimization</em> (how frames are compressed relative to each other).</p>
                     </div>
                 </div>
 
@@ -284,8 +583,27 @@
                         <span class="api-default">Default: 50</span>
                     </div>
                     <div class="api-block-content">
-                        <span class="api-type">int (0-100)</span>
-                        <p>GIF inter-frame compression. Higher values produce smaller files by coalescing near-duplicate frames and splitting distant dirty regions into multiple bands. Does not change resolution or palette size (use <code>GifQuality</code> for colour fidelity). <code>0</code> = exact-frame duplicates only / single dirty rectangle; <code>50</code> = balanced; <code>100</code> = most aggressive. Values outside 0-100 are clamped.</p>
+                        <span class="api-type">int (0–100)</span>
+                        <p>Controls the inter-frame compression level. This is an advanced optimization that reduces file size by analyzing differences between consecutive frames and encoding only the parts that change.</p>
+                        <ul>
+                            <li><code>0</code>: Minimal compression. Only exact-frame duplicates are coalesced, and a single dirty rectangle is used for each frame. Largest files.</li>
+                            <li><code>50</code>: Default. Balanced compression. Good file sizes without sacrificing visual quality.</li>
+                            <li><code>100</code>: Most aggressive compression. Smallest files, but may introduce minor visual artifacts in some cases.</li>
+                        </ul>
+
+                        <p><strong>What does "inter-frame compression" mean?</strong> In an animated GIF, most of the screen stays the same between frames. Instead of storing the entire image for every frame, FinalShot can store only the pixels that <em>changed</em>. Higher compression values make FinalShot more aggressive about finding and merging these differences, resulting in smaller files.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>; Maximum compression for sharing online
+GifCompression=90
+
+; Balanced
+GifCompression=50
+
+; No compression (largest files, but cleanest encoding)
+GifCompression=0</code></pre>
+
+                        <p><strong>Important:</strong> This setting does <strong>not</strong> change the resolution, frame rate, or color palette of the GIF. For those, use <a href="#gif-recording-settings"><code>GifFPS</code></a> and <a href="#gif-recording-settings"><code>GifQuality</code></a>.</p>
                     </div>
                 </div>
 
@@ -296,7 +614,22 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">int</span>
-                        <p>Maximum recording duration in seconds. When 0, recording continues until explicitly stopped.</p>
+                        <p>The maximum recording duration in seconds. When this time is reached, the recording stops automatically and the GIF is saved.</p>
+                        <ul>
+                            <li><code>0</code>: No time limit. Recording continues until you explicitly send a <code>-gif-stop</code> command or use the overlay's Stop button.</li>
+                            <li>Any positive number: Recording stops automatically after that many seconds.</li>
+                        </ul>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>; Record for exactly 5 seconds, then stop
+GifDuration=5
+
+; Record until manually stopped
+GifDuration=0</code></pre>
+
+                        <p><strong>Why use this?</strong> A duration limit is useful for automated workflows where you don't want recordings to run indefinitely. It also prevents accidentally filling up disk space with very long recordings.</p>
+
+                        <p><strong>Note:</strong> Paused time is <em>not</em> counted toward the duration. If you pause for 3 seconds during a 10-second recording, the total recording time will be 10 seconds of active recording, not 7.</p>
                     </div>
                 </div>
 
@@ -307,7 +640,22 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">int</span>
-                        <p>X coordinate of the predefined GIF capture region. Falls back to <code>PredefX</code> if not set.</p>
+                        <p>The X coordinate (left edge) of the predefined GIF capture region. This is separate from the screenshot predefined region, so you can define different regions for screenshots and GIFs.</p>
+                        <p><strong>Fallback behavior:</strong> If this setting is not specified or left empty, FinalShot uses the value of <a href="#predefined-region"><code>PredefX</code></a> instead.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>; Use different regions for screenshots vs GIFs
+PredefX=0
+PredefY=0
+PredefWidth=1920
+PredefHeight=1080
+
+GifPredefX=100
+GifPredefY=100
+GifPredefWidth=800
+GifPredefHeight=600</code></pre>
+
+                        <p><strong>Related:</strong> <a href="#gif-recording-settings"><code>GifPredefY</code></a>, <a href="#gif-recording-settings"><code>GifPredefWidth</code></a>, <a href="#gif-recording-settings"><code>GifPredefHeight</code></a>, <a href="#bang-commands"><code>-gif-start-predefined</code></a>.</p>
                     </div>
                 </div>
 
@@ -318,7 +666,7 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">int</span>
-                        <p>Y coordinate of the predefined GIF capture region. Falls back to <code>PredefY</code> if not set.</p>
+                        <p>The Y coordinate (top edge) of the predefined GIF capture region. Falls back to <a href="#predefined-region"><code>PredefY</code></a> if not set.</p>
                     </div>
                 </div>
 
@@ -329,7 +677,7 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">int</span>
-                        <p>Width of the predefined GIF capture region. Falls back to <code>PredefWidth</code> if not set.</p>
+                        <p>The width of the predefined GIF capture region. Falls back to <a href="#predefined-region"><code>PredefWidth</code></a> if not set.</p>
                     </div>
                 </div>
 
@@ -340,7 +688,7 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">int</span>
-                        <p>Height of the predefined GIF capture region. Falls back to <code>PredefHeight</code> if not set.</p>
+                        <p>The height of the predefined GIF capture region. Falls back to <a href="#predefined-region"><code>PredefHeight</code></a> if not set.</p>
                     </div>
                 </div>
 
@@ -351,7 +699,21 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">int (0 or 1)</span>
-                        <p>Show the recording overlay with Stop, Pause, and Abort buttons during GIF recording.</p>
+                        <p>Show the recording overlay during GIF recording. The overlay is a small floating toolbar that appears on screen while recording is active. It contains three buttons:</p>
+                        <ul>
+                            <li><strong>Stop</strong>: Stops recording and saves the GIF.</li>
+                            <li><strong>Pause</strong>: Pauses/resumes recording.</li>
+                            <li><strong>Abort</strong>: Cancels recording and discards all captured frames.</li>
+                        </ul>
+                        <ul>
+                            <li><code>1</code>: Show the overlay during recording.</li>
+                            <li><code>0</code>: Hide the overlay. You must use bang commands (<code>-gif-stop</code>, <code>-gif-pause</code>, <code>-gif-cancel</code>) to control recording.</li>
+                        </ul>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>GifShowOverlay=1</code></pre>
+
+                        <p><strong>Why hide it?</strong> If you are recording a tutorial or screencast, you may not want the overlay to appear in the recording. Set this to <code>0</code> and control recording with hotkeys instead.</p>
                     </div>
                 </div>
 
@@ -363,6 +725,12 @@
                     <div class="api-block-content">
                         <span class="api-type">int (0 or 1)</span>
                         <p>Show a progress window while the GIF is being encoded and written to disk after recording stops.</p>
+                        <ul>
+                            <li><code>1</code>: A small window appears showing encoding progress (e.g. "Encoding frame 45 of 120...").</li>
+                            <li><code>0</code>: No progress window is shown. Encoding happens silently in the background.</li>
+                        </ul>
+
+                        <p><strong>Why this exists:</strong> Encoding a GIF (especially a long recording with many frames) can take several seconds. The progress window lets you know that FinalShot is still working and hasn't frozen.</p>
                     </div>
                 </div>
 
@@ -373,7 +741,21 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">int (0 or 1)</span>
-                        <p>Show a dialog when the user issues a GIF command in an invalid state (e.g. trying to start while already recording, or stopping when not recording).</p>
+                        <p>Show a dialog box when the user issues a GIF command in an invalid state. For example:</p>
+                        <ul>
+                            <li>Trying to <em>start</em> a recording when one is already in progress.</li>
+                            <li>Trying to <em>stop</em> or <em>cancel</em> when no recording is active.</li>
+                            <li>Trying to <em>toggle</em> while the GIF is being encoded.</li>
+                        </ul>
+                        <ul>
+                            <li><code>1</code>: A dialog box is shown explaining the issue.</li>
+                            <li><code>0</code>: No dialog is shown. Invalid commands are silently ignored.</li>
+                        </ul>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>GifShowStateDialogs=0</code></pre>
+
+                        <p><strong>Why hide it?</strong> If you are using GIF commands in an automated workflow, you don't want dialog boxes popping up and blocking execution. Set this to <code>0</code> for silent operation.</p>
                     </div>
                 </div>
 
@@ -384,7 +766,12 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">string</span>
-                        <p>Rainmeter bang to execute when GIF recording starts.</p>
+                        <p>A Rainmeter bang command to execute when GIF recording starts. This runs at the moment recording begins, before any frames are captured.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>GifStartAction=[!Log "GIF recording started"]</code></pre>
+
+                        <p><strong>Practical use case:</strong> Update a UI element to show a "Recording" indicator, or switch a skin to a recording-themed layout.</p>
                     </div>
                 </div>
 
@@ -395,7 +782,10 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">string</span>
-                        <p>Rainmeter bang to execute when GIF recording is cancelled (frames discarded).</p>
+                        <p>A Rainmeter bang command to execute when GIF recording is cancelled. Cancellation discards all captured frames and no GIF file is saved.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>GifCancelAction=[!Log "GIF recording cancelled"]</code></pre>
                     </div>
                 </div>
 
@@ -406,7 +796,10 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">string</span>
-                        <p>Rainmeter bang to execute when GIF recording is paused.</p>
+                        <p>A Rainmeter bang command to execute when GIF recording is paused.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>GifPauseAction=[!Log "GIF recording paused"]</code></pre>
                     </div>
                 </div>
 
@@ -417,7 +810,40 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">string</span>
-                        <p>Rainmeter bang to execute when GIF recording resumes from pause.</p>
+                        <p>A Rainmeter bang command to execute when GIF recording resumes from pause.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>GifResumeAction=[!Log "GIF recording resumed"]</code></pre>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">GifStopAction</span>
+                        <span class="api-default">Default: (empty)</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">string</span>
+                        <p>A Rainmeter bang command to execute when GIF recording stops and a save is requested. This fires at the moment you stop recording, before encoding begins.</p>
+                        <p><strong>When does it fire?</strong></p>
+                        <ul>
+                            <li>You send <code>-gif-stop</code>.</li>
+                            <li>You use a toggle command (e.g. <code>-gif-toggle</code>) while recording.</li>
+                            <li>The recording duration limit (<a href="#gif-recording-settings"><code>GifDuration</code></a>) is reached.</li>
+                            <li>You click Stop on the recording overlay.</li>
+                        </ul>
+                        <p><strong>When does it NOT fire?</strong></p>
+                        <ul>
+                            <li>You cancel recording with <code>-gif-cancel</code> (use <a href="#gif-recording-settings"><code>GifCancelAction</code></a> instead).</li>
+                            <li>Recording hasn't started yet.</li>
+                        </ul>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>GifStopAction=[!Log "GIF recording stopped"]</code></pre>
+
+                        <p><strong>Practical use case:</strong> Update a UI element to show that encoding is in progress, or switch a skin to a different layout.</p>
+
+                        <p><strong>Related:</strong> <a href="#gif-recording-settings"><code>GifEncodingAction</code></a> (fires after this), <a href="#gif-recording-settings"><code>GifFinishAction</code></a> (fires after encoding completes).</p>
                     </div>
                 </div>
 
@@ -428,9 +854,47 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">string</span>
-                        <p>Rainmeter bang to execute when GIF encoding begins (after recording stops, before encoding completes).</p>
+                        <p>A Rainmeter bang command to execute when GIF encoding begins. Encoding is the process of converting the captured frames into the GIF file format. This runs after <a href="#gif-recording-settings"><code>GifStopAction</code></a> fires but before the GIF file is fully written to disk.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>GifEncodingAction=[!Log "Encoding GIF..."]</code></pre>
+
+                        <p><strong>Practical use case:</strong> Show a "Processing..." indicator or disable a button while encoding is in progress.</p>
+
+                        <p><strong>Event timing:</strong> The full lifecycle order is: <code>GifStartAction</code> fires, frames are captured, <code>GifStopAction</code> fires, <code>GifEncodingAction</code> fires, encoding completes, GIF is saved, then <code>GifFinishAction</code> fires. Screenshots use <a href="#screenshot-settings"><code>ScreenshotFinishAction</code></a> only, not these GIF actions.</p>
                     </div>
                 </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">GifFinishAction</span>
+                        <span class="api-default">Default: (empty)</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">string</span>
+                        <p>A Rainmeter bang command to execute after a GIF is <strong>successfully saved</strong> to <a href="#gif-recording-settings"><code>GifSavePath</code></a>. This is the last action in the GIF recording lifecycle.</p>
+                        <p><strong>When does it fire?</strong></p>
+                        <ul>
+                            <li>After encoding completes and the GIF file is written to disk.</li>
+                            <li>After the notification is shown (if <a href="#gif-recording-settings"><code>GifShowOverlay</code></a> is on).</li>
+                        </ul>
+                        <p><strong>When does it NOT fire?</strong></p>
+                        <ul>
+                            <li>If recording was cancelled (<code>-gif-cancel</code>).</li>
+                            <li>If encoding fails (e.g. disk full, write error).</li>
+                        </ul>
+                        <p>This action is independent of <a href="#screenshot-settings"><code>ScreenshotFinishAction</code></a>. Screenshots use <code>ScreenshotFinishAction</code>, GIFs use this.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>GifFinishAction=[!Log "GIF saved"][!UpdateMeterGroup StatusGroup][!Redraw]</code></pre>
+
+                        <p><strong>Practical use case:</strong> Update meters to show the new GIF file path, refresh a file list, or play a completion sound.</p>
+
+                        <p><strong>Related:</strong> <a href="#section-variables"><code>GetSavePath()</code></a> (returns the path of the just-saved GIF), <a href="#section-variables"><code>GetLastFileSize()</code></a> (returns the file size).</p>
+                    </div>
+                </div>
+
+                <hr class="section-divider">
 
                 <!-- ============================================ -->
                 <!-- OCR Settings                                 -->
@@ -439,6 +903,8 @@
                     <h3 id="ocr-settings">OCR Settings</h3>
                 </div>
 
+                <p>OCR stands for Optical Character Recognition. It is a technology that reads text from images. FinalShot uses Windows' built-in OCR engine to extract text from any region of your screen. You select a region (like taking a screenshot), and FinalShot reads the text in that region and copies it to your clipboard.</p>
+
                 <div class="api-block">
                     <div class="api-block-header">
                         <span class="api-name">OcrLanguage</span>
@@ -446,7 +912,27 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">string</span>
-                        <p>Windows OCR language tag (e.g. <code>en</code>, <code>en-US</code>, <code>de</code>, <code>ja</code>). The corresponding Windows OCR language pack must be installed. Falls back to <code>en</code> if empty or whitespace.</p>
+                        <p>The language for OCR text recognition. This uses Windows language tags (also called BCP 47 tags). The corresponding Windows OCR language pack must be installed on your system for the language to work.</p>
+
+                        <p><strong>Common language tags:</strong></p>
+                        <ul>
+                            <li><code>en</code>: English (any variant)</li>
+                            <li><code>en-US</code>: English (United States)</li>
+                            <li><code>en-GB</code>: English (United Kingdom)</li>
+                            <li><code>de</code>: German</li>
+                            <li><code>fr</code>: French</li>
+                            <li><code>ja</code>: Japanese</li>
+                            <li><code>zh-CN</code>: Chinese (Simplified)</li>
+                            <li><code>ko</code>: Korean</li>
+                        </ul>
+                        <p>If the value is empty or whitespace, it falls back to <code>en</code>.</p>
+
+                        <p><strong>How to install a language pack:</strong> Go to Windows Settings &rarr; Time &amp; Language &rarr; Language &amp; region &rarr; Add a language. The OCR feature will use whatever language packs are installed on your system.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>OcrLanguage=en-US</code></pre>
+
+                        <p><strong>Important:</strong> If you set a language that doesn't have its installed language pack, OCR will fail silently or produce poor results.</p>
                     </div>
                 </div>
 
@@ -456,8 +942,21 @@
                         <span class="api-default">Default: 2</span>
                     </div>
                     <div class="api-block-content">
-                        <span class="api-type">float (1-4)</span>
-                        <p>Upscale factor applied to the captured region before OCR. Higher values can improve recognition of small text. Clamped to 1-4.</p>
+                        <span class="api-type">float (1–4)</span>
+                        <p>The upscale factor applied to the captured image before OCR processing. Before FinalShot sends the image to the OCR engine, it can enlarge (upscale) it to improve recognition accuracy, especially for small text.</p>
+                        <ul>
+                            <li><code>1</code>: No upscaling. The image is processed at its original size.</li>
+                            <li><code>2</code>: Default. The image is doubled in size. Good for most text sizes.</li>
+                            <li><code>3</code>: Tripled. Better for very small text.</li>
+                            <li><code>4</code>: Quadrupled. Maximum upscaling. Best for tiny text, but uses more memory and processing time.</li>
+                        </ul>
+                        <p>Values outside the range 1–4 are automatically adjusted.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>; For capturing small UI text
+OcrScaleFactor=3</code></pre>
+
+                        <p><strong>When to change this:</strong> If OCR results are inaccurate for small text (e.g. status bar text, tooltips), increase the scale factor. For large text (e.g. headings, titles), the default of <code>2</code> is usually sufficient.</p>
                     </div>
                 </div>
 
@@ -468,7 +967,21 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">int (0 or 1)</span>
-                        <p>When 1, OCR result lines are joined with spaces instead of newlines.</p>
+                        <p>Controls how multiple lines of OCR text are joined together.</p>
+                        <ul>
+                            <li><code>0</code>: Lines are separated by <strong>newlines</strong> (line breaks). This preserves the original line structure of the text.</li>
+                            <li><code>1</code>: Lines are joined with <strong>spaces</strong> instead of newlines. The result is a single continuous line of text.</li>
+                        </ul>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>; Result with OcrSingleLine=0:
+; Hello
+; World
+
+; Result with OcrSingleLine=1:
+; Hello World</code></pre>
+
+                        <p><strong>When to use <code>1</code>:</strong> If you are feeding the OCR result into another program that expects single-line input (e.g. a search box, a command-line tool), set this to <code>1</code>.</p>
                     </div>
                 </div>
 
@@ -479,7 +992,18 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">int (0 or 1)</span>
-                        <p>Show an editable OCR result window after recognition. The user can edit text, copy to clipboard, then close. When 0, text is silently copied to the clipboard.</p>
+                        <p>Controls what happens after OCR text is recognized.</p>
+                        <ul>
+                            <li><code>0</code>: <strong>Silent mode.</strong> The recognized text is immediately copied to the clipboard. No window is shown. You can access the text via the <a href="#section-variables"><code>GetLastOCRText()</code></a> section variable.</li>
+                            <li><code>1</code>: <strong>Edit mode.</strong> A window appears showing the recognized text in an editable text box. You can review, edit, and correct the text before copying it to the clipboard. The text is also available via <a href="#section-variables"><code>GetLastOCRText()</code></a> (reflecting any edits you made).</li>
+                        </ul>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>ShowOCRWindow=1</code></pre>
+
+                        <p><strong>Why use edit mode?</strong> OCR is not always perfect. If you need to correct mistakes before pasting the text, the edit window saves you from having to paste into a text editor first.</p>
+
+                        <p><strong>Related:</strong> <a href="#bang-commands"><code>-ocr</code></a> command, <a href="#ocr-settings"><code>OcrLanguage</code></a>, <a href="#ocr-settings"><code>OcrScaleFactor</code></a>.</p>
                     </div>
                 </div>
 
@@ -490,9 +1014,18 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">string</span>
-                        <p>Rainmeter bang to execute after successful OCR (not on cancel).</p>
+                        <p>A Rainmeter bang command to execute after a successful OCR operation. This runs after the text has been recognized and (if applicable) after the user closes the edit window.</p>
+                        <p><strong>Important:</strong> This does not run if the user cancels the OCR selection or if the OCR fails.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>; Update a meter that displays the OCR result
+OCRFinishAction=[!UpdateMeter MeterOCR][!Redraw]</code></pre>
+
+                        <p><strong>Practical use case:</strong> Display the OCR result in a Rainmeter meter, or trigger a search with the recognized text.</p>
                     </div>
                 </div>
+
+                <hr class="section-divider">
 
                 <!-- ============================================ -->
                 <!-- Hotkey Settings                              -->
@@ -501,6 +1034,10 @@
                     <h3 id="hotkey-settings">Hotkey Settings</h3>
                 </div>
 
+                <p>FinalShot can register global hotkeys, which are keyboard shortcuts that work no matter which application is in focus. This means you can press a key combination (e.g. <code>Ctrl+Shift+F</code>) to take a screenshot while working in any program, without switching to Rainmeter first.</p>
+
+                <p>Hotkeys use a "chord" format: one or more modifier keys plus a main key, separated by <code>+</code>. For example: <code>Ctrl+Shift+F</code> means "hold Ctrl and Shift, then press F."</p>
+
                 <div class="api-block">
                     <div class="api-block-header">
                         <span class="api-name">HotkeysEnabled</span>
@@ -508,7 +1045,17 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">int (0 or 1)</span>
-                        <p>Master switch for global hotkeys. When 0, all <a href="#hotkey-settings"><code>Hotkey*</code></a> chords are ignored. Individual chords must still be set for their respective actions.</p>
+                        <p>The master switch for all global hotkeys.</p>
+                        <ul>
+                            <li><code>1</code>: Hotkeys are active. FinalShot monitors the keyboard for the configured key combinations.</li>
+                            <li><code>0</code>: All hotkeys are disabled. No keyboard monitoring occurs, even if individual <code>Hotkey*</code> chords are set.</li>
+                        </ul>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>HotkeysEnabled=1
+HotkeyCustom=Ctrl+Shift+PrintScreen</code></pre>
+
+                        <p><strong>Note:</strong> Individual hotkey chords must still be set for their respective actions. Setting <code>HotkeysEnabled=1</code> alone does nothing if no <code>Hotkey*</code> chords are configured.</p>
                     </div>
                 </div>
 
@@ -519,7 +1066,12 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">string</span>
-                        <p>Global hotkey chord for full-screen capture (<code>-fs</code>). Example: <code>Ctrl+Shift+F</code>.</p>
+                        <p>The keyboard shortcut for full-screen capture (<a href="#bang-commands"><code>-fs</code></a>). When this key combination is pressed, FinalShot captures the entire virtual screen (all monitors).</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>HotkeyFullscreen=Ctrl+Shift+F</code></pre>
+
+                        <p><strong>What this does:</strong> Pressing <code>Ctrl+Shift+F</code> anywhere on your computer will trigger a full-screen screenshot, just as if you had sent the <code>-fs</code> command.</p>
                     </div>
                 </div>
 
@@ -530,7 +1082,10 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">string</span>
-                        <p>Global hotkey chord for predefined region capture (<code>-ps</code>).</p>
+                        <p>The keyboard shortcut for predefined region capture (<a href="#bang-commands"><code>-ps</code></a>). Captures the rectangle defined by <a href="#predefined-region"><code>PredefX</code></a>, <a href="#predefined-region"><code>PredefY</code></a>, <a href="#predefined-region"><code>PredefWidth</code></a>, <a href="#predefined-region"><code>PredefHeight</code></a>.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>HotkeyPredefined=Ctrl+Shift+P</code></pre>
                     </div>
                 </div>
 
@@ -541,7 +1096,10 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">string</span>
-                        <p>Global hotkey chord for custom selection / Smart Window Snap (<code>-cs</code>). Example: <code>Ctrl+Shift+PrintScreen</code>.</p>
+                        <p>The keyboard shortcut for custom selection / Smart Window Snap (<a href="#bang-commands"><code>-cs</code></a>). Opens the overlay for drag-selection or click-to-snap window capture.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>HotkeyCustom=Ctrl+Shift+PrintScreen</code></pre>
                     </div>
                 </div>
 
@@ -552,7 +1110,14 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">string</span>
-                        <p>Global hotkey chord to pick and store a window handle (<code>-wh</code>) without capturing yet.</p>
+                        <p>The keyboard shortcut for storing a window handle (<a href="#bang-commands"><code>-wh</code></a>). Opens the snap overlay (window-only mode, no free-drag). Click a window to store its handle for later capture. No image is captured at this point.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>HotkeyWindowHandle=Ctrl+Shift+H</code></pre>
+
+                        <p><strong>How this works:</strong> Press the hotkey, click a window to "remember" it, then later press <code>HotkeyStoredWindow</code> to capture that window. This is useful when you want to capture the same window repeatedly without having to find it each time.</p>
+
+                        <p><strong>Related:</strong> <a href="#hotkey-settings"><code>HotkeyStoredWindow</code></a>, <a href="#bang-commands"><code>-wh</code></a>, <a href="#bang-commands"><code>-ws|</code></a>.</p>
                     </div>
                 </div>
 
@@ -563,7 +1128,12 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">string</span>
-                        <p>Global hotkey chord to capture the window previously stored by <code>-wh</code> (<code>-ws|</code> with empty title).</p>
+                        <p>The keyboard shortcut for capturing the stored window (<a href="#bang-commands"><code>-ws|</code></a> with empty title). This captures the window that was previously stored by <a href="#bang-commands"><code>-wh</code></a>. If the stored window no longer exists (was closed), the command aborts and clears the stored handle.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>HotkeyStoredWindow=Ctrl+Shift+W</code></pre>
+
+                        <p><strong>Workflow:</strong> Press <code>Ctrl+Shift+H</code> to store a window &rarr; work on other things &rarr; press <code>Ctrl+Shift+W</code> to capture that stored window at any time.</p>
                     </div>
                 </div>
 
@@ -574,7 +1144,10 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">string</span>
-                        <p>Global hotkey chord for OCR text extraction (<code>-ocr</code>). Example: <code>Ctrl+Shift+O</code>.</p>
+                        <p>The keyboard shortcut for OCR text extraction (<a href="#bang-commands"><code>-ocr</code></a>). Opens the snap overlay for region selection, then extracts text from the selected area using Windows OCR.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>HotkeyOCR=Ctrl+Shift+O</code></pre>
                     </div>
                 </div>
 
@@ -585,7 +1158,10 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">string</span>
-                        <p>Global hotkey chord for GIF toggle full-screen recording (<code>-gif-toggle</code>).</p>
+                        <p>The keyboard shortcut for toggling full-screen GIF recording (<a href="#bang-commands"><code>-gif-toggle</code></a>). Press once to start recording, press again to stop and save.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>HotkeyGifToggle=Ctrl+Shift+R</code></pre>
                     </div>
                 </div>
 
@@ -596,13 +1172,22 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">string</span>
-                        <p>Global hotkey chord for GIF toggle snap recording (<code>-gif-toggle-snap</code>). Example: <code>Ctrl+Shift+G</code>.</p>
+                        <p>The keyboard shortcut for toggling snap GIF recording (<a href="#bang-commands"><code>-gif-toggle-snap</code></a>). Press once to open the snap overlay and start recording the selected area. Press again to stop and save.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>HotkeyGifToggleSnap=Ctrl+Shift+G</code></pre>
                     </div>
                 </div>
 
                 <div class="note">
-                    <p><strong>Chord format:</strong> Parts separated by <code>+</code>. Modifiers: <code>Ctrl</code>, <code>Alt</code>, <code>Shift</code>, <code>Win</code>. Keys: <code>A</code>-<code>Z</code>, <code>F1</code>-<code>F24</code>, <code>PrintScreen</code>, <code>Insert</code>, <code>Delete</code>, <code>Home</code>, <code>End</code>, <code>PageUp</code>, <code>PageDown</code>, <code>Escape</code>, <code>Tab</code>, <code>Space</code>, <code>Enter</code>, <code>Backspace</code>, arrow keys, or hex VK codes (e.g. <code>0x2C</code>). Matching keys are suppressed by the keyboard hook.</p>
+                    <p><strong>Hotkey chord format:</strong> Parts are separated by <code>+</code>. <strong>Modifier keys:</strong> <code>Ctrl</code>, <code>Alt</code>, <code>Shift</code>, <code>Win</code>. <strong>Regular keys:</strong> <code>A</code>–<code>Z</code>, <code>F1</code>–<code>F24</code>, <code>PrintScreen</code>, <code>Insert</code>, <code>Delete</code>, <code>Home</code>, <code>End</code>, <code>PageUp</code>, <code>PageDown</code>, <code>Escape</code>, <code>Tab</code>, <code>Space</code>, <code>Enter</code>, <code>Backspace</code>, arrow keys, or hex virtual-key codes (e.g. <code>0x2C</code> for PrintScreen). Matching keys are <em>suppressed</em> (blocked from reaching other applications) by the keyboard hook.</p>
                 </div>
+
+                <div class="warning">
+                    <p><strong>Important limitation:</strong> Only <strong>one</strong> hotkey action can execute at a time. If you press two hotkeys simultaneously, the second one is ignored until the first finishes. This prevents conflicts and race conditions.</p>
+                </div>
+
+                <hr class="section-divider">
 
                 <!-- ============================================ -->
                 <!-- Debug Settings                               -->
@@ -611,6 +1196,8 @@
                     <h3 id="debug-settings">Debug Settings</h3>
                 </div>
 
+                <p>These settings help you troubleshoot problems with FinalShot. They are not needed for normal use.</p>
+
                 <div class="api-block">
                     <div class="api-block-header">
                         <span class="api-name">DebugLog</span>
@@ -618,7 +1205,16 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">int (0 or 1)</span>
-                        <p>Enable debug logging. When 1, detailed logs are written to the log file for troubleshooting.</p>
+                        <p>Enable debug logging. When enabled, FinalShot writes detailed log messages about its internal operations to a log file. This is useful for diagnosing problems.</p>
+                        <ul>
+                            <li><code>0</code>: Debug logging is off (default).</li>
+                            <li><code>1</code>: Debug logging is on. Log messages are written to the log file.</li>
+                        </ul>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>DebugLog=1</code></pre>
+
+                        <p><strong>Tip:</strong> Enable this temporarily when something isn't working as expected. Check the log file for error messages or unexpected behavior. Disable it again when you're done troubleshooting, as logging can slow things down slightly.</p>
                     </div>
                 </div>
 
@@ -629,9 +1225,17 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">string</span>
-                        <p>Custom path for the debug log file. Overrides the default <code>FinalShotDebug.log</code> in the Rainmeter profile directory.</p>
+                        <p>A custom file path for the debug log file. By default, the log is written to <code>FinalShotDebug.log</code> in the Rainmeter profile directory. Use this setting to write the log to a different location.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>DebugLog=1
+DebugLogPath=C:\Logs\FinalShot.log</code></pre>
+
+                        <p><strong>Note:</strong> This setting is only relevant when <a href="#debug-settings"><code>DebugLog</code></a> is set to <code>1</code>.</p>
                     </div>
                 </div>
+
+                <hr class="section-divider">
 
                 <!-- ============================================ -->
                 <!-- Bang Commands                                -->
@@ -640,27 +1244,68 @@
                     <h3 id="bang-commands">Bang Commands</h3>
                 </div>
 
-                <p>Bang commands are sent via <code>[!CommandMeasure MeasureName "command"]</code>. All commands are case-insensitive.</p>
+                <p>Bang commands are how you tell FinalShot to do something. You send a bang command to a measure using Rainmeter's <code>[!CommandMeasure]</code> syntax. All commands are case-insensitive (<code>-fs</code> and <code>-FS</code> both work).</p>
+
+                <p><strong>Syntax:</strong></p>
+<pre><code>[!CommandMeasure MeasureName "command"]</code></pre>
+
+                <p>Where:</p>
+                <ul>
+                    <li><code>MeasureName</code> is the name of your FinalShot measure (e.g. <code>MeasureFinalShot</code>).</li>
+                    <li><code>command</code> is one of the commands listed below (e.g. <code>-fs</code>).</li>
+                </ul>
+
+                <p><strong>Where to put bang commands:</strong> Bang commands can be used in several places in a Rainmeter skin:</p>
+                <ul>
+                    <li>In a <strong>LeftMouseUpAction</strong> on a meter (so clicking a button triggers the command).</li>
+                    <li>In a <strong>hotkey</strong> definition (via Rainmeter's built-in hotkey support).</li>
+                    <li>From <strong>other measures</strong> or <strong>other skins</strong> using <code>[!CommandMeasure]</code>.</li>
+                    <li>From FinalShot's own <strong>global hotkeys</strong> (see <a href="#hotkey-settings">Hotkey Settings</a>).</li>
+                </ul>
 
                 <h4>Screenshot Commands</h4>
 
                 <div class="api-block">
                     <div class="api-block-header">
                         <span class="api-name">-fs</span>
-                        <span class="api-default">Full Screen</span>
+                        <span class="api-default">Full Screen Capture</span>
                     </div>
                     <div class="api-block-content">
-                        <p>Capture the entire virtual screen (all monitors) and save to <code>SavePath</code>.</p>
+                        <p>Captures the entire virtual screen (all monitors combined) and saves it to the path specified in <a href="#screenshot-settings"><code>SavePath</code></a>.</p>
+
+                        <p><strong>What happens:</strong></p>
+                        <ol>
+                            <li>FinalShot captures a screenshot of all your monitors as one large image.</li>
+                            <li>The image is saved to the file at <code>SavePath</code>.</li>
+                            <li>If <a href="#screenshot-settings"><code>ShowNotification</code></a> is enabled, a toast notification appears.</li>
+                            <li>If <a href="#screenshot-settings"><code>ScreenshotFinishAction</code></a> is set, it runs.</li>
+                        </ol>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>[!CommandMeasure MeasureFinalShot "-fs"]</code></pre>
+
+                        <p><strong>Practical example:</strong> Add this to a meter's click action to create a screenshot button:</p>
+<pre><code>[MeterScreenshotButton]
+Meter=String
+Text=Take Screenshot
+LeftMouseUpAction=[!CommandMeasure MeasureFinalShot "-fs"]</code></pre>
                     </div>
                 </div>
 
                 <div class="api-block">
                     <div class="api-block-header">
                         <span class="api-name">-ps</span>
-                        <span class="api-default">Predefined Region</span>
+                        <span class="api-default">Predefined Region Capture</span>
                     </div>
                     <div class="api-block-content">
-                        <p>Capture the rectangle defined by <a href="#predefined-region"><code>PredefX</code></a>, <a href="#predefined-region"><code>PredefY</code></a>, <a href="#predefined-region"><code>PredefWidth</code></a>, <a href="#predefined-region"><code>PredefHeight</code></a>.</p>
+                        <p>Captures a fixed rectangular area defined by <a href="#predefined-region"><code>PredefX</code></a>, <a href="#predefined-region"><code>PredefY</code></a>, <a href="#predefined-region"><code>PredefWidth</code></a>, <a href="#predefined-region"><code>PredefHeight</code></a>.</p>
+
+                        <p><strong>What happens:</strong> Same as <code>-fs</code>, but only captures the specified rectangle.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>[!CommandMeasure MeasureFinalShot "-ps"]</code></pre>
+
+                        <p><strong>When to use:</strong> Use this when you always want to capture the same area (e.g. a specific part of your desktop, a widget, or a game window at a known position).</p>
                     </div>
                 </div>
 
@@ -670,7 +1315,30 @@
                         <span class="api-default">Custom Selection</span>
                     </div>
                     <div class="api-block-content">
-                        <p>Open the full-screen overlay. Hover to highlight a window or control and click to snap it, or drag to draw a free-selection rectangle. Calls <a href="#screenshot-settings"><code>ScreenshotFinishAction</code></a> after saving.</p>
+                        <p>Opens a full-screen overlay for interactive capture. This is the most flexible capture mode.</p>
+
+                        <p><strong>What happens:</strong></p>
+                        <ol>
+                            <li>The screen dims slightly and a full-screen overlay appears.</li>
+                            <li><strong>Hover mode:</strong> Move your mouse over windows or controls. FinalShot detects and highlights them with a border. Click to capture the highlighted area instantly.</li>
+                            <li><strong>Drag mode:</strong> Click and drag to draw a rectangle over any area. Release to capture that rectangle.</li>
+                            <li>The captured image is saved to <a href="#screenshot-settings"><code>SavePath</code></a>.</li>
+                            <li><a href="#screenshot-settings"><code>ScreenshotFinishAction</code></a> runs (if set).</li>
+                        </ol>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>[!CommandMeasure MeasureFinalShot "-cs"]</code></pre>
+
+                        <p><strong>When to use:</strong> Use this when you want to choose what to capture on the fly, without pre-defining coordinates.</p>
+
+                        <p><strong>Behavior depends on settings:</strong></p>
+                        <ul>
+                            <li>If <a href="#smart-window-snap"><code>DetectWindows</code></a> is <code>1</code>, hovering highlights windows.</li>
+                            <li>If <a href="#smart-window-snap"><code>DetectControls</code></a> is <code>1</code>, hovering also highlights child controls inside windows.</li>
+                            <li>If both are <code>0</code>, only drag-selection is available.</li>
+                        </ul>
+
+                        <p><strong>Press Escape</strong> to cancel without capturing anything.</p>
                     </div>
                 </div>
 
@@ -680,7 +1348,21 @@
                         <span class="api-default">Store Window Handle</span>
                     </div>
                     <div class="api-block-content">
-                        <p>Open the Smart Window Snap overlay (window-only; no free-drag capture). Click a window to store its HWND for later capture. Does not save an image. Title is available via <a href="#section-variables"><code>GetLastStoredWindow()</code></a>.</p>
+                        <p>Opens the Smart Window Snap overlay (window-only mode) to select and store a window for later capture. This does not capture any image. It only "remembers" which window you clicked.</p>
+
+                        <p><strong>What happens:</strong></p>
+                        <ol>
+                            <li>The snap overlay appears (same as <code>-cs</code>, but without drag-selection).</li>
+                            <li>Click a window to store its handle (internal reference).</li>
+                            <li>The window's title is stored and can be read via <a href="#section-variables"><code>GetLastStoredWindow()</code></a>.</li>
+                        </ol>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>[!CommandMeasure MeasureFinalShot "-wh"]</code></pre>
+
+                        <p><strong>Why use this?</strong> If you want to capture the same window repeatedly (e.g. every time you click a button), use <code>-wh</code> to store the window once, then use <a href="#bang-commands"><code>-ws|</code></a> to capture it later. This is faster than manually finding the window each time.</p>
+
+                        <p><strong>Related:</strong> <a href="#bang-commands"><code>-ws|</code></a>, <a href="#section-variables"><code>GetLastStoredWindow()</code></a>.</p>
                     </div>
                 </div>
 
@@ -690,8 +1372,30 @@
                         <span class="api-default">Window Capture</span>
                     </div>
                     <div class="api-block-content">
-                        <p>Capture a specific window by its exact title. The pipe <code>|</code> separator is followed by the window title string. Use <a href="#screenshot-settings"><code>UsePrintWindow=1</code></a> for exclusive capture.</p>
-                        <p>With an empty title (<code>-ws|</code>), captures the window previously stored by <code>-wh</code>. If that handle is no longer valid, the command aborts and clears the store.</p>
+                        <p>Captures a specific window by its exact title. The pipe character <code>|</code> separates the command from the window title.</p>
+
+                        <p><strong>Syntax:</strong></p>
+<pre><code>-ws|Window Title Here</code></pre>
+
+                        <p><strong>What happens:</strong></p>
+                        <ol>
+                            <li>FinalShot searches for a window whose title matches the string after <code>|</code>.</li>
+                            <li>If found, it captures that window.</li>
+                            <li>If <a href="#screenshot-settings"><code>UsePrintWindow</code></a> is <code>1</code>, only the target window is captured (no overlapping content).</li>
+                        </ol>
+
+                        <p><strong>Example: capture a specific window:</strong></p>
+<pre><code>[!CommandMeasure MeasureFinalShot "-ws|Calculator"]</code></pre>
+
+                        <p><strong>Special case: capture the stored window:</strong></p>
+<pre><code>; Use -ws| with nothing after the pipe to capture the stored window
+[!CommandMeasure MeasureFinalShot "-ws|"]</code></pre>
+
+                        <p>When the title is empty (<code>-ws|</code>), FinalShot captures the window previously stored by <a href="#bang-commands"><code>-wh</code></a>. If the stored window no longer exists, the command fails and the stored handle is cleared.</p>
+
+                        <p><strong>Important:</strong> The window title must be an <strong>exact match</strong>. Partial matches will not work. Use <a href="#section-variables"><code>GetLastStoredWindow()</code></a> to see the exact title of a stored window.</p>
+
+                        <p><strong>Common mistake:</strong> Forgetting the pipe character. <code>-wsCalculator</code> will not work. It must be <code>-ws|Calculator</code>.</p>
                     </div>
                 </div>
 
@@ -701,11 +1405,36 @@
                         <span class="api-default">OCR Text Extract</span>
                     </div>
                     <div class="api-block-content">
-                        <p>Open the snap overlay for region selection, then extract text using Windows OCR. Text is copied to the clipboard and available via <a href="#section-variables"><code>GetLastOCRText()</code></a>. Requires <a href="#ocr-settings"><code>OcrLanguage</code></a> to be set and the corresponding language pack installed.</p>
+                        <p>Opens the snap overlay for region selection, then uses Windows OCR to extract text from the selected area.</p>
+
+                        <p><strong>What happens:</strong></p>
+                        <ol>
+                            <li>The snap overlay appears.</li>
+                            <li>Select a region by hovering (click to snap) or dragging.</li>
+                            <li>FinalShot captures the selected area as an image.</li>
+                            <li>The image is sent to the Windows OCR engine, which reads the text.</li>
+                            <li>The recognized text is copied to the <strong>clipboard</strong>.</li>
+                            <li>If <a href="#ocr-settings"><code>ShowOCRWindow</code></a> is <code>1</code>, an edit window appears so you can review and modify the text.</li>
+                            <li>The text is also available via <a href="#section-variables"><code>GetLastOCRText()</code></a>.</li>
+                            <li>If <a href="#ocr-settings"><code>OCRFinishAction</code></a> is set, it runs.</li>
+                        </ol>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>[!CommandMeasure MeasureFinalShot "-ocr"]</code></pre>
+
+                        <p><strong>Prerequisites:</strong></p>
+                        <ul>
+                            <li><a href="#ocr-settings"><code>OcrLanguage</code></a> must be set to a valid language tag.</li>
+                            <li>The corresponding Windows OCR language pack must be installed.</li>
+                        </ul>
+
+                        <p><strong>Related:</strong> <a href="#ocr-settings">OCR Settings</a>, <a href="#section-variables"><code>GetLastOCRText()</code></a>.</p>
                     </div>
                 </div>
 
                 <h4>GIF Recording Commands</h4>
+
+                <p>GIF recording commands control the recording lifecycle: start, stop, cancel, pause, and toggle. See <a href="#gif-recording-settings">GIF Recording Settings</a> for the configuration options that affect recording behavior.</p>
 
                 <div class="api-block">
                     <div class="api-block-header">
@@ -713,7 +1442,18 @@
                         <span class="api-default">Start Full Screen GIF</span>
                     </div>
                     <div class="api-block-content">
-                        <p>Start recording a full-screen GIF. Requires <a href="#gif-recording-settings"><code>GifSavePath</code></a> to be set.</p>
+                        <p>Starts recording a full-screen animated GIF. Every frame captures the entire virtual screen (all monitors).</p>
+
+                        <p><strong>What happens:</strong></p>
+                        <ul>
+                            <li>If already recording: nothing happens (or a state dialog is shown if <a href="#gif-recording-settings"><code>GifShowStateDialogs</code></a> is <code>1</code>).</li>
+                            <li>If idle: recording begins. The overlay appears (if <a href="#gif-recording-settings"><code>GifShowOverlay</code></a> is <code>1</code>). <a href="#gif-recording-settings"><code>GifStartAction</code></a> fires.</li>
+                        </ul>
+
+                        <p><strong>Requirement:</strong> <a href="#gif-recording-settings"><code>GifSavePath</code></a> must be set.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>[!CommandMeasure MeasureFinalShot "-gif-start"]</code></pre>
                     </div>
                 </div>
 
@@ -723,17 +1463,30 @@
                         <span class="api-default">Start Snap GIF</span>
                     </div>
                     <div class="api-block-content">
-                        <p>Open the snap overlay for region selection, then start recording a GIF of the selected area.</p>
+                        <p>Opens the snap overlay for region selection, then starts recording a GIF of the selected area.</p>
+
+                        <p><strong>What happens:</strong></p>
+                        <ol>
+                            <li>The snap overlay appears.</li>
+                            <li>Select a region by hovering (click to snap) or dragging.</li>
+                            <li>Recording begins for the selected area only.</li>
+                        </ol>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>[!CommandMeasure MeasureFinalShot "-gif-start-snap"]</code></pre>
                     </div>
                 </div>
 
                 <div class="api-block">
                     <div class="api-block-header">
                         <span class="api-name">-gif-start-predefined</span>
-                        <span class="api-default">Start Predefined GIF</span>
+                        <span class="api-default">Start Predefined Region GIF</span>
                     </div>
                     <div class="api-block-content">
-                        <p>Start recording a GIF of the predefined region (<a href="#gif-recording-settings"><code>GifPredefX</code></a>, <a href="#gif-recording-settings"><code>GifPredefY</code></a>, <a href="#gif-recording-settings"><code>GifPredefWidth</code></a>, <a href="#gif-recording-settings"><code>GifPredefHeight</code></a>).</p>
+                        <p>Starts recording a GIF of the predefined region defined by <a href="#gif-recording-settings"><code>GifPredefX</code></a>, <a href="#gif-recording-settings"><code>GifPredefY</code></a>, <a href="#gif-recording-settings"><code>GifPredefWidth</code></a>, <a href="#gif-recording-settings"><code>GifPredefHeight</code></a>.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>[!CommandMeasure MeasureFinalShot "-gif-start-predefined"]</code></pre>
                     </div>
                 </div>
 
@@ -743,7 +1496,12 @@
                         <span class="api-default">Start Window GIF</span>
                     </div>
                     <div class="api-block-content">
-                        <p>Start recording a GIF of a specific window by title. The pipe <code>|</code> separator is followed by the window title.</p>
+                        <p>Starts recording a GIF of a specific window by its exact title. The pipe <code>|</code> separates the command from the window title.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>[!CommandMeasure MeasureFinalShot "-gif-start-window|Calculator"]</code></pre>
+
+                        <p><strong>Note:</strong> The recording will track the window even if it moves, but it will stop if the window is closed.</p>
                     </div>
                 </div>
 
@@ -753,17 +1511,37 @@
                         <span class="api-default">Stop and Save</span>
                     </div>
                     <div class="api-block-content">
-                        <p>Stop the current GIF recording and encode/save to <a href="#gif-recording-settings"><code>GifSavePath</code></a>.</p>
+                        <p>Stops the current GIF recording and encodes all captured frames into a GIF file, saving it to <a href="#gif-recording-settings"><code>GifSavePath</code></a>.</p>
+
+                        <p><strong>What happens:</strong></p>
+                        <ul>
+                            <li>If not recording: nothing happens (or a state dialog is shown).</li>
+                            <li>If recording: recording stops. <a href="#gif-recording-settings"><code>GifStopAction</code></a> fires, then <a href="#gif-recording-settings"><code>GifEncodingAction</code></a>. The encoding progress window appears (if <a href="#gif-recording-settings"><code>GifShowEncodingWindow</code></a> is <code>1</code>). The GIF file is written to disk. Then <a href="#gif-recording-settings"><code>GifFinishAction</code></a> fires (if set).</li>
+                        </ul>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>[!CommandMeasure MeasureFinalShot "-gif-stop"]</code></pre>
                     </div>
                 </div>
 
                 <div class="api-block">
                     <div class="api-block-header">
                         <span class="api-name">-gif-cancel</span>
-                        <span class="api-default">Cancel</span>
+                        <span class="api-default">Cancel Recording</span>
                     </div>
                     <div class="api-block-content">
-                        <p>Cancel the current GIF recording and discard all captured frames.</p>
+                        <p>Cancels the current GIF recording. All captured frames are discarded and no GIF file is saved.</p>
+
+                        <p><strong>What happens:</strong></p>
+                        <ul>
+                            <li>If not recording: nothing happens (or a state dialog is shown).</li>
+                            <li>If recording: recording stops immediately. <a href="#gif-recording-settings"><code>GifCancelAction</code></a> fires. No file is written.</li>
+                        </ul>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>[!CommandMeasure MeasureFinalShot "-gif-cancel"]</code></pre>
+
+                        <p><strong>When to use:</strong> Use this if you started recording by mistake and don't want to save anything.</p>
                     </div>
                 </div>
 
@@ -773,7 +1551,19 @@
                         <span class="api-default">Pause / Resume</span>
                     </div>
                     <div class="api-block-content">
-                        <p>Toggle pause on the current GIF recording. Paused time is excluded from the recording duration.</p>
+                        <p>Toggles the pause state of the current GIF recording. This is a toggle: the first call pauses, the second resumes.</p>
+
+                        <p><strong>What happens:</strong></p>
+                        <ul>
+                            <li>If not recording: nothing happens (or a state dialog is shown).</li>
+                            <li>If recording and not paused: recording pauses. <a href="#gif-recording-settings"><code>GifPauseAction</code></a> fires. No frames are captured while paused.</li>
+                            <li>If recording and paused: recording resumes. <a href="#gif-recording-settings"><code>GifResumeAction</code></a> fires.</li>
+                        </ul>
+
+                        <p><strong>Important:</strong> Paused time is <strong>excluded</strong> from the recording duration. If you pause for 3 seconds during a 10-second recording, the total active recording time will be 10 seconds.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>[!CommandMeasure MeasureFinalShot "-gif-pause"]</code></pre>
                     </div>
                 </div>
 
@@ -783,7 +1573,18 @@
                         <span class="api-default">Toggle Full Screen</span>
                     </div>
                     <div class="api-block-content">
-                        <p>Toggle GIF recording: starts full-screen recording if idle, stops and saves if recording. Ignored if encoding.</p>
+                        <p><strong>Toggles</strong> full-screen GIF recording. This is a convenience command that combines start and stop into one action.</p>
+
+                        <ul>
+                            <li>If <strong>idle</strong>: starts full-screen recording (like <code>-gif-start</code>).</li>
+                            <li>If <strong>recording</strong>: stops and saves (like <code>-gif-stop</code>).</li>
+                            <li>If <strong>encoding</strong>: ignored (or a state dialog is shown).</li>
+                        </ul>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>[!CommandMeasure MeasureFinalShot "-gif-toggle"]</code></pre>
+
+                        <p><strong>Why use toggle?</strong> It's perfect for a single button that starts and stops recording. You don't need two separate buttons.</p>
                     </div>
                 </div>
 
@@ -793,17 +1594,34 @@
                         <span class="api-default">Toggle Snap</span>
                     </div>
                     <div class="api-block-content">
-                        <p>Toggle GIF recording with snap overlay: starts snap recording if idle, stops and saves if recording. Ignored if encoding.</p>
+                        <p><strong>Toggles</strong> snap-based GIF recording.</p>
+
+                        <ul>
+                            <li>If <strong>idle</strong>: opens the snap overlay for region selection, then starts recording.</li>
+                            <li>If <strong>recording</strong>: stops and saves.</li>
+                            <li>If <strong>encoding</strong>: ignored (or a state dialog is shown).</li>
+                        </ul>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>[!CommandMeasure MeasureFinalShot "-gif-toggle-snap"]</code></pre>
                     </div>
                 </div>
 
                 <div class="api-block">
                     <div class="api-block-header">
                         <span class="api-name">-gif-toggle-predefined</span>
-                        <span class="api-default">Toggle Predefined</span>
+                        <span class="api-default">Toggle Predefined Region</span>
                     </div>
                     <div class="api-block-content">
-                        <p>Toggle GIF recording of the predefined region. Starts if idle, stops and saves if recording.</p>
+                        <p><strong>Toggles</strong> predefined region GIF recording.</p>
+
+                        <ul>
+                            <li>If <strong>idle</strong>: starts recording the predefined region.</li>
+                            <li>If <strong>recording</strong>: stops and saves.</li>
+                        </ul>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>[!CommandMeasure MeasureFinalShot "-gif-toggle-predefined"]</code></pre>
                     </div>
                 </div>
 
@@ -813,9 +1631,19 @@
                         <span class="api-default">Toggle Window</span>
                     </div>
                     <div class="api-block-content">
-                        <p>Toggle GIF recording of a specific window by title. Starts if idle, stops and saves if recording.</p>
+                        <p><strong>Toggles</strong> GIF recording of a specific window by title.</p>
+
+                        <ul>
+                            <li>If <strong>idle</strong>: starts recording the specified window.</li>
+                            <li>If <strong>recording</strong>: stops and saves.</li>
+                        </ul>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>[!CommandMeasure MeasureFinalShot "-gif-toggle-window|Calculator"]</code></pre>
                     </div>
                 </div>
+
+                <hr class="section-divider">
 
                 <!-- ============================================ -->
                 <!-- Section Variables                            -->
@@ -824,7 +1652,21 @@
                     <h3 id="section-variables">Section Variables</h3>
                 </div>
 
-                <p>Section variables are accessed via <code>[&amp;MeasureName:FunctionName()]</code>. Requires <code>DynamicVariables=1</code> on the referencing meter.</p>
+                <p>Section variables let you read information from FinalShot in your Rainmeter skins. For example, you can check if GIF recording is active, get the elapsed recording time, or read the last OCR result.</p>
+
+                <p><strong>How to use them:</strong> Reference the measure with a function name in square brackets:</p>
+<pre><code>[&amp;MeasureName:FunctionName()]</code></pre>
+
+                <p>For example:</p>
+<pre><code>[&amp;MeasureFinalShot:GetStatus()]</code></pre>
+
+                <div class="note">
+                    <p><strong>Important:</strong> The meter that displays a section variable must have <code>DynamicVariables=1</code> set. Without this, the value will not update in real time.</p>
+<pre><code>[MeterStatus]
+Meter=String
+Text=Status: [&amp;MeasureFinalShot:GetStatus()]
+DynamicVariables=1</code></pre>
+                </div>
 
                 <div class="api-block">
                     <div class="api-block-header">
@@ -832,7 +1674,22 @@
                         <span class="api-default">Returns: string</span>
                     </div>
                     <div class="api-block-content">
-                        <p>Returns the numeric recording state: <code>1</code> = Idle, <code>2</code> = Recording, <code>3</code> = Encoding.</p>
+                        <p>Returns the current recording state as a numeric code:</p>
+                        <ul>
+                            <li><code>1</code> = <strong>Idle</strong>: Not recording, not encoding.</li>
+                            <li><code>2</code> = <strong>Recording</strong>: Actively capturing frames.</li>
+                            <li><code>3</code> = <strong>Encoding</strong>: Recording is done, GIF is being encoded and saved.</li>
+                        </ul>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>[&amp;MeasureFinalShot:GetStatus()]
+; Returns: "1", "2", or "3"</code></pre>
+
+                        <p><strong>Practical use:</strong> Use this to show a status indicator in your skin.</p>
+<pre><code>[MeterStatus]
+Meter=String
+Text=[&amp;MeasureFinalShot:GetStatus()]
+DynamicVariables=1</code></pre>
                     </div>
                 </div>
 
@@ -842,7 +1699,22 @@
                         <span class="api-default">Returns: string</span>
                     </div>
                     <div class="api-block-content">
-                        <p>Returns <code>1</code> if currently recording, <code>-1</code> otherwise.</p>
+                        <p>Returns whether GIF recording is currently active.</p>
+                        <ul>
+                            <li><code>1</code>: Yes, recording is in progress.</li>
+                            <li><code>-1</code>: No, not recording.</li>
+                        </ul>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>[&amp;MeasureFinalShot:IsRecording()]
+; Returns: "1" if recording, "-1" otherwise</code></pre>
+
+                        <p><strong>Practical use:</strong> Show or hide a "Recording" indicator based on the result.</p>
+<pre><code>[MeterRecordingDot]
+Meter=String
+Text=● REC
+Hidden=([&amp;MeasureFinalShot:IsRecording()] = -1 ? 1 : 0)
+DynamicVariables=1</code></pre>
                     </div>
                 </div>
 
@@ -852,7 +1724,15 @@
                         <span class="api-default">Returns: string</span>
                     </div>
                     <div class="api-block-content">
-                        <p>Returns <code>1</code> if currently encoding, <code>-1</code> otherwise.</p>
+                        <p>Returns whether the GIF is currently being encoded (after recording stops, before the file is saved).</p>
+                        <ul>
+                            <li><code>1</code>: Yes, encoding is in progress.</li>
+                            <li><code>-1</code>: No, not encoding.</li>
+                        </ul>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>[&amp;MeasureFinalShot:IsEncoding()]
+; Returns: "1" if encoding, "-1" otherwise</code></pre>
                     </div>
                 </div>
 
@@ -862,7 +1742,15 @@
                         <span class="api-default">Returns: string</span>
                     </div>
                     <div class="api-block-content">
-                        <p>Returns <code>1</code> if idle (not recording or encoding), <code>-1</code> otherwise.</p>
+                        <p>Returns whether FinalShot is idle (not recording and not encoding).</p>
+                        <ul>
+                            <li><code>1</code>: Yes, idle.</li>
+                            <li><code>-1</code>: No, busy (recording or encoding).</li>
+                        </ul>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>[&amp;MeasureFinalShot:IsIdle()]
+; Returns: "1" if idle, "-1" otherwise</code></pre>
                     </div>
                 </div>
 
@@ -872,7 +1760,15 @@
                         <span class="api-default">Returns: string</span>
                     </div>
                     <div class="api-block-content">
-                        <p>Returns <code>1</code> if recording is paused, <code>-1</code> otherwise.</p>
+                        <p>Returns whether the recording is currently paused.</p>
+                        <ul>
+                            <li><code>1</code>: Yes, recording is paused.</li>
+                            <li><code>-1</code>: No, not paused (or not recording at all).</li>
+                        </ul>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>[&amp;MeasureFinalShot:IsPaused()]
+; Returns: "1" if paused, "-1" otherwise</code></pre>
                     </div>
                 </div>
 
@@ -882,7 +1778,21 @@
                         <span class="api-default">Returns: string</span>
                     </div>
                     <div class="api-block-content">
-                        <p>Returns the number of frames captured so far in the current recording. Returns <code>0</code> when not recording.</p>
+                        <p>Returns the number of frames captured so far in the current recording.</p>
+                        <ul>
+                            <li>During recording: the count increases as frames are captured (e.g. <code>"42"</code>).</li>
+                            <li>When not recording: returns <code>"0"</code>.</li>
+                        </ul>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>[&amp;MeasureFinalShot:GetFrameCount()]
+; Returns: "0", "1", "15", "120", etc.</code></pre>
+
+                        <p><strong>Practical use:</strong> Show a live frame counter in your skin while recording.</p>
+<pre><code>[MeterFrameCount]
+Meter=String
+Text=Frames: [&amp;MeasureFinalShot:GetFrameCount()]
+DynamicVariables=1</code></pre>
                     </div>
                 </div>
 
@@ -892,7 +1802,22 @@
                         <span class="api-default">Returns: string</span>
                     </div>
                     <div class="api-block-content">
-                        <p>Returns the elapsed recording time as <code>MM:SS</code> (excludes paused time). Returns <code>00:00</code> when not recording.</p>
+                        <p>Returns the elapsed recording time as a formatted string in <code>MM:SS</code> format (minutes and seconds). Paused time is excluded.</p>
+                        <ul>
+                            <li>During recording: e.g. <code>"00:15"</code> (15 seconds), <code>"01:30"</code> (1 minute 30 seconds).</li>
+                            <li>When not recording: returns <code>"00:00"</code>.</li>
+                        </ul>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>[&amp;MeasureFinalShot:GetElapsedTime()]
+; Returns: "00:15" after 15 seconds of recording</code></pre>
+
+                        <p><strong>Practical use:</strong> Display a recording timer in your skin.</p>
+<pre><code>[MeterTimer]
+Meter=String
+Text=[&amp;MeasureFinalShot:GetElapsedTime()]
+FontSize=20
+DynamicVariables=1</code></pre>
                     </div>
                 </div>
 
@@ -902,7 +1827,17 @@
                         <span class="api-default">Returns: string</span>
                     </div>
                     <div class="api-block-content">
-                        <p>Returns the elapsed recording time in whole seconds (excludes paused time). Returns <code>0</code> when not recording.</p>
+                        <p>Returns the elapsed recording time in whole seconds (no formatting). Paused time is excluded.</p>
+                        <ul>
+                            <li>During recording: e.g. <code>"15"</code>, <code>"90"</code>.</li>
+                            <li>When not recording: returns <code>"0"</code>.</li>
+                        </ul>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>[&amp;MeasureFinalShot:GetElapsedSeconds()]
+; Returns: "90" after 1 minute 30 seconds of recording</code></pre>
+
+                        <p><strong>When to use this vs. GetElapsedTime():</strong> Use <code>GetElapsedSeconds()</code> when you need a raw number for calculations (e.g. comparing against <code>GifDuration</code>). Use <code>GetElapsedTime()</code> for display purposes.</p>
                     </div>
                 </div>
 
@@ -912,7 +1847,20 @@
                         <span class="api-default">Returns: string</span>
                     </div>
                     <div class="api-block-content">
-                        <p>Returns the full path of the last successfully saved GIF file. Returns <code>""</code> if no GIF has been saved yet this session.</p>
+                        <p>Returns the full file path of the last successfully saved GIF file.</p>
+                        <ul>
+                            <li>After a GIF is saved: returns the path, e.g. <code>"C:\Users\You\Pictures\recording.gif"</code>.</li>
+                            <li>If no GIF has been saved yet this session: returns <code>""</code> (empty string).</li>
+                        </ul>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>[&amp;MeasureFinalShot:GetSavePath()]
+; Returns: "C:\Users\You\Pictures\recording.gif"</code></pre>
+
+                        <p><strong>Practical use:</strong> Open the saved GIF after recording stops.</p>
+<pre><code>; In GifEncodingAction or a separate meter
+Text=Last saved: [&amp;MeasureFinalShot:GetSavePath()]
+DynamicVariables=1</code></pre>
                     </div>
                 </div>
 
@@ -922,7 +1870,17 @@
                         <span class="api-default">Returns: string</span>
                     </div>
                     <div class="api-block-content">
-                        <p>Returns the file size of the last saved GIF as a human-readable string (e.g. <code>2.4 MB</code>, <code>512 KB</code>, <code>980 B</code>). Returns <code>""</code> if no GIF has been saved yet.</p>
+                        <p>Returns the file size of the last saved GIF as a human-readable string.</p>
+                        <ul>
+                            <li>After a GIF is saved: e.g. <code>"2.4 MB"</code>, <code>"512.0 KB"</code>, <code>"980 B"</code>, <code>"1.2 GB"</code>.</li>
+                            <li>If no GIF has been saved yet: returns <code>""</code> (empty string).</li>
+                        </ul>
+
+                        <p><strong>Size format:</strong> Values are automatically formatted with appropriate units: <code>B</code> (bytes), <code>KB</code> (kilobytes), <code>MB</code> (megabytes), or <code>GB</code> (gigabytes).</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>[&amp;MeasureFinalShot:GetLastFileSize()]
+; Returns: "2.4 MB"</code></pre>
                     </div>
                 </div>
 
@@ -932,7 +1890,22 @@
                         <span class="api-default">Returns: string</span>
                     </div>
                     <div class="api-block-content">
-                        <p>Returns the last OCR result text. Empty if none, cancelled, or failed. After <a href="#ocr-settings"><code>ShowOCRWindow=1</code></a>, this reflects any edits made in the result window.</p>
+                        <p>Returns the last OCR result text.</p>
+                        <ul>
+                            <li>After a successful OCR operation: returns the recognized text.</li>
+                            <li>If <a href="#ocr-settings"><code>ShowOCRWindow</code></a> was <code>1</code>: returns whatever text is in the edit window (including any edits the user made).</li>
+                            <li>If no OCR has been performed, or if the last OCR was cancelled or failed: returns <code>""</code> (empty string).</li>
+                        </ul>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>[&amp;MeasureFinalShot:GetLastOCRText()]
+; Returns: "Hello, this is the recognized text."</code></pre>
+
+                        <p><strong>Practical use:</strong> Display the OCR result in a meter, or use it in another skin.</p>
+<pre><code>[MeterOCRResult]
+Meter=String
+Text=[&amp;MeasureFinalShot:GetLastOCRText()]
+DynamicVariables=1</code></pre>
                     </div>
                 </div>
 
@@ -942,71 +1915,186 @@
                         <span class="api-default">Returns: string</span>
                     </div>
                     <div class="api-block-content">
-                        <p>Returns the title of the window stored by <code>-wh</code>. Empty if none has been selected, or if the store was cleared after an invalid <code>-ws|</code> capture attempt.</p>
+                        <p>Returns the title of the window that was stored by the <a href="#bang-commands"><code>-wh</code></a> command.</p>
+                        <ul>
+                            <li>After storing a window: returns the window title, e.g. <code>"Calculator"</code>.</li>
+                            <li>If no window has been stored, or if the store was cleared (e.g. after an invalid <a href="#bang-commands"><code>-ws|</code></a> attempt): returns <code>""</code> (empty string).</li>
+                        </ul>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>[&amp;MeasureFinalShot:GetLastStoredWindow()]
+; Returns: "Calculator"</code></pre>
+
+                        <p><strong>Practical use:</strong> Show which window is currently stored in your skin.</p>
+<pre><code>[MeterStoredWindow]
+Meter=String
+Text=Stored window: [&amp;MeasureFinalShot:GetLastStoredWindow()]
+DynamicVariables=1</code></pre>
                     </div>
                 </div>
 
                 <div class="note">
-                    <p><strong>Default measure string:</strong> When the measure is referenced without a function name (e.g. <code>[&amp;Measure_FinalShot]</code>), it returns the current status: <code>Idle</code>, <code>Recording</code>, or <code>Encoding</code>.</p>
+                    <p><strong>Default measure string:</strong> When you reference the measure <em>without</em> a function name (e.g. <code>[&amp;Measure_FinalShot]</code>), it returns the current status as a word: <code>Idle</code>, <code>Recording</code>, or <code>Encoding</code>.</p>
                 </div>
 
                 <hr class="section-divider">
 
+                <!-- ============================================ -->
+                <!-- Example                                      -->
+                <!-- ============================================ -->
                 <h2 id="example">Example: Complete Measure</h2>
+
+                <p>Here is a fully annotated example that demonstrates every category of settings. You can copy this into your Rainmeter skin file and modify it to suit your needs.</p>
+
+                <p>You do not need to use every setting. Only include the ones you need. All settings have sensible defaults.</p>
+
 <pre><code>[MeasureFinalShot]
 Measure=Plugin
 Plugin=FinalShot
 
-; Screenshot
+; ========================================
+; Screenshot Settings
+; ========================================
+
+; Where to save screenshots. Include folder, filename, and extension.
+; Supported: .png, .jpg, .jpeg, .bmp, .tiff
 SavePath=#@#Screenshots\shot.png
+
+; Include the mouse cursor in captures. 1 = yes, 0 = no.
 ShowCursor=1
+
+; Show a toast notification after capture. 1 = yes, 0 = no.
 ShowNotification=1
+
+; Play a sound with the notification. 1 = yes, 0 = no.
 NotificationSound=1
+
+; Window capture method. 0 = screen-based, 1 = PrintWindow (exclusive).
 UsePrintWindow=0
+
+; JPEG quality (only for .jpg/.jpeg). 0 = worst, 100 = best.
 JpgQuality=85
+
+; Run this after a screenshot is saved.
 ScreenshotFinishAction=[!Log "Screenshot saved"]
+
+; Theme for popup windows. 0 = dark, 1 = light, 2 = system.
 UITheme=0
 
+; ========================================
 ; Predefined Region
+; ========================================
+; Coordinates for -ps (predefined screenshot) command.
+
 PredefX=200
 PredefY=150
 PredefWidth=1024
 PredefHeight=768
 
+; ========================================
 ; Smart Window Snap
+; ========================================
+
+; Detect windows in the -cs overlay. 1 = yes, 0 = no (drag only).
 DetectWindows=1
+
+; Detect child controls inside windows. 1 = yes, 0 = no.
 DetectControls=1
+
+; Remove Windows 11 rounded corners. 1 = yes, 0 = no.
 RoundWindowCorners=0
 
+; ========================================
 ; GIF Recording
+; ========================================
+
+; Where to save recorded GIFs. Must include .gif extension.
 GifSavePath=#@#Screenshots\recording.gif
+
+; Frames per second. 1 = slowest, 30 = fastest.
 GifFPS=10
+
+; Color quality. Higher = more colors, larger files.
 GifQuality=100
+
+; Inter-frame compression. Higher = smaller files.
 GifCompression=50
+
+; Max duration in seconds. 0 = no limit (manual stop required).
 GifDuration=0
+
+; Show the recording overlay (Stop/Pause/Abort buttons). 1 = yes, 0 = no.
 GifShowOverlay=1
+
+; Show encoding progress window. 1 = yes, 0 = no.
 GifShowEncodingWindow=1
+
+; Show dialogs for invalid commands. 1 = yes, 0 = no.
 GifShowStateDialogs=1
+
+; Actions (Rainmeter bangs) for GIF events.
 GifStartAction=[!Log "GIF recording started"]
 GifStopAction=[!Log "GIF recording stopped"]
+GifCancelAction=[!Log "GIF recording cancelled"]
+GifPauseAction=[!Log "GIF recording paused"]
+GifResumeAction=[!Log "GIF recording resumed"]
+GifEncodingAction=[!Log "Encoding GIF..."]
+GifFinishAction=[!Log "GIF saved"]
 
+; ========================================
 ; OCR
+; ========================================
+
+; Language for text recognition. Requires Windows language pack.
 OcrLanguage=en
+
+; Upscale factor before OCR. 1 = none, 4 = maximum.
 OcrScaleFactor=2
+
+; Join lines with spaces (1) or newlines (0).
 OcrSingleLine=0
+
+; Show an editable result window (1) or copy silently (0).
 ShowOCRWindow=1
+
+; Run this after successful OCR.
 OCRFinishAction=[!UpdateMeter MeterOCR][!Redraw]
 
+; ========================================
 ; Hotkeys
+; ========================================
+
+; Master switch for all hotkeys. 1 = enabled, 0 = disabled.
 HotkeysEnabled=1
+
+; Keyboard shortcuts. Format: Modifier+Key (e.g. Ctrl+Shift+F).
+; Leave empty to disable a specific hotkey.
+HotkeyFullscreen=Ctrl+Shift+F
+HotkeyPredefined=Ctrl+Shift+P
 HotkeyCustom=Ctrl+Shift+PrintScreen
 HotkeyWindowHandle=Ctrl+Shift+H
 HotkeyStoredWindow=Ctrl+Shift+W
 HotkeyOCR=Ctrl+Shift+O
+HotkeyGifToggle=Ctrl+Shift+R
 HotkeyGifToggleSnap=Ctrl+Shift+G
 
+; ========================================
 ; Debug
+; ========================================
+
+; Enable debug logging. 1 = on, 0 = off.
 DebugLog=0</code></pre>
+
+                <div class="note">
+                    <p><strong>Quick start:</strong> Copy the measure above into your skin file, change <code>SavePath</code> and <code>GifSavePath</code> to your preferred locations, and add a button to trigger screenshots:</p>
+<pre><code>[MeterScreenshotButton]
+Meter=String
+Text=📸 Take Screenshot
+LeftMouseUpAction=[!CommandMeasure MeasureFinalShot "-fs"]
+MouseOverColor=#AccentColor#
+</code></pre>
+                </div>
+
             </div>
         </main>
     </div>

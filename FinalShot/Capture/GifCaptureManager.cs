@@ -211,6 +211,7 @@ namespace PluginScreenshot
 
             Logger.Log("GifCaptureManager.StopAndSave: signalled capture thread to stop.");
             GifRecordingOverlay.CloseOverlay();
+            ExecuteAction(settings, settings.GifStopAction, "GifStopAction");
 
             var finishThread = new Thread(() =>
                 EncodeAndFinish(settings, captureThreadSnapshot, cacheSnapshot));
@@ -556,7 +557,7 @@ namespace PluginScreenshot
                 catch { }
                 if (settings.ShowNotification && File.Exists(settings.GifSavePath))
                     ShowGifNotification(settings.GifSavePath, settings);
-                ScreenshotManager.ExecuteFinishAction(settings);
+                ExecuteAction(settings, settings.GifFinishAction, "GifFinishAction");
             }
         }
 

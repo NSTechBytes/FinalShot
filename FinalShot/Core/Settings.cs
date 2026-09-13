@@ -70,9 +70,14 @@ namespace PluginScreenshot
 
         public string GifStartAction { get; private set; }
         public string GifCancelAction { get; private set; }
+        public string GifStopAction { get; private set; }
         public string GifEncodingAction { get; private set; }
         public string GifPauseAction { get; private set; }
         public string GifResumeAction { get; private set; }
+
+        // Bang after a GIF is successfully saved (not on cancel / encode failure).
+        // Replaces ScreenshotFinishAction for the GIF path.
+        public string GifFinishAction { get; private set; }
         public bool GifShowOverlay { get; private set; }
 
         // When true, a small encoding-progress window is shown while the GIF
@@ -181,9 +186,11 @@ namespace PluginScreenshot
 
             GifStartAction       = api.ReadString("GifStartAction",      "");
             GifCancelAction      = api.ReadString("GifCancelAction",     "");
+            GifStopAction        = api.ReadString("GifStopAction",       "");
             GifPauseAction       = api.ReadString("GifPauseAction",      "");
             GifResumeAction      = api.ReadString("GifResumeAction",     "");
             GifEncodingAction    = api.ReadString("GifEncodingAction", "");
+            GifFinishAction      = api.ReadString("GifFinishAction",    "");
             GifShowOverlay        = api.ReadInt("GifShowOverlay",        1) > 0;
             GifShowEncodingWindow = api.ReadInt("GifShowEncodingWindow", 1) > 0;
             GifShowStateDialogs   = api.ReadInt("GifShowStateDialogs",   1) > 0;
@@ -215,9 +222,11 @@ namespace PluginScreenshot
                 + "  GifPredefinedRegion=" + GifPredefinedRegion
                 + "  GifStartAction="      + (string.IsNullOrEmpty(GifStartAction)      ? "(none)" : "(set)")
                 + "  GifCancelAction="     + (string.IsNullOrEmpty(GifCancelAction)     ? "(none)" : "(set)")
+                + "  GifStopAction="       + (string.IsNullOrEmpty(GifStopAction)       ? "(none)" : "(set)")
                 + "  GifPauseAction="      + (string.IsNullOrEmpty(GifPauseAction)      ? "(none)" : "(set)")
                 + "  GifResumeAction="     + (string.IsNullOrEmpty(GifResumeAction)     ? "(none)" : "(set)")
-                + "  GifEncodingAction=" + (string.IsNullOrEmpty(GifEncodingAction) ? "(none)" : "(set)"));
+                + "  GifEncodingAction=" + (string.IsNullOrEmpty(GifEncodingAction) ? "(none)" : "(set)")
+                + "  GifFinishAction="   + (string.IsNullOrEmpty(GifFinishAction)   ? "(none)" : "(set)"));
         }
     }
 }
