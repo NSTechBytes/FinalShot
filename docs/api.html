@@ -258,6 +258,17 @@
 
                 <div class="api-block">
                     <div class="api-block-header">
+                        <span class="api-name">GifQuality</span>
+                        <span class="api-default">Default: 100</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">int (0-100)</span>
+                        <p>GIF encode quality. Higher values use more palette colours and stronger dithering for smoother gradients (larger files). Lower values reduce colour count for smaller files. Values outside 0-100 are clamped. Approximate mapping: <code>85–100</code> → 256 colours, <code>65–84</code> → 128, <code>45–64</code> → 64, <code>25–44</code> → 32, <code>0–24</code> → 16. Dither is disabled below <code>15</code>.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
                         <span class="api-name">GifDuration</span>
                         <span class="api-default">Default: 0</span>
                     </div>
@@ -904,6 +915,7 @@ RoundWindowCorners=0
 ; GIF Recording
 GifSavePath=#@#Screenshots\recording.gif
 GifFPS=10
+GifQuality=100
 GifDuration=0
 GifShowOverlay=1
 GifShowEncodingWindow=1

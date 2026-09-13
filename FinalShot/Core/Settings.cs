@@ -49,6 +49,10 @@ namespace PluginScreenshot
         public string GifSavePath { get; private set; }
         public int GifFPS { get; private set; }
         public int GifDuration { get; private set; }
+
+        // GIF encode quality 0–100 (default 100). Higher = more colors / stronger dither.
+        public int GifQuality { get; private set; }
+
         public Rectangle GifPredefinedRegion { get; private set; }
 
         // When true, a dialog is shown when the user tries to start a recording
@@ -148,6 +152,10 @@ namespace PluginScreenshot
             GifDuration = api.ReadInt("GifDuration", 0);
             if (GifDuration < 0) GifDuration = 0;
 
+            GifQuality = api.ReadInt("GifQuality", 100);
+            if (GifQuality < 0)   GifQuality = 0;
+            if (GifQuality > 100) GifQuality = 100;
+
             int gx = api.ReadInt("GifPredefX",      x);
             int gy = api.ReadInt("GifPredefY",      y);
             int gw = api.ReadInt("GifPredefWidth",  w);
@@ -182,6 +190,7 @@ namespace PluginScreenshot
                 + "  HotkeyOCR=" + (string.IsNullOrEmpty(HotkeyOcr) ? "(none)" : HotkeyOcr)
                 + "  GifSavePath=" + GifSavePath
                 + "  GifFPS=" + GifFPS
+                + "  GifQuality=" + GifQuality
                 + "  GifDuration=" + GifDuration
                 + "  GifPredefinedRegion=" + GifPredefinedRegion
                 + "  GifStartAction="      + (string.IsNullOrEmpty(GifStartAction)      ? "(none)" : "(set)")

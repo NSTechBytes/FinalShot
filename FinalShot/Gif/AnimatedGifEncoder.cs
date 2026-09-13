@@ -54,7 +54,7 @@ namespace PluginScreenshot
         //  Total memory at any point ~= 2 x frameBytes regardless of recording
         //  length - identical to ShareX HardDiskCache approach.
 
-        public static void Encode(GifDiskCache cache, string outputPath)
+        public static void Encode(GifDiskCache cache, string outputPath, int quality = 100)
         {
             if (cache == null || cache.Count == 0)
                 throw new ArgumentException("No frames to encode.");
@@ -77,18 +77,19 @@ namespace PluginScreenshot
             if (w == 0 || h == 0)
                 throw new InvalidOperationException("Could not determine frame dimensions.");
 
-            const int  REAL_COLORS = 256;
+            ResolveGifQuality(quality, out int realColors, out int bayerStrength, out bool useDither);
+
             const int  MAX_SAMPLES = 500_000;
             // Near-duplicate: skip frames that change fewer than this fraction of pixels
             // (ClearType / cursor anti-alias shimmer) -- visually identical at GIF scale.
             const double NearDupeFraction = 0.0002; // 0.02%
 
             Logger.Log($"AnimatedGifEncoder: {cache.Count} frames, {w}x{h}, " +
-                       $"colors={REAL_COLORS}, maxSamples={MAX_SAMPLES}, " +
-                       $"dither=bayer, out={outputPath}");
+                       $"quality={quality}, colors={realColors}, dither=" +
+                       (useDither ? ("bayer/" + bayerStrength) : "off") +
+                       $", out={outputPath}");
 
             // -- Pass 1: build global palette (streaming, even across all frames)
-            int     realColors = REAL_COLORS;
             int     transpIdx  = realColors - 1;
             Color[] palette    = MediaCutQuantizer.BuildGlobalStreaming(
                                      cache.GetFrameEnumerator(),
@@ -152,9 +153,9 @@ namespace PluginScreenshot
                     byte[] bgra = ReadBgraInternal(frame.Bitmap, w, h);
                     frame.Bitmap.Dispose();
 
-                    // Full Bayer ordered dither -- required for smooth gradients
-                    // (wallpaper, shadows). Selective/nearest-only dither bands them.
-                    byte[] indices = DitherInternal(bgra, w, h, palette, cube, transpIdx);
+                    byte[] indices = useDither
+                        ? DitherInternal(bgra, w, h, palette, cube, transpIdx, bayerStrength)
+                        : QuantizeNoDither(bgra, w, h, cube);
                     bgra = null;
 
                     if (prevIndices != null && BytesEqual(indices, prevIndices))
@@ -513,14 +514,38 @@ namespace PluginScreenshot
             63, 31, 55, 23, 61, 29, 53, 21
         };
 
-        // Bayer dither strength: offset added to each channel is in [-strength/2, +strength/2].
-        // 24 smooths wallpaper/UI gradients without harsh patterning.
-        private const int BayerStrength = 24;
+        // Bayer dither strength default (quality 100). Offset is in [-strength/2, +strength/2].
+        private const int DefaultBayerStrength = 24;
+
+        // Maps GifQuality 0–100 → palette size (power of 2), Bayer strength, dither on/off.
+        // 100 = 256 colors + full dither (previous default behaviour).
+        private static void ResolveGifQuality(int quality,
+            out int paletteSize, out int bayerStrength, out bool useDither)
+        {
+            if (quality < 0) quality = 0;
+            if (quality > 100) quality = 100;
+
+            // Palette size includes the reserved transparent slot.
+            if (quality >= 85)      paletteSize = 256;
+            else if (quality >= 65) paletteSize = 128;
+            else if (quality >= 45) paletteSize = 64;
+            else if (quality >= 25) paletteSize = 32;
+            else                    paletteSize = 16;
+
+            useDither = quality >= 15;
+            // Scale dither 8…24 with quality so gradients stay smooth at high settings.
+            bayerStrength = useDither
+                ? Math.Max(8, DefaultBayerStrength * quality / 100)
+                : 0;
+        }
 
         internal static byte[] DitherInternal(byte[] bgra, int w, int h,
                                               Color[] palette, byte[] cube,
-                                              int skipIdx = -1)
+                                              int skipIdx = -1, int bayerStrength = DefaultBayerStrength)
         {
+            if (bayerStrength < 1)
+                return QuantizeNoDither(bgra, w, h, cube);
+
             byte[] indices = new byte[w * h];
 
             for (int y = 0; y < h; y++)
@@ -529,7 +554,7 @@ namespace PluginScreenshot
                 for (int x = 0; x < w; x++)
                 {
                     int   threshold = _bayer8x8[(y & 7) * 8 + (x & 7)];
-                    int   offset    = (threshold * BayerStrength + 32) / 64 - BayerStrength / 2;
+                    int   offset    = (threshold * bayerStrength + 32) / 64 - bayerStrength / 2;
 
                     int   bi = (rowBase + x) * 4;
                     byte  r  = (byte)Math.Max(0, Math.Min(255, bgra[bi + 2] + offset));
