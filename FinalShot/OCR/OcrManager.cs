@@ -160,8 +160,8 @@ namespace PluginScreenshot
             string tempPath = null;
             try
             {
-                try { System.Media.SystemSounds.Asterisk.Play(); }
-                catch { /* ignore */ }
+                if (settings.PlayNotificationSound)
+                    NotificationSound.Play();
 
                 tempPath = Path.Combine(Path.GetTempPath(),
                     "FinalShot_OCR_" + Guid.NewGuid().ToString("N") + ".png");

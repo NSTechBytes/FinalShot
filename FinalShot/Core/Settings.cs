@@ -27,6 +27,10 @@ namespace PluginScreenshot
         public int JpegQuality { get; private set; }
         public Rectangle PredefinedRegion { get; private set; }
         public bool ShowNotification { get; private set; }
+
+        // Play a Windows notify WAV when the toast appears. Default true.
+        // Independent of the Windows sound-scheme Asterisk event (often silent).
+        public bool PlayNotificationSound { get; private set; }
         public bool UsePrintWindow { get; private set; }
         public bool DetectWindows { get; private set; }
         public bool DetectControls { get; private set; }
@@ -109,6 +113,7 @@ namespace PluginScreenshot
             ShowCursor       = api.ReadInt("ShowCursor", 0) > 0;
             JpegQuality      = api.ReadInt("JpgQuality", 70);
             ShowNotification = api.ReadInt("ShowNotification", 0) > 0;
+            PlayNotificationSound = api.ReadInt("NotificationSound", 1) > 0;
             UsePrintWindow   = api.ReadInt("UsePrintWindow", 0) > 0;
 
             UITheme = ThemeColors.ParseTheme(api.ReadString("UITheme", "0"));

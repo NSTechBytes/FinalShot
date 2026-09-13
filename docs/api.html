@@ -77,7 +77,18 @@
                     </div>
                     <div class="api-block-content">
                         <span class="api-type">int (0 or 1)</span>
-                        <p>Show a themed toast notification with image preview after a successful capture or GIF save. Plays the Windows notification sound.</p>
+                        <p>Show a themed toast notification with image preview after a successful capture or GIF save.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">NotificationSound</span>
+                        <span class="api-default">Default: 1</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">int (0 or 1)</span>
+                        <p>Play a Windows Media notify WAV when the toast appears (e.g. <code>Windows Notify System Generic.wav</code>). Independent of the Windows sound-scheme Asterisk event, which is often set to silent.</p>
                     </div>
                 </div>
 
@@ -907,6 +918,7 @@ Plugin=FinalShot
 SavePath=#@#Screenshots\shot.png
 ShowCursor=1
 ShowNotification=1
+NotificationSound=1
 UsePrintWindow=0
 JpgQuality=85
 ScreenshotFinishAction=[!Log "Screenshot saved"]

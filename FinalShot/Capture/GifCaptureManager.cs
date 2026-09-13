@@ -672,6 +672,9 @@ namespace PluginScreenshot
         {
             try
             {
+                if (settings.PlayNotificationSound)
+                    NotificationSound.Play();
+
                 var thread = new System.Threading.Thread(() =>
                 {
                     try { Application.Run(new NotificationForm(gifPath, "GIF Recording", settings)); }

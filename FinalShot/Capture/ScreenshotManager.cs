@@ -393,8 +393,8 @@ namespace PluginScreenshot
                     return;
                 }
                 Logger.Log($"ShowNotificationWithImage: Creating notification for '{captureType}'");
-                try { System.Media.SystemSounds.Asterisk.Play(); }
-                catch (Exception ex) { Logger.Log($"Notification sound error: {ex.Message}"); }
+                if (settings.PlayNotificationSound)
+                    NotificationSound.Play();
 
                 // Apply theme to shared UI windows before showing
                 GifEncodingWindow.SetTheme(settings.UITheme);

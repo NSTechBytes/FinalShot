@@ -107,6 +107,7 @@
     <Compile Include="Plugin.cs" />
     <Compile Include="Core\Logger.cs" />
     <Compile Include="Core\Settings.cs" />
+    <Compile Include="Core\NotificationSound.cs" />
     <Compile Include="Core\NativeMethods.cs" />
     <Compile Include="Core\WindowInfo.cs" />
     <Compile Include="Core\WindowsDetector.cs" />
