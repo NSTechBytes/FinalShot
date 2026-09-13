@@ -133,15 +133,6 @@ namespace PluginScreenshot
                 else
                     GifCaptureManager.ToggleRecording(settings, GifCaptureMode.Window, windowTitle);
             }
-            else if (cmd.StartsWith("ExecuteBatch ", StringComparison.OrdinalIgnoreCase))
-            {
-                if (int.TryParse(cmd.Split(' ')[1], out int code))
-                {
-                    if (code == 1) ScreenshotManager.TakeFullScreen(settings);
-                    if (code == 2) ScreenshotManager.TakeCustom(settings, () => { });
-                    if (code == 3) ScreenshotManager.TakePredefined(settings);
-                }
-            }
         }
 
         public static string CommandFor(HotkeyAction action)

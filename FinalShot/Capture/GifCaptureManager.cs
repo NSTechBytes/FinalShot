@@ -496,7 +496,7 @@ namespace PluginScreenshot
         {
             captureThread?.Join();
             Logger.Log("GifCaptureManager.EncodeAndFinish: capture thread joined.");
-            ExecuteAction(settings, settings.OnGifEncodingAction, "OnGifEncodingAction");
+            ExecuteAction(settings, settings.GifEncodingAction, "GifEncodingAction");
 
             // Apply theme to all popup windows
             GifEncodingWindow.SetTheme(settings.UITheme);

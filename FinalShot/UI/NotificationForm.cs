@@ -30,7 +30,7 @@ namespace PluginScreenshot
     //   Right: App name, title, subtitle, close button.
     //
     // Themed: Dark / Light / System.
-    // Clicking the body (not close button) executes OnNotificationClickAction.
+    // Clicking the body (not close button) executes NotificationClickAction.
     // Fades in, auto-closes after 4s, fades out.
     public sealed class NotificationForm : Form
     {
@@ -68,7 +68,7 @@ namespace PluginScreenshot
             _imagePath   = imagePath;
             _captureType = captureType;
             _settings    = settings;
-            _clickAction = settings?.OnNotificationClickAction ?? "";
+            _clickAction = settings?.NotificationClickAction ?? "";
             _t           = ThemeColors.Resolve(settings?.UITheme ?? UITheme.Dark);
 
             FormBorderStyle = FormBorderStyle.None;

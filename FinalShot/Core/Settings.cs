@@ -44,7 +44,7 @@ namespace PluginScreenshot
 
         // Bang executed when the user clicks the notification toast.
         // Leave empty for no action.
-        public string OnNotificationClickAction { get; private set; }
+        public string NotificationClickAction { get; private set; }
 
         public string GifSavePath { get; private set; }
         public int GifFPS { get; private set; }
@@ -58,7 +58,7 @@ namespace PluginScreenshot
 
         public string GifStartAction { get; private set; }
         public string GifCancelAction { get; private set; }
-        public string OnGifEncodingAction { get; private set; }
+        public string GifEncodingAction { get; private set; }
         public string GifPauseAction { get; private set; }
         public string GifResumeAction { get; private set; }
         public bool GifShowOverlay { get; private set; }
@@ -104,7 +104,7 @@ namespace PluginScreenshot
             UsePrintWindow   = api.ReadInt("UsePrintWindow", 0) > 0;
 
             UITheme = ThemeColors.ParseTheme(api.ReadString("UITheme", "0"));
-            OnNotificationClickAction = api.ReadString("OnNotificationClickAction", "");
+            NotificationClickAction = api.ReadString("NotificationClickAction", "");
 
             int x = api.ReadInt("PredefX", 0);
             int y = api.ReadInt("PredefY", 0);
@@ -158,7 +158,7 @@ namespace PluginScreenshot
             GifCancelAction      = api.ReadString("GifCancelAction",     "");
             GifPauseAction       = api.ReadString("GifPauseAction",      "");
             GifResumeAction      = api.ReadString("GifResumeAction",     "");
-            OnGifEncodingAction  = api.ReadString("OnGifEncodingAction", "");
+            GifEncodingAction    = api.ReadString("GifEncodingAction", "");
             GifShowOverlay        = api.ReadInt("GifShowOverlay",        1) > 0;
             GifShowEncodingWindow = api.ReadInt("GifShowEncodingWindow", 1) > 0;
             GifShowStateDialogs   = api.ReadInt("GifShowStateDialogs",   1) > 0;
@@ -188,7 +188,7 @@ namespace PluginScreenshot
                 + "  GifCancelAction="     + (string.IsNullOrEmpty(GifCancelAction)     ? "(none)" : "(set)")
                 + "  GifPauseAction="      + (string.IsNullOrEmpty(GifPauseAction)      ? "(none)" : "(set)")
                 + "  GifResumeAction="     + (string.IsNullOrEmpty(GifResumeAction)     ? "(none)" : "(set)")
-                + "  OnGifEncodingAction=" + (string.IsNullOrEmpty(OnGifEncodingAction) ? "(none)" : "(set)"));
+                + "  GifEncodingAction=" + (string.IsNullOrEmpty(GifEncodingAction) ? "(none)" : "(set)"));
         }
     }
 }

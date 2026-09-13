@@ -1,7 +1,6 @@
 # FinalShot
 
-A powerful Rainmeter plugin for capturing screenshots directly from your skins with beautiful themed notifications.  
-FinalShot supports full‑screen captures, predefined regions, custom selection, smart window snapping, window capture, multi‑monitor composition, cursor inclusion, JPEG quality control, and post‑capture actions.
+FinalShot is a Rainmeter plugin that adds screenshot capture, GIF recording, and OCR text extraction capabilities to your Rainmeter skins. It provides a set of measure-based APIs and bang commands that integrate directly into the Rainmeter workflow.
 
 ## License
 
