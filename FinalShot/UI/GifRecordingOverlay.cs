@@ -184,7 +184,9 @@ namespace PluginScreenshot
                                                         region.Width, region.Height));
                     var rgn = new System.Drawing.Region(outerPath);
                     rgn.Exclude(holePath);
+                    // Control.Region clones the region; dispose our local copy.
                     Region = rgn;
+                    rgn.Dispose();
                 }
 
                 // Column width = toolbar spans exactly region.Width, starting at _offsetX.

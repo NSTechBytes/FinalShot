@@ -406,9 +406,10 @@ namespace PluginScreenshot
                     }
 
                     var captureSw = Stopwatch.StartNew();
+                    Bitmap bmp = null;
                     try
                     {
-                        Bitmap bmp      = CaptureFrame(settings.ShowCursor);
+                        bmp = CaptureFrame(settings.ShowCursor);
                         int elapsedMs   = (int)frameClock.ElapsedMilliseconds;
                         frameClock.Restart();
                         int delayCs     = (int)Math.Round(elapsedMs / 10.0);
@@ -422,6 +423,7 @@ namespace PluginScreenshot
                             pendingDelayCs += delayCs;
                             stillSkipped++;
                             bmp.Dispose();
+                            bmp = null;
                         }
                         else
                         {
@@ -430,11 +432,13 @@ namespace PluginScreenshot
                             prevHash = hash;
                             havePrev = true;
                             localCache.Add(new GifFrame(bmp, delayCs));
+                            bmp = null; // ownership transferred to cache
                             Interlocked.Increment(ref _framesCaptured);
                         }
                     }
                     catch (Exception ex)
                     {
+                        bmp?.Dispose();
                         Logger.Log($"GifCaptureManager.CaptureLoop: frame {i} error -- {ex.Message}");
                         frameClock.Restart();
                     }

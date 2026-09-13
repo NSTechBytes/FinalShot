@@ -180,6 +180,10 @@ namespace PluginScreenshot
         [DllImport("user32.dll", SetLastError = true)]
         public static extern bool GetIconInfo(IntPtr hIcon, out ICONINFO pIconInfo);
 
+        [DllImport("gdi32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool DeleteObject(IntPtr hObject);
+
         public const int CURSOR_SHOWING = 0x00000001;
 
         // Low-level keyboard hook

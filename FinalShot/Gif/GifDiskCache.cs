@@ -17,7 +17,6 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Threading;
 
 namespace PluginScreenshot
@@ -33,6 +32,7 @@ namespace PluginScreenshot
             DelayCs = delayCs;
         }
     }
+
     //  GifDiskCache  --  ShareX-style disk-backed frame store.
     //
     //  During recording each captured Bitmap is serialised as a raw BMP into
@@ -48,7 +48,6 @@ namespace PluginScreenshot
     //  The temp file is deleted when Dispose() is called.
     internal sealed class GifDiskCache : IDisposable
     {
-        //  Index entry: byte offset + length of one BMP frame in the cache file
         private struct FrameEntry
         {
             public readonly long   Offset;
@@ -63,24 +62,19 @@ namespace PluginScreenshot
             }
         }
 
-        //  Fields
-
         private readonly string             _cachePath;
         private readonly FileStream         _writeStream;
         private readonly List<FrameEntry>   _index = new List<FrameEntry>();
         private readonly object             _lock  = new object();
 
-        // Background consumer -- receives bitmaps from the capture thread and
-        // writes them to disk so the capture loop is never blocked by I/O.
         private readonly System.Collections.Concurrent.BlockingCollection<GifFrame>
                                             _queue
             = new System.Collections.Concurrent.BlockingCollection<GifFrame>();
         private readonly Thread             _writerThread;
         private bool                        _disposed;
+        private bool                        _completed;
 
         public int Count { get { lock (_lock) { return _index.Count; } } }
-
-        //  Construction -- opens the cache file and starts the writer thread
 
         public GifDiskCache()
         {
@@ -98,32 +92,48 @@ namespace PluginScreenshot
             _writerThread.Start();
         }
 
-        //  Add -- called from capture thread (non-blocking)
-        //  The bitmap is owned by the queue from this point; the writer thread
-        //  disposes it after writing.
-
         public void Add(GifFrame frame)
         {
             if (frame == null) throw new ArgumentNullException("frame");
-            if (_disposed) { frame.Bitmap?.Dispose(); return; }
-            _queue.Add(frame);
+            if (_disposed || _completed) { frame.Bitmap?.Dispose(); return; }
+            try
+            {
+                _queue.Add(frame);
+            }
+            catch (InvalidOperationException)
+            {
+                // Queue completed between check and Add
+                frame.Bitmap?.Dispose();
+            }
         }
 
-        //  Complete -- signals end of capture; blocks until all queued frames
-        //  have been written to disk and the write stream is flushed/closed.
-
+        // Signals end of capture; blocks until all queued frames are on disk.
         public void Complete()
         {
-            _queue.CompleteAdding();
-            _writerThread.Join();   // wait for every frame to land on disk
-            _writeStream.Flush();
-            _writeStream.Dispose();
+            lock (_lock)
+            {
+                if (_completed || _disposed) return;
+                _completed = true;
+            }
+
+            try
+            {
+                if (!_queue.IsAddingCompleted)
+                    _queue.CompleteAdding();
+            }
+            catch (InvalidOperationException) { /* already completed */ }
+
+            _writerThread.Join();
+            try
+            {
+                _writeStream.Flush();
+                _writeStream.Dispose();
+            }
+            catch { }
         }
 
-        //  GetFrameEnumerator -- streams frames back from disk one at a time.
-        //  Safe to call multiple times (each call opens a fresh read handle).
-        //  Must only be called after Complete().
-
+        // Streams frames back from disk. Safe to call multiple times after Complete().
+        // Yields independent Bitmaps (deep-copied) so callers are not tied to a stream.
         public IEnumerable<GifFrame> GetFrameEnumerator()
         {
             if (_index.Count == 0 || !File.Exists(_cachePath))
@@ -135,7 +145,6 @@ namespace PluginScreenshot
             {
                 foreach (FrameEntry entry in _index)
                 {
-                    // Read the BMP bytes for this frame
                     byte[] buf = new byte[entry.Length];
                     fs.Seek(entry.Offset, SeekOrigin.Begin);
                     int read = 0;
@@ -146,18 +155,19 @@ namespace PluginScreenshot
                         read += n;
                     }
 
-                    // Decode BMP -> Bitmap, yield, then dispose immediately
+                    // new Bitmap(stream) keeps a reference to the stream — clone
+                    // into an independent bitmap before disposing the MemoryStream.
                     Bitmap bmp;
                     using (var ms = new MemoryStream(buf))
-                        bmp = new Bitmap(ms);
+                    using (var temp = new Bitmap(ms))
+                    {
+                        bmp = new Bitmap(temp);
+                    }
 
                     yield return new GifFrame(bmp, entry.DelayCs);
-                    // Caller disposes the bitmap after use
                 }
             }
         }
-
-        //  Writer loop (background thread)
 
         private void WriterLoop()
         {
@@ -171,7 +181,7 @@ namespace PluginScreenshot
                     }
                     finally
                     {
-                        frame.Bitmap?.Dispose(); // free GDI bitmap immediately
+                        frame.Bitmap?.Dispose();
                     }
                 }
             }
@@ -185,7 +195,6 @@ namespace PluginScreenshot
         {
             using (var ms = new MemoryStream())
             {
-                // Save as BMP -- lossless and very fast to encode/decode
                 frame.Bitmap.Save(ms, ImageFormat.Bmp);
                 long offset = _writeStream.Position;
                 byte[] buf  = ms.ToArray();
@@ -195,20 +204,38 @@ namespace PluginScreenshot
             }
         }
 
-        //  Dispose -- deletes the temp file
-
         public void Dispose()
         {
-            if (_disposed) return;
-            _disposed = true;
+            lock (_lock)
+            {
+                if (_disposed) return;
+                _disposed = true;
+            }
 
-            // Drain any remaining queued frames (cancelled recording path)
-            _queue.CompleteAdding();
-            while (_queue.TryTake(out GifFrame leftover))
-                leftover?.Bitmap?.Dispose();
-            _queue.Dispose();
+            // Cancel path: Complete() was never called — drain and join writer.
+            if (!_completed)
+            {
+                try
+                {
+                    if (!_queue.IsAddingCompleted)
+                        _queue.CompleteAdding();
+                }
+                catch (InvalidOperationException) { }
 
-            try { _writeStream.Dispose(); } catch { }
+                while (_queue.TryTake(out GifFrame leftover))
+                    leftover?.Bitmap?.Dispose();
+
+                try
+                {
+                    if (_writerThread.IsAlive)
+                        _writerThread.Join(5000);
+                }
+                catch { }
+
+                try { _writeStream.Dispose(); } catch { }
+            }
+
+            try { _queue.Dispose(); } catch { }
 
             if (File.Exists(_cachePath))
             {

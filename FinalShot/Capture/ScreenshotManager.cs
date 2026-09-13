@@ -28,16 +28,33 @@ namespace PluginScreenshot
         public static void DrawCursor(Graphics g, Rectangle bounds)
         {
             var ci = new NativeMethods.CURSORINFO { cbSize = Marshal.SizeOf(typeof(NativeMethods.CURSORINFO)) };
-            if (NativeMethods.GetCursorInfo(out ci) && ci.flags == NativeMethods.CURSOR_SHOWING)
+            if (!NativeMethods.GetCursorInfo(out ci) || ci.flags != NativeMethods.CURSOR_SHOWING)
+                return;
+
+            if (!NativeMethods.GetIconInfo(ci.hCursor, out NativeMethods.ICONINFO iconInfo))
+                return;
+
+            // GetIconInfo allocates mask/color bitmaps — must DeleteObject both.
+            try
             {
-                if (NativeMethods.GetIconInfo(ci.hCursor, out NativeMethods.ICONINFO iconInfo))
+                IntPtr hdc = g.GetHdc();
+                try
                 {
-                    IntPtr hdc = g.GetHdc();
                     int x = ci.ptScreenPos.x - bounds.Left - iconInfo.xHotspot;
                     int y = ci.ptScreenPos.y - bounds.Top - iconInfo.yHotspot;
                     NativeMethods.DrawIcon(hdc, x, y, ci.hCursor);
-                    g.ReleaseHdc();
                 }
+                finally
+                {
+                    g.ReleaseHdc(hdc);
+                }
+            }
+            finally
+            {
+                if (iconInfo.hbmMask != IntPtr.Zero)
+                    NativeMethods.DeleteObject(iconInfo.hbmMask);
+                if (iconInfo.hbmColor != IntPtr.Zero)
+                    NativeMethods.DeleteObject(iconInfo.hbmColor);
             }
         }
         private static void WithHighDpiContext(Action action)
@@ -401,9 +418,11 @@ namespace PluginScreenshot
                     }
                     else
                     {
-                        var pars = new EncoderParameters(1);
-                        pars.Param[0] = new EncoderParameter(Encoder.Quality, settings.JpegQuality);
-                        bitmap.Save(fs, enc, pars);
+                        using (var pars = new EncoderParameters(1))
+                        {
+                            pars.Param[0] = new EncoderParameter(Encoder.Quality, settings.JpegQuality);
+                            bitmap.Save(fs, enc, pars);
+                        }
                     }
                 }
                 else
