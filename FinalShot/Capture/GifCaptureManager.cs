@@ -339,6 +339,7 @@ namespace PluginScreenshot
                 Logger.Log($"GifCaptureManager.StartRecordingInternal: mode={mode}, " +
                            $"region={captureRegion}, fps={settings.GifFPS}, " +
                            $"quality={settings.GifQuality}, " +
+                           $"compression={settings.GifCompression}, " +
                            $"duration={settings.GifDuration}s, " +
                            $"path={settings.GifSavePath}");
 
@@ -521,7 +522,8 @@ namespace PluginScreenshot
 
                 // Encoder reads frames from disk via two streaming passes --
                 // no frame list ever lives in RAM simultaneously.
-                AnimatedGifEncoder.Encode(cache, settings.GifSavePath, settings.GifQuality);
+                AnimatedGifEncoder.Encode(cache, settings.GifSavePath,
+                    settings.GifQuality, settings.GifCompression);
                 success = true;
             }
             catch (Exception ex)

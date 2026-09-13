@@ -269,6 +269,17 @@
 
                 <div class="api-block">
                     <div class="api-block-header">
+                        <span class="api-name">GifCompression</span>
+                        <span class="api-default">Default: 50</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">int (0-100)</span>
+                        <p>GIF inter-frame compression. Higher values produce smaller files by coalescing near-duplicate frames and splitting distant dirty regions into multiple bands. Does not change resolution or palette size (use <code>GifQuality</code> for colour fidelity). <code>0</code> = exact-frame duplicates only / single dirty rectangle; <code>50</code> = balanced; <code>100</code> = most aggressive. Values outside 0-100 are clamped.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
                         <span class="api-name">GifDuration</span>
                         <span class="api-default">Default: 0</span>
                     </div>
@@ -916,6 +927,7 @@ RoundWindowCorners=0
 GifSavePath=#@#Screenshots\recording.gif
 GifFPS=10
 GifQuality=100
+GifCompression=50
 GifDuration=0
 GifShowOverlay=1
 GifShowEncodingWindow=1

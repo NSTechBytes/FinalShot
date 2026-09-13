@@ -54,7 +54,8 @@ namespace PluginScreenshot
         //  Total memory at any point ~= 2 x frameBytes regardless of recording
         //  length - identical to ShareX HardDiskCache approach.
 
-        public static void Encode(GifDiskCache cache, string outputPath, int quality = 100)
+        public static void Encode(GifDiskCache cache, string outputPath,
+                                  int quality = 100, int compression = 50)
         {
             if (cache == null || cache.Count == 0)
                 throw new ArgumentException("No frames to encode.");
@@ -78,16 +79,15 @@ namespace PluginScreenshot
                 throw new InvalidOperationException("Could not determine frame dimensions.");
 
             ResolveGifQuality(quality, out int realColors, out int bayerStrength, out bool useDither);
+            ResolveGifCompression(compression,
+                out double nearDupeFraction, out int bandAreaPercent, out int maxBands);
 
-            const int  MAX_SAMPLES = 500_000;
-            // Near-duplicate: skip frames that change fewer than this fraction of pixels
-            // (ClearType / cursor anti-alias shimmer) -- visually identical at GIF scale.
-            const double NearDupeFraction = 0.0002; // 0.02%
+            const int MAX_SAMPLES = 500_000;
 
             Logger.Log($"AnimatedGifEncoder: {cache.Count} frames, {w}x{h}, " +
-                       $"quality={quality}, colors={realColors}, dither=" +
+                       $"quality={quality}, compression={compression}, colors={realColors}, dither=" +
                        (useDither ? ("bayer/" + bayerStrength) : "off") +
-                       $", out={outputPath}");
+                       $", nearDupe={nearDupeFraction:P3}, out={outputPath}");
 
             // -- Pass 1: build global palette (streaming, even across all frames)
             int     transpIdx  = realColors - 1;
@@ -143,7 +143,9 @@ namespace PluginScreenshot
                 int    frameNum    = 0;
                 int    nearDupes   = 0;
                 int    multiBandFrames = 0;
-                long   nearDupeThreshold = Math.Max(4L, (long)(w * (long)h * NearDupeFraction));
+                long   nearDupeThreshold = nearDupeFraction <= 0
+                    ? 0
+                    : Math.Max(4L, (long)(w * (long)h * nearDupeFraction));
 
                 foreach (GifFrame frame in cache.GetFrameEnumerator())
                 {
@@ -165,7 +167,7 @@ namespace PluginScreenshot
                         continue;
                     }
 
-                    if (prevIndices != null)
+                    if (prevIndices != null && nearDupeThreshold > 0)
                     {
                         long changedCount = CountChangedPixels(indices, prevIndices);
                         if (changedCount < nearDupeThreshold)
@@ -183,10 +185,10 @@ namespace PluginScreenshot
 
                     if (prevIndices != null)
                     {
-                        List<Rectangle> bands = ComputeDirtyBands(indices, prevIndices, w, h);
+                        List<Rectangle> bands = ComputeDirtyBands(
+                            indices, prevIndices, w, h, bandAreaPercent, maxBands);
                         if (bands == null || bands.Count == 0)
                         {
-                            // Nothing changed -- fold delay (should be rare after near-dupe check)
                             pendingCs += effectiveCs;
                             continue;
                         }
@@ -201,7 +203,6 @@ namespace PluginScreenshot
                         for (int b = 0; b < bands.Count; b++)
                         {
                             Rectangle cr = bands[b];
-                            // Delay only on the last band so all patches paint in one tick.
                             int bandDelay = (b == bands.Count - 1) ? effectiveCs : 0;
                             byte[] sub = ExtractSubRect(deltaFull, w, cr);
                             WriteGifFrameWithTransparency(bw, sub,
@@ -278,10 +279,16 @@ namespace PluginScreenshot
         // Splits dirty pixels into horizontal bands so distant updates (e.g. cursor
         // + toast) do not force one huge AABB. Returns null/empty if nothing changed.
         // Falls back to a single AABB when banding would not shrink encoded area.
+        // bandAreaPercent / maxBands come from GifCompression.
         private static List<Rectangle> ComputeDirtyBands(byte[] current, byte[] previous,
-                                                         int w, int h)
+                                                         int w, int h,
+                                                         int bandAreaPercent = 85,
+                                                         int maxBands = 6)
         {
             const int MergeGapRows = 8; // merge bands separated by tiny quiet gaps
+            if (bandAreaPercent < 50) bandAreaPercent = 50;
+            if (bandAreaPercent > 100) bandAreaPercent = 100;
+            if (maxBands < 1) maxBands = 1;
 
             var dirtyRows = new bool[h];
             int dirtyRowCount = 0;
@@ -353,7 +360,7 @@ namespace PluginScreenshot
             if (aabb != null && bands.Count > 1)
             {
                 long aabbArea = (long)aabb.Value.Width * aabb.Value.Height;
-                if (bandArea >= aabbArea * 85 / 100)
+                if (bandArea >= aabbArea * bandAreaPercent / 100)
                     return new List<Rectangle> { aabb.Value };
             }
             else if (bands.Count == 1)
@@ -362,7 +369,7 @@ namespace PluginScreenshot
             }
 
             // Cap band count to avoid GCE overhead on noisy frames
-            if (bands.Count > 6 && aabb != null)
+            if (bands.Count > maxBands && aabb != null)
                 return new List<Rectangle> { aabb.Value };
 
             return bands;
@@ -537,6 +544,25 @@ namespace PluginScreenshot
             bayerStrength = useDither
                 ? Math.Max(8, DefaultBayerStrength * quality / 100)
                 : 0;
+        }
+
+        // Maps GifCompression 0–100 = near-duplicate threshold and dirty-band aggressiveness.
+        // Higher compression → smaller files (more frame skipping / multi-band patches).
+        // Does not change resolution or palette (use GifQuality for that).
+        private static void ResolveGifCompression(int compression,
+            out double nearDupeFraction, out int bandAreaPercent, out int maxBands)
+        {
+            if (compression < 0) compression = 0;
+            if (compression > 100) compression = 100;
+
+            // 0 : exact duplicates only; 50 → ~0.1%; 100 → ~0.2%
+            nearDupeFraction = compression / 100.0 * 0.002;
+
+            // 0 " never prefer bands (100%); 50 → 85%; 100 → 70%
+            bandAreaPercent = 100 - compression * 30 / 100;
+
+            // 0 : single rect; 50 → ~4; 100 → 8
+            maxBands = Math.Max(1, 1 + compression * 7 / 100);
         }
 
         internal static byte[] DitherInternal(byte[] bgra, int w, int h,

@@ -53,6 +53,10 @@ namespace PluginScreenshot
         // GIF encode quality 0–100 (default 100). Higher = more colors / stronger dither.
         public int GifQuality { get; private set; }
 
+        // GIF inter-frame compression 0–100 (default 50). Higher = smaller files via
+        // more aggressive dirty-band / near-duplicate optimisation. Does not change resolution.
+        public int GifCompression { get; private set; }
+
         public Rectangle GifPredefinedRegion { get; private set; }
 
         // When true, a dialog is shown when the user tries to start a recording
@@ -156,6 +160,10 @@ namespace PluginScreenshot
             if (GifQuality < 0)   GifQuality = 0;
             if (GifQuality > 100) GifQuality = 100;
 
+            GifCompression = api.ReadInt("GifCompression", 50);
+            if (GifCompression < 0)   GifCompression = 0;
+            if (GifCompression > 100) GifCompression = 100;
+
             int gx = api.ReadInt("GifPredefX",      x);
             int gy = api.ReadInt("GifPredefY",      y);
             int gw = api.ReadInt("GifPredefWidth",  w);
@@ -191,6 +199,7 @@ namespace PluginScreenshot
                 + "  GifSavePath=" + GifSavePath
                 + "  GifFPS=" + GifFPS
                 + "  GifQuality=" + GifQuality
+                + "  GifCompression=" + GifCompression
                 + "  GifDuration=" + GifDuration
                 + "  GifPredefinedRegion=" + GifPredefinedRegion
                 + "  GifStartAction="      + (string.IsNullOrEmpty(GifStartAction)      ? "(none)" : "(set)")
