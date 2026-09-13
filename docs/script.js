@@ -180,6 +180,61 @@
         }
     }
 
+    // Copy-to-clipboard buttons for code blocks
+    function initCopyButtons() {
+        var pres = document.querySelectorAll('pre');
+        for (var i = 0; i < pres.length; i++) {
+            var pre = pres[i];
+            pre.style.position = 'relative';
+
+            var btn = document.createElement('button');
+            btn.className = 'copy-btn';
+            btn.textContent = 'Copy';
+            btn.title = 'Copy to clipboard';
+
+            btn.onclick = function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                var block = this.parentNode;
+                var code = block.querySelector('code');
+                var text = code ? code.textContent : block.textContent;
+                var self = this;
+
+                // Always use textarea fallback for reliability
+                var ta = document.createElement('textarea');
+                ta.value = text;
+                ta.setAttribute('readonly', '');
+                ta.style.cssText = 'position:fixed;left:0;top:0;opacity:0;width:1px;height:1px;padding:0;border:none;outline:none;box-shadow:none;';
+                document.body.appendChild(ta);
+                ta.focus();
+                ta.select();
+
+                var ok = false;
+                try {
+                    ok = document.execCommand('copy');
+                } catch (err) { /* ignore */ }
+                document.body.removeChild(ta);
+
+                if (ok) {
+                    self.textContent = 'Copied!';
+                    self.classList.add('copied');
+                    setTimeout(function () {
+                        self.textContent = 'Copy';
+                        self.classList.remove('copied');
+                    }, 2000);
+                } else {
+                    self.textContent = 'Failed';
+                    setTimeout(function () {
+                        self.textContent = 'Copy';
+                    }, 2000);
+                }
+            };
+
+            pre.appendChild(btn);
+        }
+    }
+
     // Initialize
     document.addEventListener('DOMContentLoaded', function () {
         setActiveNav();
@@ -187,6 +242,7 @@
         renderApiBlocks();
         initAnchors();
         highlightAnchor();
+        initCopyButtons();
 
         // Re-highlight on hash change
         window.addEventListener('hashchange', highlightAnchor);

@@ -314,6 +314,38 @@ pre code {
     color: var(--text-primary);
 }
 
+/* Copy button for code blocks */
+.copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 4px 10px;
+    font-size: 0.72rem;
+    font-family: 'Segoe UI', -apple-system, sans-serif;
+    color: var(--text-secondary);
+    background-color: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s, border-color 0.15s;
+    z-index: 2;
+}
+
+pre:hover .copy-btn {
+    opacity: 1;
+}
+
+.copy-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+}
+
+.copy-btn.copied {
+    color: var(--accent-green);
+    border-color: var(--accent-green);
+}
+
 /* API Block Component */
 .api-block {
     border: 1px solid var(--border);
