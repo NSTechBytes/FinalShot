@@ -162,6 +162,15 @@ namespace PluginScreenshot
             return Rainmeter.StringBuffer.Update(GifCaptureManager.LastSavedPath);
         }
 
+        // Returns the full path of the last successfully saved screenshot.
+        // Usage: [&Measure_FinalShot:GetLastScreenshotPath()]
+        [DllExport]
+        public static IntPtr GetLastScreenshotPath(IntPtr data, int argc,
+            [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr, SizeParamIndex = 1)] string[] argv)
+        {
+            return Rainmeter.StringBuffer.Update(ScreenshotManager.LastSavedPath);
+        }
+
         // Returns the file size of the last saved GIF as a human-readable string
         // e.g. "2.4 MB", "512 KB", "980 B".
         // Returns "" if no GIF has been saved yet this session.

@@ -289,10 +289,13 @@ ScreenshotFinishAction=["#PlayerMediaControls#" "Play"]</code></pre>
                         <p>Leave empty for no action when the notification is clicked.</p>
 
                         <p><strong>Example:</strong></p>
-<pre><code>; Open the saved screenshot in the default image viewer
-NotificationClickAction=["C:\Users\YourName\Pictures\shot.png"]
+<pre><code>; Open the last screenshot (requires DynamicVariables=1 on the measure)
+NotificationClickAction=["[&amp;Measure_FinalShot:GetLastScreenshotPath()]"]
 
-; Or switch to the folder where screenshots are saved
+; Open the last GIF
+NotificationClickAction=["[&amp;Measure_FinalShot:GetSavePath()]"]
+
+; Or open a fixed folder
 NotificationClickAction=["C:\Users\YourName\Pictures"]</code></pre>
 
                         <p><strong>Note:</strong> This setting requires <a href="#screenshot-settings"><code>ShowNotification</code></a> to be <code>1</code> for the notification to appear in the first place.</p>
@@ -1867,6 +1870,18 @@ DynamicVariables=1</code></pre>
                         <p><strong>Practical use:</strong> Open the saved GIF after recording stops.</p>
 <pre><code>; In GifEncodingAction or a separate meter
 Text=Last saved: [&amp;MeasureFinalShot:GetSavePath()]
+DynamicVariables=1</code></pre>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">GetLastScreenshotPath()</span>
+                        <span class="api-default">Returns: string</span>
+                    </div>
+                    <div class="api-block-content">
+                        <p>Returns the full path of the last successfully saved screenshot this session, or <code>""</code> if none.</p>
+<pre><code>Text=[&amp;Measure_FinalShot:GetLastScreenshotPath()]
 DynamicVariables=1</code></pre>
                     </div>
                 </div>

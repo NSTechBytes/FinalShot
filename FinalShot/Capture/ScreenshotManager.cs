@@ -25,6 +25,11 @@ namespace PluginScreenshot
 {
     public static class ScreenshotManager
     {
+        private static string _lastSavedPath = "";
+
+        // Full path of the last successfully saved screenshot this session.
+        public static string LastSavedPath => _lastSavedPath ?? "";
+
         public static void DrawCursor(Graphics g, Rectangle bounds)
         {
             var ci = new NativeMethods.CURSORINFO { cbSize = Marshal.SizeOf(typeof(NativeMethods.CURSORINFO)) };
@@ -384,6 +389,7 @@ namespace PluginScreenshot
                         g.DrawImage(source, 0, 0, source.Width, source.Height);
                         SaveBitmapToStream(opaque, path, fmt, settings);
                     }
+                    _lastSavedPath = path;
                     return;
                 }
 
@@ -395,6 +401,7 @@ namespace PluginScreenshot
                     g.DrawImageUnscaled(source, 0, 0);
                     SaveBitmapToStream(clone, path, fmt, settings);
                 }
+                _lastSavedPath = path;
             }
             catch (Exception ex)
             {
