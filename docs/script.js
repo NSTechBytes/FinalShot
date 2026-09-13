@@ -235,6 +235,94 @@
         }
     }
 
+    // ========================================
+    // Search bar
+    // ========================================
+    function initSearch() {
+        var input = document.querySelector('.sidebar-search input');
+        if (!input) return;
+
+        input.addEventListener('input', function () {
+            var query = this.value.toLowerCase().trim();
+            var apiBlocks = document.querySelectorAll('.api-block');
+            var catHeaders = document.querySelectorAll('.category-header');
+
+            if (!query) {
+                for (var i = 0; i < apiBlocks.length; i++) apiBlocks[i].classList.remove('search-hidden');
+                for (var j = 0; j < catHeaders.length; j++) catHeaders[j].classList.remove('search-hidden');
+                return;
+            }
+
+            for (var m = 0; m < apiBlocks.length; m++) apiBlocks[m].classList.add('search-hidden');
+
+            for (var n = 0; n < apiBlocks.length; n++) {
+                if (apiBlocks[n].textContent.toLowerCase().indexOf(query) !== -1) {
+                    apiBlocks[n].classList.remove('search-hidden');
+                }
+            }
+
+            for (var h = 0; h < catHeaders.length; h++) {
+                var header = catHeaders[h];
+                var sibling = header.nextElementSibling;
+                var hasVisible = false;
+                while (sibling) {
+                    if (sibling.classList.contains('category-header')) break;
+                    if (sibling.classList.contains('api-block') && !sibling.classList.contains('search-hidden')) {
+                        hasVisible = true;
+                        break;
+                    }
+                    sibling = sibling.nextElementSibling;
+                }
+                if (hasVisible) {
+                    header.classList.remove('search-hidden');
+                } else {
+                    header.classList.add('search-hidden');
+                }
+            }
+        });
+    }
+
+    // ========================================
+    // Theme toggle (dark / light)
+    // ========================================
+    function initThemeToggle() {
+        var btn = document.querySelector('.theme-toggle-btn');
+        if (!btn) return;
+
+        var saved = localStorage.getItem('fs-docs-theme');
+        if (saved === 'light') {
+            document.body.classList.add('light');
+            btn.classList.add('active');
+        }
+
+        btn.addEventListener('click', function () {
+            document.body.classList.toggle('light');
+            var isLight = document.body.classList.contains('light');
+            this.classList.toggle('active', isLight);
+            localStorage.setItem('fs-docs-theme', isLight ? 'light' : 'dark');
+        });
+    }
+
+    // ========================================
+    // Back to top button
+    // ========================================
+    function initBackToTop() {
+        var btn = document.querySelector('.back-to-top');
+        if (!btn) return;
+
+        window.addEventListener('scroll', function () {
+            if (window.scrollY > 300) {
+                btn.classList.add('visible');
+            } else {
+                btn.classList.remove('visible');
+            }
+        });
+
+        btn.addEventListener('click', function () {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+    }
+
     // Initialize
     document.addEventListener('DOMContentLoaded', function () {
         setActiveNav();
@@ -243,8 +331,10 @@
         initAnchors();
         highlightAnchor();
         initCopyButtons();
+        initSearch();
+        initThemeToggle();
+        initBackToTop();
 
-        // Re-highlight on hash change
         window.addEventListener('hashchange', highlightAnchor);
     });
 })();

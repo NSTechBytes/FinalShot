@@ -321,7 +321,7 @@ pre code {
     right: 8px;
     padding: 4px 10px;
     font-size: 0.72rem;
-    font-family: 'Segoe UI', -apple-system, sans-serif;
+    font-family: 'Ubuntu', 'Segoe UI', -apple-system, sans-serif;
     color: var(--text-secondary);
     background-color: var(--bg-input);
     border: 1px solid var(--border);
@@ -614,4 +614,147 @@ tr:nth-child(even) td {
     .layout {
         flex-direction: column;
     }
+}
+
+/* ======================================== */
+/* Search bar                               */
+/* ======================================== */
+.sidebar-search {
+    padding: 12px 16px 8px;
+}
+
+.sidebar-search input {
+    width: 100%;
+    padding: 7px 10px;
+    font-size: 0.8rem;
+    font-family: 'Segoe UI', -apple-system, sans-serif;
+    color: var(--text-primary);
+    background-color: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    outline: none;
+    transition: border-color 0.15s;
+}
+
+.sidebar-search input:focus {
+    border-color: var(--accent-blue);
+}
+
+.sidebar-search input::placeholder {
+    color: var(--text-secondary);
+}
+
+/* ======================================== */
+/* Theme toggle                             */
+/* ======================================== */
+.theme-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px 12px;
+    border-top: 1px solid var(--divider);
+}
+
+.theme-toggle-label {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+}
+
+.theme-toggle-btn {
+    position: relative;
+    width: 36px;
+    height: 20px;
+    background-color: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.theme-toggle-btn::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    background-color: var(--text-secondary);
+    border-radius: 50%;
+    transition: transform 0.2s, background-color 0.2s;
+}
+
+.theme-toggle-btn.active {
+    background-color: var(--accent-blue);
+    border-color: var(--accent-blue);
+}
+
+.theme-toggle-btn.active::after {
+    transform: translateX(16px);
+    background-color: #fff;
+}
+
+/* Light theme overrides */
+body.light {
+    --bg: #F5F6F8;
+    --bg-card: #FFFFFF;
+    --bg-input: #ECEEF1;
+    --border: #D4D6DA;
+    --border-strong: #B8BABE;
+    --divider: #E0E2E6;
+    --text-primary: #1A1A1A;
+    --text-secondary: #555555;
+    --accent-blue: #0078D4;
+    --accent-green: #00A050;
+    --accent-amber: #CC7A00;
+    --code-bg: #ECEEF1;
+    --code-border: #D4D6DA;
+}
+
+body.light .api-block-header {
+    background-color: #E0ECF5;
+}
+
+body.light .sidebar {
+    background-color: #FFFFFF;
+}
+
+/* ======================================== */
+/* Back to top button                       */
+/* ======================================== */
+.back-to-top {
+    position: fixed;
+    bottom: 32px;
+    right: 32px;
+    width: 40px;
+    height: 40px;
+    background-color: var(--accent-blue);
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    font-size: 1.2rem;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.25s, visibility 0.25s, background-color 0.15s;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.back-to-top.visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.back-to-top:hover {
+    background-color: #005fa3;
+}
+
+/* ======================================== */
+/* Search highlight                         */
+/* ======================================== */
+.search-hidden {
+    display: none !important;
 }
