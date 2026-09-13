@@ -65,7 +65,10 @@ namespace PluginScreenshot
         public static bool IsIdle      => _state == State.Idle;
 
         // True when the recording is currently paused.
-        public static bool IsPaused    => _pauseRequested;
+        public static bool IsPaused
+        {
+            get { lock (_stateLock) return _pauseRequested; }
+        }
 
         // Elapsed recording time (excluding paused intervals).
         // Returns TimeSpan.Zero when not recording.
@@ -73,24 +76,32 @@ namespace PluginScreenshot
         {
             get
             {
-                if (_state != State.Recording || _recordingStart == DateTime.MinValue)
-                    return TimeSpan.Zero;
-                TimeSpan total = DateTime.UtcNow - _recordingStart - _pausedDuration;
-                // If currently paused, subtract the ongoing pause as well
-                if (_pauseRequested && _pauseStartUtc != DateTime.MinValue)
-                    total -= DateTime.UtcNow - _pauseStartUtc;
-                return total < TimeSpan.Zero ? TimeSpan.Zero : total;
+                lock (_stateLock)
+                {
+                    if (_state != State.Recording || _recordingStart == DateTime.MinValue)
+                        return TimeSpan.Zero;
+                    TimeSpan total = DateTime.UtcNow - _recordingStart - _pausedDuration;
+                    if (_pauseRequested && _pauseStartUtc != DateTime.MinValue)
+                        total -= DateTime.UtcNow - _pauseStartUtc;
+                    return total < TimeSpan.Zero ? TimeSpan.Zero : total;
+                }
             }
         }
 
         // Number of frames captured so far in the current recording.
-        public static int FramesCaptured => _framesCaptured;
+        public static int FramesCaptured => Interlocked.CompareExchange(ref _framesCaptured, 0, 0);
 
         // Full path of the last successfully saved GIF file.
-        public static string LastSavedPath => _lastSavedPath;
+        public static string LastSavedPath
+        {
+            get { lock (_stateLock) return _lastSavedPath ?? ""; }
+        }
 
         // File size in bytes of the last saved GIF. 0 if none saved yet.
-        public static long LastFileSizeBytes => _lastFileSizeBytes;
+        public static long LastFileSizeBytes
+        {
+            get { lock (_stateLock) return _lastFileSizeBytes; }
+        }
 
         public static void StartRecording(Settings settings,
                                           GifCaptureMode mode = GifCaptureMode.FullScreen,
@@ -222,6 +233,8 @@ namespace PluginScreenshot
 
         public static void PauseRecording()
         {
+            bool paused;
+            Settings settings;
             lock (_stateLock)
             {
                 if (_state != State.Recording) return;
@@ -235,13 +248,16 @@ namespace PluginScreenshot
                     _pausedDuration += DateTime.UtcNow - _pauseStartUtc;
                     _pauseStartUtc   = DateTime.MinValue;
                 }
-                Logger.Log($"GifCaptureManager.PauseRecording: paused={_pauseRequested}");
+                paused = _pauseRequested;
+                settings = _activeSettings;
+                Logger.Log($"GifCaptureManager.PauseRecording: paused={paused}");
             }
-            GifRecordingOverlay.SetPaused(_pauseRequested);
-            if (_pauseRequested)
-                ExecuteAction(_activeSettings, _activeSettings.GifPauseAction,  "GifPauseAction");
+            GifRecordingOverlay.SetPaused(paused);
+            if (settings == null) return;
+            if (paused)
+                ExecuteAction(settings, settings.GifPauseAction,  "GifPauseAction");
             else
-                ExecuteAction(_activeSettings, _activeSettings.GifResumeAction, "GifResumeAction");
+                ExecuteAction(settings, settings.GifResumeAction, "GifResumeAction");
         }
 
         public static void ToggleRecording(Settings settings,
@@ -555,8 +571,11 @@ namespace PluginScreenshot
                 Logger.Log($"GifCaptureManager.EncodeAndFinish: GIF saved -> {settings.GifSavePath}");
                 try
                 {
-                    _lastSavedPath     = settings.GifSavePath;
-                    _lastFileSizeBytes = new FileInfo(settings.GifSavePath).Length;
+                    lock (_stateLock)
+                    {
+                        _lastSavedPath     = settings.GifSavePath;
+                        _lastFileSizeBytes = new FileInfo(settings.GifSavePath).Length;
+                    }
                 }
                 catch { }
                 if (settings.ShowNotification && File.Exists(settings.GifSavePath))
@@ -759,15 +778,15 @@ namespace PluginScreenshot
 
         private static void ExecuteAction(Settings settings, string action, string actionName)
         {
-            if (string.IsNullOrEmpty(action)) return;
+            if (string.IsNullOrEmpty(action) || settings?.Api == null) return;
             try
             {
-                Logger.Log($"GifCaptureManager: executing {actionName}.");
-                settings.Api.Execute(action);
+                Logger.Log($"GifCaptureManager: queueing {actionName}.");
+                BangQueue.Enqueue(settings.Api, action);
             }
             catch (Exception ex)
             {
-                Logger.Log($"GifCaptureManager: error executing {actionName} -- {ex.Message}");
+                Logger.Log($"GifCaptureManager: error queueing {actionName} -- {ex.Message}");
             }
         }
     }

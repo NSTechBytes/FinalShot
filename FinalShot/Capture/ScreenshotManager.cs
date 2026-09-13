@@ -444,7 +444,7 @@ namespace PluginScreenshot
             if (string.IsNullOrEmpty(settings.FinishAction)) return;
             try
             {
-                settings.Api.Execute(settings.FinishAction);
+                BangQueue.Enqueue(settings.Api, settings.FinishAction);
             }
             catch (Exception ex)
             {

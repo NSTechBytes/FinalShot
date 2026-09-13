@@ -15,6 +15,7 @@
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace PluginScreenshot
 {
@@ -23,7 +24,7 @@ namespace PluginScreenshot
     // scheme event is set to "(None)" (common on Windows 11).
     internal static class NotificationSound
     {
-        private const uint SND_ASYNC = 0x0001;
+        private const uint SND_SYNC = 0x0000;
         private const uint SND_FILENAME = 0x00020000;
         private const uint SND_NODEFAULT = 0x0002;
 
@@ -36,33 +37,47 @@ namespace PluginScreenshot
             "ding.wav"
         };
 
+        private static int _playing;
+
         [DllImport("winmm.dll", SetLastError = true, CharSet = CharSet.Unicode)]
         private static extern bool PlaySound(string pszSound, IntPtr hmod, uint fdwSound);
 
         public static void Play()
         {
-            try
-            {
-                string media = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.Windows),
-                    "Media");
+            // Play synchronously on a worker so the path string stays valid for
+            // the entire PlaySound call (SND_ASYNC can read a GC'd string).
+            if (Interlocked.CompareExchange(ref _playing, 1, 0) != 0)
+                return;
 
-                foreach (string name in CandidateFiles)
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                try
                 {
-                    string path = Path.Combine(media, name);
-                    if (!File.Exists(path))
-                        continue;
+                    string media = Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+                        "Media");
 
-                    if (PlaySound(path, IntPtr.Zero, SND_ASYNC | SND_FILENAME | SND_NODEFAULT))
-                        return;
+                    foreach (string name in CandidateFiles)
+                    {
+                        string path = Path.Combine(media, name);
+                        if (!File.Exists(path))
+                            continue;
+
+                        if (PlaySound(path, IntPtr.Zero, SND_SYNC | SND_FILENAME | SND_NODEFAULT))
+                            return;
+                    }
+
+                    Logger.Log("NotificationSound: no playable Windows Media notify WAV found.");
                 }
-
-                Logger.Log("NotificationSound: no playable Windows Media notify WAV found.");
-            }
-            catch (Exception ex)
-            {
-                Logger.Log("NotificationSound error: " + ex.Message);
-            }
+                catch (Exception ex)
+                {
+                    Logger.Log("NotificationSound error: " + ex.Message);
+                }
+                finally
+                {
+                    Interlocked.Exchange(ref _playing, 0);
+                }
+            });
         }
     }
 }

@@ -147,7 +147,7 @@ namespace PluginScreenshot
                 return;
             try
             {
-                settings.Api.Execute(settings.OcrFinishAction);
+                BangQueue.Enqueue(settings.Api, settings.OcrFinishAction);
             }
             catch (Exception ex)
             {

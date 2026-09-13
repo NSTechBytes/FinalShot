@@ -48,6 +48,7 @@ namespace PluginScreenshot
         [DllExport]
         public static double Update(IntPtr data)
         {
+            BangQueue.Flush();
             return 0.0;
         }
 

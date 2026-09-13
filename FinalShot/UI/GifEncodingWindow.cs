@@ -32,47 +32,74 @@ namespace PluginScreenshot
     //   Thread-safe: Show/Close/UpdateProgress may be called from any thread.
     internal static class GifEncodingWindow
     {
+        private static readonly object Sync = new object();
         private static EncodingForm _form;
         private static Thread       _thread;
         private static UITheme      _theme = UITheme.Dark;
 
-        // Call from Settings load to keep the window themed.
         public static void SetTheme(UITheme theme) => _theme = theme;
 
-        //  Public API
-
-        // Shows the encoding window (non-blocking). Call from any thread.
         public static void Show(int totalFrames)
         {
             var theme = _theme;
+            var ready = new ManualResetEventSlim(false);
+
+            lock (Sync)
+            {
+                // Avoid overlapping encode windows
+                if (_form != null && !_form.IsDisposed)
+                    return;
+            }
+
             _thread = new Thread(() =>
             {
+                EncodingForm form = null;
                 try
                 {
-                    _form = new EncodingForm(totalFrames, theme);
-                    Application.Run(_form);
+                    form = new EncodingForm(totalFrames, theme);
+                    form.FormClosed += (s, e) =>
+                    {
+                        lock (Sync)
+                        {
+                            if (_form == form)
+                                _form = null;
+                        }
+                    };
+                    lock (Sync) { _form = form; }
+                    ready.Set();
+                    Application.Run(form);
                 }
                 catch (Exception ex)
                 {
                     Logger.Log($"GifEncodingWindow: thread error -- {ex.Message}");
+                    ready.Set();
+                    lock (Sync)
+                    {
+                        if (_form == form)
+                            _form = null;
+                    }
                 }
             });
             _thread.SetApartmentState(ApartmentState.STA);
             _thread.IsBackground = true;
             _thread.Name = "FinalShot-EncodingWindow";
             _thread.Start();
+            ready.Wait(2000);
         }
 
-        // Updates the "Frame X / Y" label. Call from the encoding thread.
         public static void UpdateProgress(int current, int total)
         {
+            EncodingForm f;
+            lock (Sync) { f = _form; }
             try
             {
-                var f = _form;
                 if (f != null && !f.IsDisposed)
                 {
                     if (f.InvokeRequired)
-                        f.BeginInvoke(new Action(() => f.SetProgress(current, total)));
+                        f.BeginInvoke(new Action(() =>
+                        {
+                            if (!f.IsDisposed) f.SetProgress(current, total);
+                        }));
                     else
                         f.SetProgress(current, total);
                 }
@@ -80,22 +107,24 @@ namespace PluginScreenshot
             catch { }
         }
 
-        // Marks encoding complete: fills the progress bar then fades the window out.
         public static void Close()
         {
+            EncodingForm f;
+            lock (Sync) { f = _form; }
             try
             {
-                var f = _form;
-                if (f != null && !f.IsDisposed)
-                {
-                    if (f.InvokeRequired)
-                        f.BeginInvoke(new Action(() => f.FinishAndClose()));
-                    else
-                        f.FinishAndClose();
-                }
+                if (f == null || f.IsDisposed)
+                    return;
+                if (f.InvokeRequired)
+                    f.BeginInvoke(new Action(() =>
+                    {
+                        if (!f.IsDisposed) f.FinishAndClose();
+                    }));
+                else
+                    f.FinishAndClose();
             }
             catch { }
-            finally { _form = null; }
+            // _form cleared in FormClosed — do not null here (races UpdateProgress / Show)
         }
 
         //  EncodingForm
@@ -194,15 +223,28 @@ namespace PluginScreenshot
                 Invalidate();
             }
 
+            private WinTimer _holdTimer;
+
             public void FinishAndClose()
             {
+                if (_done) return;
                 _done = true;
                 _animTimer.Stop();
                 Invalidate();
-                // Brief pause at 100 % then fade out
-                var holdTimer = new WinTimer { Interval = 600 };
-                holdTimer.Tick += (s, e) => { holdTimer.Stop(); holdTimer.Dispose(); _fadeOutTimer.Start(); };
-                holdTimer.Start();
+                if (_holdTimer != null)
+                {
+                    _holdTimer.Stop();
+                    _holdTimer.Dispose();
+                }
+                _holdTimer = new WinTimer { Interval = 600 };
+                _holdTimer.Tick += (s, e) =>
+                {
+                    _holdTimer.Stop();
+                    _holdTimer.Dispose();
+                    _holdTimer = null;
+                    if (!IsDisposed) _fadeOutTimer.Start();
+                };
+                _holdTimer.Start();
             }
 
             //  Fade
@@ -306,6 +348,12 @@ namespace PluginScreenshot
                     _animTimer?.Dispose();
                     _fadeInTimer?.Dispose();
                     _fadeOutTimer?.Dispose();
+                    if (_holdTimer != null)
+                    {
+                        _holdTimer.Stop();
+                        _holdTimer.Dispose();
+                        _holdTimer = null;
+                    }
                 }
                 base.Dispose(disposing);
             }

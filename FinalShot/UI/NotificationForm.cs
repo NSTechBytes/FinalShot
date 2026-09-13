@@ -196,7 +196,7 @@ namespace PluginScreenshot
             // Click anywhere else -> execute action then close
             if (!string.IsNullOrEmpty(_clickAction))
             {
-                try { _settings?.Api?.Execute(_clickAction); }
+                try { BangQueue.Enqueue(_settings?.Api, _clickAction); }
                 catch (Exception ex) { Logger.Log($"NotificationForm: click action error -- {ex.Message}"); }
             }
             StartClose();

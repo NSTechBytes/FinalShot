@@ -30,61 +30,90 @@ namespace PluginScreenshot
     //     A thin blue accent line runs across the top of the toolbar.
     internal static class GifRecordingOverlay
     {
+        private static readonly object Sync = new object();
         private static OverlayForm _form;
-
-        //  Public API
 
         public static void Show(Rectangle region,
                                 Action onStop,
                                 Action onPause,
                                 Action onAbort)
         {
+            lock (Sync)
+            {
+                if (_form != null && !_form.IsDisposed)
+                    return;
+            }
+
+            var ready = new System.Threading.ManualResetEventSlim(false);
             var thread = new System.Threading.Thread(() =>
             {
+                OverlayForm form = null;
                 try
                 {
-                    _form = new OverlayForm(region, onStop, onPause, onAbort);
-                    Application.Run(_form);
+                    form = new OverlayForm(region, onStop, onPause, onAbort);
+                    form.FormClosed += (s, e) =>
+                    {
+                        lock (Sync)
+                        {
+                            if (_form == form)
+                                _form = null;
+                        }
+                    };
+                    lock (Sync) { _form = form; }
+                    ready.Set();
+                    Application.Run(form);
                 }
                 catch (Exception ex)
                 {
                     Logger.Log($"GifRecordingOverlay: thread error -- {ex.Message}");
+                    ready.Set();
+                    lock (Sync)
+                    {
+                        if (_form == form)
+                            _form = null;
+                    }
                 }
             });
             thread.SetApartmentState(System.Threading.ApartmentState.STA);
             thread.IsBackground = true;
             thread.Name = "FinalShot-GifOverlay";
             thread.Start();
+            ready.Wait(2000);
         }
 
-        // Closes the overlay from any thread.
         public static void CloseOverlay()
         {
+            OverlayForm f;
+            lock (Sync) { f = _form; }
             try
             {
-                var f = _form;
-                if (f != null && !f.IsDisposed)
-                {
-                    if (f.InvokeRequired)
-                        f.BeginInvoke(new Action(() => f.Close()));
-                    else
-                        f.Close();
-                }
+                if (f == null || f.IsDisposed)
+                    return;
+                if (f.InvokeRequired)
+                    f.BeginInvoke(new Action(() =>
+                    {
+                        if (!f.IsDisposed) f.Close();
+                    }));
+                else
+                    f.Close();
             }
             catch { }
-            finally { _form = null; }
+            // _form cleared in FormClosed
         }
 
-        // Syncs pause state (button label + timer freeze) from any thread.
         public static void SetPaused(bool paused)
         {
+            OverlayForm f;
+            lock (Sync) { f = _form; }
             try
             {
-                var f = _form;
                 if (f != null && !f.IsDisposed)
                 {
                     if (f.InvokeRequired)
-                        f.BeginInvoke(new Action(() => f.UpdatePauseState(paused)));
+                        f.BeginInvoke(new Action(() =>
+                        {
+                            if (!f.IsDisposed) f.UpdatePauseState(paused);
+                        }));
                     else
                         f.UpdatePauseState(paused);
                 }

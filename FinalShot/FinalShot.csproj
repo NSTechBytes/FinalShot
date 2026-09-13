@@ -108,6 +108,7 @@
     <Compile Include="Core\Logger.cs" />
     <Compile Include="Core\Settings.cs" />
     <Compile Include="Core\NotificationSound.cs" />
+    <Compile Include="Core\BangQueue.cs" />
     <Compile Include="Core\StoredWindowTarget.cs" />
     <Compile Include="Core\NativeMethods.cs" />
     <Compile Include="Core\WindowInfo.cs" />
