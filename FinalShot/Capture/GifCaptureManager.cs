@@ -625,10 +625,33 @@ namespace PluginScreenshot
 
         //  Window helpers
 
+        // Prefer exact title (same as -ws), then largest visible contains-match.
+        // First-contains-wins previously grabbed tiny helper HWNDs (e.g. 384x45).
         private static IntPtr FindWindowByTitle(string title)
         {
-            IntPtr found = IntPtr.Zero;
+            if (string.IsNullOrWhiteSpace(title))
+                return IntPtr.Zero;
+
+            IntPtr exact = NativeMethods.FindWindow(null, title);
+            if (exact != IntPtr.Zero && NativeMethods.IsWindowVisible(exact))
+            {
+                NativeMethods.DwmGetWindowAttribute(exact, NativeMethods.DWMWA_CLOAKED,
+                    out int cloakedExact, sizeof(int));
+                if (cloakedExact == 0)
+                {
+                    Logger.Log("GifCaptureManager.FindWindowByTitle: exact match HWND="
+                        + exact.ToInt64() + " title='" + title + "' bounds=" + GetWindowBounds(exact));
+                    return exact;
+                }
+            }
+
             string lower = title.ToLowerInvariant();
+            IntPtr best = IntPtr.Zero;
+            string bestTitle = "";
+            long bestArea = 0;
+            IntPtr exactEnum = IntPtr.Zero;
+            Rectangle exactEnumBounds = Rectangle.Empty;
+
             NativeMethods.EnumWindows((hWnd, _) =>
             {
                 if (!NativeMethods.IsWindowVisible(hWnd))
@@ -637,16 +660,54 @@ namespace PluginScreenshot
                                                     out int cloaked, sizeof(int));
                 if (cloaked != 0)
                     return true;
+
                 var sb = new StringBuilder(512);
                 GetWindowText(hWnd, sb, sb.Capacity);
-                if (sb.ToString().ToLowerInvariant().Contains(lower))
+                string winTitle = sb.ToString();
+                if (string.IsNullOrEmpty(winTitle))
+                    return true;
+
+                string winLower = winTitle.ToLowerInvariant();
+                Rectangle bounds = GetWindowBounds(hWnd);
+                long area = (long)bounds.Width * bounds.Height;
+                if (bounds.Width < 80 || bounds.Height < 80)
+                    return true; // skip toolbars / ghosts / title-bar scraps
+
+                if (string.Equals(winTitle, title, StringComparison.OrdinalIgnoreCase))
                 {
-                    found = hWnd;
-                    return false;
+                    if (area > (long)exactEnumBounds.Width * exactEnumBounds.Height)
+                    {
+                        exactEnum = hWnd;
+                        exactEnumBounds = bounds;
+                    }
+                }
+
+                if (winLower.Contains(lower) && area > bestArea)
+                {
+                    best = hWnd;
+                    bestTitle = winTitle;
+                    bestArea = area;
                 }
                 return true;
             }, IntPtr.Zero);
-            return found;
+
+            if (exactEnum != IntPtr.Zero)
+            {
+                Logger.Log("GifCaptureManager.FindWindowByTitle: enum exact HWND="
+                    + exactEnum.ToInt64() + " title='" + title + "' bounds=" + exactEnumBounds);
+                return exactEnum;
+            }
+
+            if (best != IntPtr.Zero)
+            {
+                Logger.Log("GifCaptureManager.FindWindowByTitle: contains match HWND="
+                    + best.ToInt64() + " title='" + bestTitle + "' area=" + bestArea
+                    + " bounds=" + GetWindowBounds(best));
+                return best;
+            }
+
+            Logger.Log("GifCaptureManager.FindWindowByTitle: no window matched '" + title + "'");
+            return IntPtr.Zero;
         }
 
         private static Rectangle GetWindowBounds(IntPtr hWnd)
