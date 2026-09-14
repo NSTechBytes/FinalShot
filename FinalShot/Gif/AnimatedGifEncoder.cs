@@ -55,7 +55,8 @@ namespace PluginScreenshot
         //  length - identical to ShareX HardDiskCache approach.
 
         public static void Encode(GifDiskCache cache, string outputPath,
-                                  int quality = 100, int compression = 50)
+                                  int quality = 100, int compression = 50,
+                                  bool coalesceIdentical = true)
         {
             if (cache == null || cache.Count == 0)
                 throw new ArgumentException("No frames to encode.");
@@ -81,11 +82,14 @@ namespace PluginScreenshot
             ResolveGifQuality(quality, out int realColors, out int bayerStrength, out bool useDither);
             ResolveGifCompression(compression,
                 out double nearDupeFraction, out int bandAreaPercent, out int maxBands);
+            if (!coalesceIdentical)
+                nearDupeFraction = 0;
 
             const int MAX_SAMPLES = 500_000;
 
             Logger.Log($"AnimatedGifEncoder: {cache.Count} frames, {w}x{h}, " +
-                       $"quality={quality}, compression={compression}, colors={realColors}, dither=" +
+                       $"quality={quality}, compression={compression}, " +
+                       $"coalesceIdentical={coalesceIdentical}, colors={realColors}, dither=" +
                        (useDither ? ("bayer/" + bayerStrength) : "off") +
                        $", nearDupe={nearDupeFraction:P3}, out={outputPath}");
 
@@ -160,7 +164,7 @@ namespace PluginScreenshot
                         : QuantizeNoDither(bgra, w, h, cube);
                     bgra = null;
 
-                    if (prevIndices != null)
+                    if (prevIndices != null && coalesceIdentical)
                     {
                         // One pass: exact dupe + near-dupe (was BytesEqual then CountChangedPixels)
                         long changedCount = CountChangedPixels(indices, prevIndices);
@@ -183,7 +187,7 @@ namespace PluginScreenshot
                     int effectiveCs = delayCs + pendingCs;
                     pendingCs = 0;
 
-                    if (prevIndices != null)
+                    if (prevIndices != null && coalesceIdentical)
                     {
                         List<Rectangle> bands = ComputeDirtyBands(
                             indices, prevIndices, w, h, bandAreaPercent, maxBands);
@@ -213,7 +217,7 @@ namespace PluginScreenshot
                     else
                     {
                         Logger.Log($"AnimatedGifEncoder: writing frame {frameNum}/{cache.Count} " +
-                                   $"delay={effectiveCs}cs (first frame, full canvas)");
+                                   $"delay={effectiveCs}cs (full canvas)");
                         WriteGifFrameWithTransparency(bw, indices,
                             0, 0, w, h, effectiveCs, transpIdx, lzwMinCode);
                     }

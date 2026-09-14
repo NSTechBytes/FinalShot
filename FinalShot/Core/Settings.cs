@@ -64,6 +64,10 @@ namespace PluginScreenshot
         // more aggressive dirty-band / near-duplicate optimisation. Does not change resolution.
         public int GifCompression { get; private set; }
 
+        // When true (default), identical successive captures are merged into one frame
+        // (delay coalesced). Set to false to keep every FPS tick even on a still screen.
+        public bool GifSkipIdenticalFrames { get; private set; }
+
         public Rectangle GifPredefinedRegion { get; private set; }
 
         // When true, a dialog is shown when the user tries to start a recording
@@ -181,6 +185,8 @@ namespace PluginScreenshot
             if (GifCompression < 0)   GifCompression = 0;
             if (GifCompression > 100) GifCompression = 100;
 
+            GifSkipIdenticalFrames = api.ReadInt("GifSkipIdenticalFrames", 1) > 0;
+
             int gx = api.ReadInt("GifPredefX",      x);
             int gy = api.ReadInt("GifPredefY",      y);
             int gw = api.ReadInt("GifPredefWidth",  w);
@@ -269,6 +275,7 @@ namespace PluginScreenshot
                 + "|" + OcrLanguage + "|" + OcrScaleFactor + "|" + OcrSingleLine
                 + "|" + ShowOcrWindow + "|" + (OcrFinishAction ?? "")
                 + "|" + GifFPS + "|" + GifQuality + "|" + GifCompression + "|" + GifDuration
+                + "|" + GifSkipIdenticalFrames
                 + "|" + GifPredefinedRegion
                 + "|" + GifShowOverlay + "|" + GifShowEncodingWindow + "|" + GifShowStateDialogs
                 + "|" + (GifStartAction ?? "") + "|" + (GifCancelAction ?? "")

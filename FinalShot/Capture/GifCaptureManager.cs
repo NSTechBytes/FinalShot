@@ -395,11 +395,12 @@ namespace PluginScreenshot
             int fps        = settings.GifFPS;
             int maxSeconds = settings.GifDuration;
             int targetMs   = Math.Max(1, 1000 / Math.Max(1, fps));
+            bool skipIdentical = settings.GifSkipIdenticalFrames;
 
             GifDiskCache localCache = _cache;
 
             Logger.Log($"GifCaptureManager.CaptureLoop: starting, mode={_captureMode}, fps={fps}, " +
-                       $"maxSeconds={maxSeconds}, targetMs={targetMs}");
+                       $"maxSeconds={maxSeconds}, targetMs={targetMs}, skipIdentical={skipIdentical}");
 
             if (localCache == null)
             {
@@ -457,23 +458,35 @@ namespace PluginScreenshot
                         if (delayCs < 2) delayCs = 2;
 
                         // Still-frame merge: identical captures fold into the next
-                        // frame's delay -- same timing, fewer frames, no quality loss.
-                        ulong hash = HashBitmapPixels(bmp);
-                        if (havePrev && hash == prevHash)
+                        // frame's delay -- same timing, fewer frames. Disable with
+                        // GifSkipIdenticalFrames=0 to keep every FPS tick.
+                        if (skipIdentical)
                         {
-                            pendingDelayCs += delayCs;
-                            stillSkipped++;
-                            bmp.Dispose();
-                            bmp = null;
+                            ulong hash = HashBitmapPixels(bmp);
+                            if (havePrev && hash == prevHash)
+                            {
+                                pendingDelayCs += delayCs;
+                                stillSkipped++;
+                                bmp.Dispose();
+                                bmp = null;
+                            }
+                            else
+                            {
+                                delayCs += pendingDelayCs;
+                                pendingDelayCs = 0;
+                                prevHash = hash;
+                                havePrev = true;
+                                localCache.Add(new GifFrame(bmp, delayCs));
+                                bmp = null;
+                                Interlocked.Increment(ref _framesCaptured);
+                            }
                         }
                         else
                         {
                             delayCs += pendingDelayCs;
                             pendingDelayCs = 0;
-                            prevHash = hash;
-                            havePrev = true;
                             localCache.Add(new GifFrame(bmp, delayCs));
-                            bmp = null; // ownership transferred to cache
+                            bmp = null;
                             Interlocked.Increment(ref _framesCaptured);
                         }
                     }
@@ -594,7 +607,8 @@ namespace PluginScreenshot
                 // Encoder reads frames from disk via two streaming passes --
                 // no frame list ever lives in RAM simultaneously.
                 AnimatedGifEncoder.Encode(cache, settings.GifSavePath,
-                    settings.GifQuality, settings.GifCompression);
+                    settings.GifQuality, settings.GifCompression,
+                    settings.GifSkipIdenticalFrames);
                 success = true;
             }
             catch (Exception ex)

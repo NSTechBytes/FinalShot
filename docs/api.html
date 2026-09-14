@@ -617,6 +617,28 @@ GifCompression=0</code></pre>
 
                 <div class="api-block">
                     <div class="api-block-header">
+                        <span class="api-name">GifSkipIdenticalFrames</span>
+                        <span class="api-default">Default: 1</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">int (0 or 1)</span>
+                        <p>Controls whether FinalShot drops successive captures that look identical (still screen / mouse not moving). Dropped time is merged into the next frame’s delay so playback length stays correct, but fewer frames are stored.</p>
+                        <ul>
+                            <li><code>1</code> (default): Skip identical captures at record time and coalesces duplicates while encoding. Smaller files.</li>
+                            <li><code>0</code>: Keep every frame at <a href="#gif-recording-settings"><code>GifFPS</code></a>, even when nothing on screen changes. Larger files.</li>
+                        </ul>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>; Capture every FPS tick (still screen still writes frames)
+GifSkipIdenticalFrames=0
+
+; Default — coalesce motionless periods
+GifSkipIdenticalFrames=1</code></pre>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
                         <span class="api-name">GifDuration</span>
                         <span class="api-default">Default: 0</span>
                     </div>
@@ -2069,6 +2091,9 @@ GifQuality=100
 
 ; Inter-frame compression. Higher = smaller files.
 GifCompression=50
+
+; 1 = skip identical still frames (default). 0 = capture every FPS tick.
+GifSkipIdenticalFrames=1
 
 ; Max duration in seconds. 0 = no limit (manual stop required).
 GifDuration=0
