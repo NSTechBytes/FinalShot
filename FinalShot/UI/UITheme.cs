@@ -49,6 +49,13 @@ namespace PluginScreenshot
         public Color AccentGreen  { get; } = Color.FromArgb(0, 200, 100);
         public Color AccentAmber  { get; } = Color.FromArgb(255, 160, 30);
 
+        // Snap / region-select overlay (GifSnapSelector, CustomScreenshotForm)
+        public Color SnapBorder    { get; }
+        public Color SnapFill      { get; }
+        public Color SnapLabelBack { get; }
+        public Color SnapLabelFore { get; }
+        public Color SnapDim       { get; }
+
         public Color CloseNormal  { get; }
         public Color CloseHover   { get; }
 
@@ -69,6 +76,12 @@ namespace PluginScreenshot
                 BtnText      = Color.FromArgb(220, 220, 220);
                 CloseNormal  = Color.FromArgb(120, 120, 120);
                 CloseHover   = Color.White;
+
+                SnapBorder    = AccentBlue;
+                SnapFill      = Color.FromArgb(30,  0, 120, 212);
+                SnapLabelBack = Color.FromArgb(220, 0,  80, 160);
+                SnapLabelFore = Color.White;
+                SnapDim       = Color.FromArgb(130, 0, 0, 0);
             }
             else
             {
@@ -85,6 +98,13 @@ namespace PluginScreenshot
                 BtnText      = Color.FromArgb(20,  22,  28);
                 CloseNormal  = Color.FromArgb(120, 120, 120);
                 CloseHover   = Color.FromArgb(20,  22,  28);
+
+                SnapBorder    = AccentBlue;
+                SnapFill      = Color.FromArgb(40,  0, 120, 212);
+                SnapLabelBack = Color.FromArgb(245, 255, 255, 255);
+                SnapLabelFore = Color.FromArgb(20, 22, 28);
+                // Same blackout dim as Dark mode
+                SnapDim       = Color.FromArgb(130, 0, 0, 0);
             }
         }
 

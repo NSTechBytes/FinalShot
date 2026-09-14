@@ -32,6 +32,7 @@ namespace PluginScreenshot
         private readonly Action   _finishCallback;
         private readonly CustomScreenshotMode _mode;
         private readonly bool _detectWindows;
+        private readonly ThemeColors _theme;
 
         // Desktop snapshot -- shown dimmed; the hovered/selected region is shown undimmed.
         private Bitmap _desktopSnapshot;
@@ -81,6 +82,7 @@ namespace PluginScreenshot
             _settings       = settings;
             _finishCallback = finishCallback;
             _mode           = mode;
+            _theme          = ThemeColors.Resolve(settings?.UITheme ?? UITheme.Dark);
             // Window-handle pick always enables detection (plan: window-only select).
             _detectWindows  = mode == CustomScreenshotMode.WindowHandlePick || settings.DetectWindows;
 
@@ -337,7 +339,7 @@ namespace PluginScreenshot
 
             // 1. Dimmed desktop snapshot as the base layer.
             g.DrawImage(_desktopSnapshot, 0, 0);
-            using (var dim = new SolidBrush(GifSnapSelector.DimColor))
+            using (var dim = new SolidBrush(_theme.SnapDim))
                 g.FillRectangle(dim, client);
 
             if (!IsHandlePick && _dragging && _selection.Width > 1 && _selection.Height > 1)
@@ -349,13 +351,13 @@ namespace PluginScreenshot
                             new Rectangle(sel.X, sel.Y, sel.Width, sel.Height),
                             sel, GraphicsUnit.Pixel);
 
-                // Blue fill + border + handles + label.
-                using (var fill = new SolidBrush(GifSnapSelector.SelectionFillColor))
+                // Themed fill + border + handles + label.
+                using (var fill = new SolidBrush(_theme.SnapFill))
                     g.FillRectangle(fill, sel);
-                using (var pen = new Pen(GifSnapSelector.SelectionBorderColor, 2))
+                using (var pen = new Pen(_theme.SnapBorder, 2))
                     g.DrawRectangle(pen, sel.X, sel.Y, sel.Width - 1, sel.Height - 1);
-                GifSnapSelector.DrawCornerHandles(g, sel);
-                GifSnapSelector.DrawSizeLabel(g, sel, client);
+                GifSnapSelector.DrawCornerHandles(g, sel, _theme);
+                GifSnapSelector.DrawSizeLabel(g, sel, client, _theme);
                 return;
             }
 
@@ -377,7 +379,7 @@ namespace PluginScreenshot
                         active, GraphicsUnit.Pixel);
 
             // Extra dim on the four surrounding bands.
-            using (var band = new SolidBrush(GifSnapSelector.DimColor))
+            using (var band = new SolidBrush(_theme.SnapDim))
             {
                 if (active.Top    > 0)            g.FillRectangle(band, 0,            0,             client.Width,                active.Top);
                 if (active.Left   > 0)            g.FillRectangle(band, 0,            active.Top,    active.Left,                 active.Height);
@@ -385,18 +387,18 @@ namespace PluginScreenshot
                 if (active.Bottom < client.Height) g.FillRectangle(band, 0,            active.Bottom, client.Width,                client.Height - active.Bottom);
             }
 
-            // Blue fill + border + handles.
-            using (var fill = new SolidBrush(GifSnapSelector.SelectionFillColor))
+            // Themed fill + border + handles.
+            using (var fill = new SolidBrush(_theme.SnapFill))
                 g.FillRectangle(fill, active);
-            using (var pen = new Pen(GifSnapSelector.SelectionBorderColor, 2))
+            using (var pen = new Pen(_theme.SnapBorder, 2))
                 g.DrawRectangle(pen, active.X, active.Y, active.Width - 1, active.Height - 1);
-            GifSnapSelector.DrawCornerHandles(g, active);
+            GifSnapSelector.DrawCornerHandles(g, active, _theme);
 
             // Size label uses the actual window pixel dimensions.
             Rectangle sizeRect = new Rectangle(active.X, active.Y,
                                                _hoveredWindow.Rectangle.Width,
                                                _hoveredWindow.Rectangle.Height);
-            GifSnapSelector.DrawSizeLabel(g, sizeRect, client);
+            GifSnapSelector.DrawSizeLabel(g, sizeRect, client, _theme);
         }
 
         //  Cleanup

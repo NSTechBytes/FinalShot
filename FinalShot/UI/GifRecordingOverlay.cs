@@ -36,7 +36,8 @@ namespace PluginScreenshot
         public static void Show(Rectangle region,
                                 Action onStop,
                                 Action onPause,
-                                Action onAbort)
+                                Action onAbort,
+                                UITheme theme = UITheme.Dark)
         {
             lock (Sync)
             {
@@ -50,7 +51,7 @@ namespace PluginScreenshot
                 OverlayForm form = null;
                 try
                 {
-                    form = new OverlayForm(region, onStop, onPause, onAbort);
+                    form = new OverlayForm(region, onStop, onPause, onAbort, theme);
                     form.FormClosed += (s, e) =>
                     {
                         lock (Sync)
@@ -125,30 +126,19 @@ namespace PluginScreenshot
 
         internal sealed class OverlayForm : Form
         {
-            //  Style -- matches the screenshot exactly
-
-            // Border
-            private static readonly Color BorderColor  = Color.FromArgb(255,  0, 120, 212); // #0078D4
+            // Border / toolbar chrome from UITheme
             private const int BorderW   = 2;
             private const int BorderGap = 1; // pixels between capture edge and innermost border pixel
 
-            // Toolbar
-            private static readonly Color ToolbarBg      = Color.FromArgb(255, 16,  18,  22);  // near-black
-            private static readonly Color AccentLine      = Color.FromArgb(255,  0, 120, 212);  // blue top line
-            private static readonly Color DividerColor    = Color.FromArgb(255, 40,  42,  48);  // column divider
-            private static readonly Color TextNormal      = Color.FromArgb(255, 220, 220, 220); // off-white
-            private static readonly Color TextHover       = Color.White;
-            private static readonly Color ColHoverBg      = Color.FromArgb(255, 35,  38,  45);  // subtle highlight
-            private static readonly Color TimerText       = Color.FromArgb(255, 180, 215, 255); // light blue
-
             private const int ToolbarH    = 32;  // height of the toolbar
-            private const int AccentLineH = 2;   // blue line at top of toolbar
+            private const int AccentLineH = 2;   // accent line at top of toolbar
             private const int Cols        = 4;   // Stop | Pause | Abort | Timer
 
             //  State
 
-            private readonly Rectangle _region;
-            private readonly Action    _onStop, _onPause, _onAbort;
+            private readonly Rectangle   _region;
+            private readonly Action      _onStop, _onPause, _onAbort;
+            private readonly ThemeColors _t;
 
             private readonly Timer    _ticker;
             private readonly DateTime _startUtc      = DateTime.UtcNow;
@@ -163,12 +153,14 @@ namespace PluginScreenshot
 
             //  Constructor
 
-            public OverlayForm(Rectangle region, Action onStop, Action onPause, Action onAbort)
+            public OverlayForm(Rectangle region, Action onStop, Action onPause, Action onAbort,
+                               UITheme theme)
             {
                 _region  = region;
                 _onStop  = onStop;
                 _onPause = onPause;
                 _onAbort = onAbort;
+                _t       = ThemeColors.Resolve(theme);
 
                 FormBorderStyle = FormBorderStyle.None;
                 ShowInTaskbar   = false;
@@ -272,7 +264,7 @@ namespace PluginScreenshot
                 float bw = _region.Width  + (BorderGap + BorderW / 2f) * 2;
                 float bh = _region.Height + (BorderGap + BorderW / 2f) * 2;
 
-                using (var pen = new Pen(BorderColor, BorderW))
+                using (var pen = new Pen(_t.SnapBorder, BorderW))
                 {
                     pen.DashStyle   = DashStyle.Dash;
                     pen.DashPattern = new float[] { 6f, 3f };
@@ -288,11 +280,11 @@ namespace PluginScreenshot
                 int tbW = _region.Width;           // toolbar width = exactly capture region width
 
                 // Background
-                using (var bg = new SolidBrush(ToolbarBg))
+                using (var bg = new SolidBrush(_t.Background))
                     g.FillRectangle(bg, tbX, _tbY, tbW, ToolbarH);
 
-                // Blue accent line at top
-                using (var accent = new SolidBrush(AccentLine))
+                // Accent line at top
+                using (var accent = new SolidBrush(_t.AccentBlue))
                     g.FillRectangle(accent, tbX, _tbY, tbW, AccentLineH);
 
                 // Column labels
@@ -310,22 +302,22 @@ namespace PluginScreenshot
                     // Hover highlight (not on timer column)
                     if (i == _hovered && i < 3)
                     {
-                        using (var hov = new SolidBrush(ColHoverBg))
+                        using (var hov = new SolidBrush(_t.BtnHover))
                             g.FillRectangle(hov, colRect);
                     }
 
                     // Divider (1px right edge of each column except last)
                     if (i < Cols - 1)
                     {
-                        using (var div = new Pen(DividerColor, 1))
+                        using (var div = new Pen(_t.Divider, 1))
                             g.DrawLine(div, cx + cw, _tbY + AccentLineH + 4,
                                             cx + cw, _tbY + ToolbarH - 4);
                     }
 
                     // Text
-                    Color tc = (i == 3) ? TimerText
-                             : (_hovered == i) ? TextHover
-                             : TextNormal;
+                    Color tc = (i == 3) ? _t.AccentBlue
+                             : (_hovered == i) ? _t.CloseHover
+                             : _t.TextPrimary;
 
                     using (var font = new Font(i == 3 ? "Consolas" : "Segoe UI", 9.5f,
                                                i == 3 ? FontStyle.Bold : FontStyle.Regular))

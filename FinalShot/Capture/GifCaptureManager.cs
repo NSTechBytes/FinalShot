@@ -403,7 +403,8 @@ namespace PluginScreenshot
                     captureRegion,
                     onStop:  () => ThreadPool.QueueUserWorkItem(_ => StopAndSave(_activeSettings)),
                     onPause: () => ThreadPool.QueueUserWorkItem(_ => PauseRecording()),
-                    onAbort: () => ThreadPool.QueueUserWorkItem(_ => CancelRecording(_activeSettings)));
+                    onAbort: () => ThreadPool.QueueUserWorkItem(_ => CancelRecording(_activeSettings)),
+                    theme:   settings.UITheme);
             }
 
             ExecuteAction(settings, settings.GifStartAction, "GifStartAction");

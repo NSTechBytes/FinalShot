@@ -44,21 +44,14 @@ namespace PluginScreenshot
             return result;
         }
 
-        //  Shared style constants -- keep in sync with CustomScreenshotForm
-
-        internal static readonly Color SelectionBorderColor = Color.FromArgb(255, 0, 120, 212); // #0078D4
-        internal static readonly Color SelectionFillColor   = Color.FromArgb(30,  0, 120, 212);
-        internal static readonly Color LabelBackColor       = Color.FromArgb(220, 0,  80, 160);
-        internal static readonly Color LabelForeColor       = Color.White;
-        internal static readonly Color DimColor             = Color.FromArgb(130, 0,   0,   0);
-
-        //  SnapOverlayForm
+        //  Shared overlay style -- resolved from UITheme on each form
 
         private sealed class SnapOverlayForm : Form
         {
             public Rectangle SelectedRegion { get; private set; }
 
-            private readonly Settings _settings;
+            private readonly Settings    _settings;
+            private readonly ThemeColors _theme;
 
             // Drag state
             private Point     _dragStart;
@@ -77,6 +70,7 @@ namespace PluginScreenshot
             public SnapOverlayForm(Settings settings)
             {
                 _settings = settings;
+                _theme    = ThemeColors.Resolve(settings?.UITheme ?? UITheme.Dark);
 
                 NativeMethods.SetThreadDpiAwarenessContext(NativeMethods.DPI_PER_MONITOR_AWARE_V2);
 
@@ -291,7 +285,7 @@ namespace PluginScreenshot
 
                 // 1. Dimmed desktop snapshot as background.
                 g.DrawImage(_desktopSnapshot, 0, 0);
-                using (var dim = new SolidBrush(DimColor))
+                using (var dim = new SolidBrush(_theme.SnapDim))
                     g.FillRectangle(dim, client);
 
                 if (_dragging)
@@ -304,13 +298,13 @@ namespace PluginScreenshot
                                     new Rectangle(sel.X, sel.Y, sel.Width, sel.Height),
                                     sel, GraphicsUnit.Pixel);
 
-                        // Blue fill + border + handles + label.
-                        using (var fill = new SolidBrush(SelectionFillColor))
+                        // Themed fill + border + handles + label.
+                        using (var fill = new SolidBrush(_theme.SnapFill))
                             g.FillRectangle(fill, sel);
-                        using (var pen = new Pen(SelectionBorderColor, 2))
+                        using (var pen = new Pen(_theme.SnapBorder, 2))
                             g.DrawRectangle(pen, sel.X, sel.Y, sel.Width - 1, sel.Height - 1);
-                        DrawCornerHandles(g, sel);
-                        DrawSizeLabel(g, sel, client);
+                        DrawCornerHandles(g, sel, _theme);
+                        DrawSizeLabel(g, sel, client, _theme);
                     }
                     return;
                 }
@@ -334,7 +328,7 @@ namespace PluginScreenshot
                             active, GraphicsUnit.Pixel);
 
                 // Extra dim on the four surrounding bands.
-                using (var band = new SolidBrush(DimColor))
+                using (var band = new SolidBrush(_theme.SnapDim))
                 {
                     if (active.Top    > 0)       g.FillRectangle(band, 0,            0,             client.Width,              active.Top);
                     if (active.Left   > 0)        g.FillRectangle(band, 0,            active.Top,    active.Left,               active.Height);
@@ -342,18 +336,18 @@ namespace PluginScreenshot
                     if (active.Bottom < client.Height) g.FillRectangle(band, 0,            active.Bottom, client.Width,              client.Height - active.Bottom);
                 }
 
-                // Blue fill + border + handles.
-                using (var fill = new SolidBrush(SelectionFillColor))
+                // Themed fill + border + handles.
+                using (var fill = new SolidBrush(_theme.SnapFill))
                     g.FillRectangle(fill, active);
-                using (var pen = new Pen(SelectionBorderColor, 2))
+                using (var pen = new Pen(_theme.SnapBorder, 2))
                     g.DrawRectangle(pen, active.X, active.Y, active.Width - 1, active.Height - 1);
-                DrawCornerHandles(g, active);
+                DrawCornerHandles(g, active, _theme);
 
                 // Size label uses the actual window pixel dimensions.
                 Rectangle sizeRect = new Rectangle(active.X, active.Y,
                                                    _hoveredWindow.Rectangle.Width,
                                                    _hoveredWindow.Rectangle.Height);
-                DrawSizeLabel(g, sizeRect, client);
+                DrawSizeLabel(g, sizeRect, client, _theme);
             }
 
             //  Helpers
@@ -378,10 +372,11 @@ namespace PluginScreenshot
         //  Shared paint helpers -- used by GifSnapSelector and CustomScreenshotForm
 
         // Draws small square handles at each corner of the selection.
-        internal static void DrawCornerHandles(Graphics g, Rectangle sel)
+        internal static void DrawCornerHandles(Graphics g, Rectangle sel, ThemeColors theme)
         {
+            if (theme == null) theme = ThemeColors.Resolve(UITheme.Dark);
             const int sz = 6;
-            using (var fill = new SolidBrush(SelectionBorderColor))
+            using (var fill = new SolidBrush(theme.SnapBorder))
             {
                 Point[] corners =
                 {
@@ -395,13 +390,15 @@ namespace PluginScreenshot
             }
         }
 
-        // Draws the "W x H" size label in a rounded blue pill below (or above) the selection.
-        internal static void DrawSizeLabel(Graphics g, Rectangle sel, Rectangle clientBounds)
+        // Draws the "W x H" size label in a rounded themed pill below (or above) the selection.
+        internal static void DrawSizeLabel(Graphics g, Rectangle sel, Rectangle clientBounds,
+                                          ThemeColors theme)
         {
+            if (theme == null) theme = ThemeColors.Resolve(UITheme.Dark);
             string label = $"{sel.Width} × {sel.Height}";
             using (var font = new Font("Segoe UI", 9f, FontStyle.Bold))
-            using (var bg   = new SolidBrush(LabelBackColor))
-            using (var fg   = new SolidBrush(LabelForeColor))
+            using (var bg   = new SolidBrush(theme.SnapLabelBack))
+            using (var fg   = new SolidBrush(theme.SnapLabelFore))
             {
                 SizeF ts   = g.MeasureString(label, font);
                 int   padX = 8, padY = 4;
