@@ -394,13 +394,12 @@ namespace PluginScreenshot
         {
             int fps        = settings.GifFPS;
             int maxSeconds = settings.GifDuration;
-            int targetMs   = 1000 / fps;
-            int maxFrames  = maxSeconds > 0 ? fps * maxSeconds : int.MaxValue;
+            int targetMs   = Math.Max(1, 1000 / Math.Max(1, fps));
 
             GifDiskCache localCache = _cache;
 
             Logger.Log($"GifCaptureManager.CaptureLoop: starting, mode={_captureMode}, fps={fps}, " +
-                       $"maxFrames={maxFrames}, targetMs={targetMs}");
+                       $"maxSeconds={maxSeconds}, targetMs={targetMs}");
 
             if (localCache == null)
             {
@@ -410,22 +409,41 @@ namespace PluginScreenshot
 
             IntPtr oldCtx = NativeMethods.SetThreadDpiAwarenessContext(
                                 NativeMethods.DPI_PER_MONITOR_AWARE_V2);
+            bool durationReached = false;
             try
             {
                 var frameClock = Stopwatch.StartNew();
+                // Wall-clock limit (paused time excluded). Frame-count limits drifted
+                // when capture was slower than FPS and never triggered StopAndSave.
+                var limitWatch = Stopwatch.StartNew();
                 ulong prevHash = 0;
                 bool  havePrev = false;
                 int   pendingDelayCs = 0;
                 int   stillSkipped = 0;
 
-                for (int i = 0; !_stopRequested && i < maxFrames; i++)
+                for (int i = 0; !_stopRequested; i++)
                 {
+                    if (maxSeconds > 0 && limitWatch.Elapsed.TotalSeconds >= maxSeconds)
+                    {
+                        durationReached = true;
+                        Logger.Log($"GifCaptureManager.CaptureLoop: GifDuration={maxSeconds}s reached.");
+                        break;
+                    }
+
                     if (_pauseRequested)
                     {
+                        limitWatch.Stop();
                         while (_pauseRequested && !_stopRequested)
                             Thread.Sleep(50);
+                        limitWatch.Start();
                         frameClock.Restart();
                         if (_stopRequested) break;
+                        if (maxSeconds > 0 && limitWatch.Elapsed.TotalSeconds >= maxSeconds)
+                        {
+                            durationReached = true;
+                            Logger.Log($"GifCaptureManager.CaptureLoop: GifDuration={maxSeconds}s reached after resume.");
+                            break;
+                        }
                     }
 
                     var captureSw = Stopwatch.StartNew();
@@ -479,6 +497,14 @@ namespace PluginScreenshot
                 NativeMethods.SetThreadDpiAwarenessContext(oldCtx);
                 localCache.Complete();
                 Logger.Log("GifCaptureManager.CaptureLoop: finished.");
+            }
+
+            // Duration limit must go through StopAndSave (encode + overlay close).
+            // Queue after this thread finishes Complete() so EncodeAndFinish can Join safely.
+            if (durationReached)
+            {
+                Settings s = settings ?? _activeSettings;
+                ThreadPool.QueueUserWorkItem(_ => StopAndSave(s));
             }
         }
 
