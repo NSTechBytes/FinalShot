@@ -758,3 +758,14 @@ body.light .sidebar {
 .search-hidden {
     display: none !important;
 }
+
+.search-highlight {
+    background-color: rgba(255, 160, 30, 0.35);
+    color: inherit;
+    border-radius: 2px;
+    padding: 0 1px;
+}
+
+body.light .search-highlight {
+    background-color: rgba(255, 160, 30, 0.45);
+}

@@ -242,10 +242,52 @@
         var input = document.querySelector('.sidebar-search input');
         if (!input) return;
 
+        function highlightText(node, query) {
+            if (node.nodeType === 3) {
+                var text = node.nodeValue;
+                var lower = text.toLowerCase();
+                var idx = lower.indexOf(query.toLowerCase());
+                if (idx === -1) return false;
+
+                var before = text.substring(0, idx);
+                var match = text.substring(idx, idx + query.length);
+                var after = text.substring(idx + query.length);
+
+                var span = document.createElement('span');
+                span.className = 'search-highlight';
+                span.textContent = match;
+
+                var parent = node.parentNode;
+                if (before) parent.insertBefore(document.createTextNode(before), node);
+                parent.insertBefore(span, node);
+                if (after) parent.insertBefore(document.createTextNode(after), node);
+                parent.removeChild(node);
+                return true;
+            }
+            if (node.nodeType === 1 && node.nodeName !== 'SCRIPT' && node.nodeName !== 'STYLE' && !node.classList.contains('search-highlight')) {
+                var children = Array.prototype.slice.call(node.childNodes);
+                for (var i = 0; i < children.length; i++) {
+                    highlightText(children[i], query);
+                }
+            }
+            return false;
+        }
+
+        function removeHighlights() {
+            var marks = document.querySelectorAll('.search-highlight');
+            for (var i = marks.length - 1; i >= 0; i--) {
+                var parent = marks[i].parentNode;
+                parent.replaceChild(document.createTextNode(marks[i].textContent), marks[i]);
+                parent.normalize();
+            }
+        }
+
         input.addEventListener('input', function () {
-            var query = this.value.toLowerCase().trim();
+            var query = this.value.trim();
             var apiBlocks = document.querySelectorAll('.api-block');
             var catHeaders = document.querySelectorAll('.category-header');
+
+            removeHighlights();
 
             if (!query) {
                 for (var i = 0; i < apiBlocks.length; i++) apiBlocks[i].classList.remove('search-hidden');
@@ -256,8 +298,9 @@
             for (var m = 0; m < apiBlocks.length; m++) apiBlocks[m].classList.add('search-hidden');
 
             for (var n = 0; n < apiBlocks.length; n++) {
-                if (apiBlocks[n].textContent.toLowerCase().indexOf(query) !== -1) {
+                if (apiBlocks[n].textContent.toLowerCase().indexOf(query.toLowerCase()) !== -1) {
                     apiBlocks[n].classList.remove('search-hidden');
+                    highlightText(apiBlocks[n], query);
                 }
             }
 
