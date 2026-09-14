@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (c) 2025 nstechbytes
+ * Copyright (c) 2026 nstechbytes
  *
  * Licensed under the MIT License.
  * You may obtain a copy of the License at:
@@ -16,7 +16,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 
 [assembly: AssemblyCopyright("Â© 2025 - nstechbytes")]
-[assembly: AssemblyVersion("1.7.1.0")]
+[assembly: AssemblyVersion("1.7.2.0")]
 
 // Do not change the entries below!
 #if X64

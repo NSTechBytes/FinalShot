@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 nstechbytes
+ * Copyright (c) 2026 nstechbytes
  *
  * Licensed under the MIT License.
  * You may obtain a copy of the License at:
