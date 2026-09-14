@@ -29,7 +29,15 @@ namespace PluginScreenshot
 
             Logger.Log("CommandDispatcher: " + cmd);
 
-            if (string.Equals(cmd, "-fs", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(cmd, "-open-last-screenshot", StringComparison.OrdinalIgnoreCase))
+            {
+                ScreenshotManager.OpenLastSaved();
+            }
+            else if (string.Equals(cmd, "-open-last-gif", StringComparison.OrdinalIgnoreCase))
+            {
+                GifCaptureManager.OpenLastSaved();
+            }
+            else if (string.Equals(cmd, "-fs", StringComparison.OrdinalIgnoreCase))
             {
                 ScreenshotManager.TakeFullScreen(settings);
             }

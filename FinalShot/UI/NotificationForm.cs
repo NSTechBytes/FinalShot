@@ -16,6 +16,8 @@ using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
+using System.IO;
+using System.Text.RegularExpressions;
 using System.Windows.Forms;
 
 using WinTimer = System.Windows.Forms.Timer;
@@ -30,8 +32,9 @@ namespace PluginScreenshot
     //   Right: App name, title, subtitle, close button.
     //
     // Themed: Dark / Light / System.
-    // Clicking the body (not close button) executes NotificationClickAction.
-    // Fades in, auto-closes after 4s, fades out.
+    // Click body runs NotificationClickAction. A sole ["path"] bang opens this
+    // toast's file (_imagePath) so early-resolved GetLastScreenshotPath still
+    // matches the preview. Fades in, auto-closes after 4s, fades out.
     public sealed class NotificationForm : Form
     {
         //  Layout constants
@@ -194,12 +197,46 @@ namespace PluginScreenshot
             }
 
             // Click anywhere else -> execute action then close
-            if (!string.IsNullOrEmpty(_clickAction))
-            {
-                try { BangQueue.Enqueue(_settings?.Api, _clickAction); }
-                catch (Exception ex) { Logger.Log($"NotificationForm: click action error -- {ex.Message}"); }
-            }
+            try { ExecuteClickAction(); }
+            catch (Exception ex) { Logger.Log($"NotificationForm: click action error -- {ex.Message}"); }
             StartClose();
+        }
+
+        // Uses this toast's _imagePath so a stale GetLast* path still opens the preview file.
+        private void ExecuteClickAction()
+        {
+            if (string.IsNullOrWhiteSpace(_clickAction))
+                return;
+
+            string action = _clickAction.Trim();
+
+            // Rainmeter resolves ["[&Measure:GetLastScreenshotPath()]"] at measure
+            // reload (often the previous file). Treat a sole quoted path as "open
+            // this capture", unless it is an existing directory (open folder as-is).
+            string quotedPath;
+            if (TryGetSoleQuotedPath(action, out quotedPath))
+            {
+                if (!string.IsNullOrEmpty(quotedPath) &&
+                    Directory.Exists(quotedPath) && !File.Exists(quotedPath))
+                {
+                    BangQueue.Enqueue(_settings?.Api, action);
+                    return;
+                }
+
+                ScreenshotManager.OpenFile(_imagePath);
+                return;
+            }
+
+            BangQueue.Enqueue(_settings?.Api, action);
+        }
+
+        private static bool TryGetSoleQuotedPath(string action, out string path)
+        {
+            path = null;
+            var m = Regex.Match(action, @"^\s*\[\s*""(?<p>[^""]*)""\s*\]\s*$");
+            if (!m.Success) return false;
+            path = m.Groups["p"].Value;
+            return true;
         }
 
         //  Paint

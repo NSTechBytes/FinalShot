@@ -103,6 +103,13 @@ namespace PluginScreenshot
             get { lock (_stateLock) return _lastFileSizeBytes; }
         }
 
+        public static void OpenLastSaved()
+        {
+            string path;
+            lock (_stateLock) { path = _lastSavedPath; }
+            ScreenshotManager.OpenFile(path);
+        }
+
         public static void StartRecording(Settings settings,
                                           GifCaptureMode mode = GifCaptureMode.FullScreen,
                                           string windowTitle  = null)

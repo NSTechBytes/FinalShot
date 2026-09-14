@@ -13,12 +13,12 @@
  */
 
 using System;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
-using System.Media;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 namespace PluginScreenshot
@@ -29,6 +29,32 @@ namespace PluginScreenshot
 
         // Full path of the last successfully saved screenshot this session.
         public static string LastSavedPath => _lastSavedPath ?? "";
+
+        public static void OpenLastSaved()
+        {
+            OpenFile(_lastSavedPath);
+        }
+
+        internal static void OpenFile(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            {
+                Logger.Log("OpenFile: missing or empty path: " + path);
+                return;
+            }
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = path,
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                Logger.Log("OpenFile error: " + ex.Message);
+            }
+        }
 
         public static void DrawCursor(Graphics g, Rectangle bounds)
         {
