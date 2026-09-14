@@ -45,6 +45,7 @@ namespace PluginScreenshot
         private sealed class MeasureBindings
         {
             public Settings Settings;
+            public string ConfigKey;
             public List<BindingEntry> Entries = new List<BindingEntry>();
         }
 
@@ -64,6 +65,21 @@ namespace PluginScreenshot
 
             lock (Sync)
             {
+                string hotkeyKey = settings != null ? settings.HotkeyConfigKey : "";
+
+                // DynamicVariables=1 calls Reload every update. Refresh Settings
+                // pointers only when hotkey chords did not change — avoid rebind spam.
+                MeasureBindings existing;
+                if (Measures.TryGetValue(measureId, out existing) &&
+                    existing.ConfigKey == hotkeyKey)
+                {
+                    existing.Settings = settings;
+                    foreach (var e in existing.Entries)
+                        e.Settings = settings;
+                    RefreshFlatSettingsLocked(measureId, settings);
+                    return;
+                }
+
                 Measures.Remove(measureId);
 
                 if (settings != null && settings.HotkeysEnabled)
@@ -74,15 +90,49 @@ namespace PluginScreenshot
                         Measures[measureId] = new MeasureBindings
                         {
                             Settings = settings,
+                            ConfigKey = hotkeyKey,
                             Entries = entries
                         };
                         Logger.Log("HotkeyManager: measure " + measureId.ToInt64()
                             + " registered " + entries.Count + " hotkey(s).");
                     }
+                    else
+                    {
+                        // Enabled but no valid chords — keep key so we skip rebuilds.
+                        Measures[measureId] = new MeasureBindings
+                        {
+                            Settings = settings,
+                            ConfigKey = hotkeyKey,
+                            Entries = new List<BindingEntry>()
+                        };
+                    }
+                }
+                else if (settings != null)
+                {
+                    Measures[measureId] = new MeasureBindings
+                    {
+                        Settings = settings,
+                        ConfigKey = hotkeyKey,
+                        Entries = new List<BindingEntry>()
+                    };
                 }
 
                 RebuildFlatLocked();
                 EnsureHookStateLocked();
+            }
+        }
+
+        private static void RefreshFlatSettingsLocked(IntPtr measureId, Settings settings)
+        {
+            MeasureBindings mb;
+            if (!Measures.TryGetValue(measureId, out mb) || mb.Entries.Count == 0)
+                return;
+
+            var set = new HashSet<BindingEntry>(mb.Entries);
+            for (int i = 0; i < _flat.Count; i++)
+            {
+                if (set.Contains(_flat[i]))
+                    _flat[i].Settings = settings;
             }
         }
 

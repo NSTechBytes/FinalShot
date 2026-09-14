@@ -20,6 +20,9 @@ namespace PluginScreenshot
 {
     public class Settings
     {
+        // Suppresses spam when DynamicVariables=1 reloads every update.
+        private static string _lastDebugSignature;
+
         public API Api { get; }
         public string SavePath { get; private set; }
         public string FinishAction { get; private set; }
@@ -200,33 +203,78 @@ namespace PluginScreenshot
             if (!string.IsNullOrEmpty(dbg))
                 Logger.LogFilePath = dbg;
 
-            Logger.Log("Settings reloaded. SavePath=" + SavePath
-                + "  DetectWindows=" + DetectWindows
-                + "  DetectControls=" + DetectControls
-                + "  RoundWindowCorners=" + RoundWindowCorners
-                + "  OcrLanguage=" + OcrLanguage
-                + "  OcrScaleFactor=" + OcrScaleFactor
-                + "  OcrSingleLine=" + OcrSingleLine
-                + "  ShowOCRWindow=" + ShowOcrWindow
-                + "  OCRFinishAction=" + (string.IsNullOrEmpty(OcrFinishAction) ? "(none)" : "(set)")
-                + "  HotkeysEnabled=" + HotkeysEnabled
-                + "  HotkeyCustom=" + (string.IsNullOrEmpty(HotkeyCustom) ? "(none)" : HotkeyCustom)
-                + "  HotkeyWindowHandle=" + (string.IsNullOrEmpty(HotkeyWindowHandle) ? "(none)" : HotkeyWindowHandle)
-                + "  HotkeyStoredWindow=" + (string.IsNullOrEmpty(HotkeyStoredWindow) ? "(none)" : HotkeyStoredWindow)
-                + "  HotkeyOCR=" + (string.IsNullOrEmpty(HotkeyOcr) ? "(none)" : HotkeyOcr)
-                + "  GifSavePath=" + GifSavePath
-                + "  GifFPS=" + GifFPS
-                + "  GifQuality=" + GifQuality
-                + "  GifCompression=" + GifCompression
-                + "  GifDuration=" + GifDuration
-                + "  GifPredefinedRegion=" + GifPredefinedRegion
-                + "  GifStartAction="      + (string.IsNullOrEmpty(GifStartAction)      ? "(none)" : "(set)")
-                + "  GifCancelAction="     + (string.IsNullOrEmpty(GifCancelAction)     ? "(none)" : "(set)")
-                + "  GifStopAction="       + (string.IsNullOrEmpty(GifStopAction)       ? "(none)" : "(set)")
-                + "  GifPauseAction="      + (string.IsNullOrEmpty(GifPauseAction)      ? "(none)" : "(set)")
-                + "  GifResumeAction="     + (string.IsNullOrEmpty(GifResumeAction)     ? "(none)" : "(set)")
-                + "  GifEncodingAction=" + (string.IsNullOrEmpty(GifEncodingAction) ? "(none)" : "(set)")
-                + "  GifFinishAction="   + (string.IsNullOrEmpty(GifFinishAction)   ? "(none)" : "(set)"));
+            // DynamicVariables=1 reloads every update (SavePath often changes each
+            // second with a Time measure). Only log when non-path config changes.
+            string sig = BuildDebugSignature();
+            if (sig != _lastDebugSignature)
+            {
+                _lastDebugSignature = sig;
+                Logger.Log("Settings reloaded. SavePath=" + SavePath
+                    + "  DetectWindows=" + DetectWindows
+                    + "  DetectControls=" + DetectControls
+                    + "  RoundWindowCorners=" + RoundWindowCorners
+                    + "  OcrLanguage=" + OcrLanguage
+                    + "  OcrScaleFactor=" + OcrScaleFactor
+                    + "  OcrSingleLine=" + OcrSingleLine
+                    + "  ShowOCRWindow=" + ShowOcrWindow
+                    + "  OCRFinishAction=" + (string.IsNullOrEmpty(OcrFinishAction) ? "(none)" : "(set)")
+                    + "  HotkeysEnabled=" + HotkeysEnabled
+                    + "  HotkeyCustom=" + (string.IsNullOrEmpty(HotkeyCustom) ? "(none)" : HotkeyCustom)
+                    + "  HotkeyWindowHandle=" + (string.IsNullOrEmpty(HotkeyWindowHandle) ? "(none)" : HotkeyWindowHandle)
+                    + "  HotkeyStoredWindow=" + (string.IsNullOrEmpty(HotkeyStoredWindow) ? "(none)" : HotkeyStoredWindow)
+                    + "  HotkeyOCR=" + (string.IsNullOrEmpty(HotkeyOcr) ? "(none)" : HotkeyOcr)
+                    + "  GifSavePath=" + GifSavePath
+                    + "  GifFPS=" + GifFPS
+                    + "  GifQuality=" + GifQuality
+                    + "  GifCompression=" + GifCompression
+                    + "  GifDuration=" + GifDuration
+                    + "  GifPredefinedRegion=" + GifPredefinedRegion
+                    + "  GifStartAction="      + (string.IsNullOrEmpty(GifStartAction)      ? "(none)" : "(set)")
+                    + "  GifCancelAction="     + (string.IsNullOrEmpty(GifCancelAction)     ? "(none)" : "(set)")
+                    + "  GifStopAction="       + (string.IsNullOrEmpty(GifStopAction)       ? "(none)" : "(set)")
+                    + "  GifPauseAction="      + (string.IsNullOrEmpty(GifPauseAction)      ? "(none)" : "(set)")
+                    + "  GifResumeAction="     + (string.IsNullOrEmpty(GifResumeAction)     ? "(none)" : "(set)")
+                    + "  GifEncodingAction=" + (string.IsNullOrEmpty(GifEncodingAction) ? "(none)" : "(set)")
+                    + "  GifFinishAction="   + (string.IsNullOrEmpty(GifFinishAction)   ? "(none)" : "(set)"));
+            }
+        }
+
+        // Hotkey chords + enabled flag — used to skip rebinding every DynamicVariables reload.
+        internal string HotkeyConfigKey
+        {
+            get
+            {
+                return (HotkeysEnabled ? "1" : "0")
+                    + "|" + (HotkeyFullscreen ?? "")
+                    + "|" + (HotkeyPredefined ?? "")
+                    + "|" + (HotkeyCustom ?? "")
+                    + "|" + (HotkeyWindowHandle ?? "")
+                    + "|" + (HotkeyStoredWindow ?? "")
+                    + "|" + (HotkeyOcr ?? "")
+                    + "|" + (HotkeyGifToggle ?? "")
+                    + "|" + (HotkeyGifToggleSnap ?? "");
+            }
+        }
+
+        // Everything except SavePath / GifSavePath (those change every update with stamps).
+        private string BuildDebugSignature()
+        {
+            return HotkeyConfigKey
+                + "|" + DetectWindows + "|" + DetectControls + "|" + RoundWindowCorners
+                + "|" + ShowCursor + "|" + ShowNotification + "|" + PlayNotificationSound
+                + "|" + UsePrintWindow + "|" + JpegQuality + "|" + UITheme
+                + "|" + PredefinedRegion
+                + "|" + (FinishAction ?? "")
+                + "|" + (NotificationClickAction ?? "")
+                + "|" + OcrLanguage + "|" + OcrScaleFactor + "|" + OcrSingleLine
+                + "|" + ShowOcrWindow + "|" + (OcrFinishAction ?? "")
+                + "|" + GifFPS + "|" + GifQuality + "|" + GifCompression + "|" + GifDuration
+                + "|" + GifPredefinedRegion
+                + "|" + GifShowOverlay + "|" + GifShowEncodingWindow + "|" + GifShowStateDialogs
+                + "|" + (GifStartAction ?? "") + "|" + (GifCancelAction ?? "")
+                + "|" + (GifStopAction ?? "") + "|" + (GifPauseAction ?? "")
+                + "|" + (GifResumeAction ?? "") + "|" + (GifEncodingAction ?? "")
+                + "|" + (GifFinishAction ?? "");
         }
     }
 }
