@@ -129,7 +129,10 @@ namespace PluginScreenshot
                         Logger.Log("GifCaptureManager.StartRecording(Snap): already active, ignoring.");
                         return;
                     }
+                    // Recording during region pick blocks double-start, but do not
+                    // keep the previous session's start time (elapsed would jump).
                     _state = State.Recording;
+                    ClearLiveStatsLocked();
                 }
                 var snapThread = new Thread(() =>
                 {
@@ -139,7 +142,11 @@ namespace PluginScreenshot
                         if (region == null || region.Value.Width <= 0 || region.Value.Height <= 0)
                         {
                             Logger.Log("GifCaptureManager.StartRecording(Snap): selection cancelled.");
-                            lock (_stateLock) { _state = State.Idle; }
+                            lock (_stateLock)
+                            {
+                                _state = State.Idle;
+                                ClearLiveStatsLocked();
+                            }
                             return;
                         }
                         Logger.Log($"GifCaptureManager.StartRecording(Snap): region={region.Value}");
@@ -149,7 +156,11 @@ namespace PluginScreenshot
                     catch (Exception ex)
                     {
                         Logger.Log($"GifCaptureManager.StartRecording(Snap): error -- {ex.Message}");
-                        lock (_stateLock) { _state = State.Idle; }
+                        lock (_stateLock)
+                        {
+                            _state = State.Idle;
+                            ClearLiveStatsLocked();
+                        }
                     }
                 });
                 snapThread.SetApartmentState(ApartmentState.STA);
@@ -307,6 +318,7 @@ namespace PluginScreenshot
                 cacheSnapshot         = _cache;
                 _captureThread        = null;
                 _cache                = null;
+                ClearLiveStatsLocked();
             }
 
             Logger.Log("GifCaptureManager.CancelRecording: signalled stop, discarding frames.");
@@ -336,6 +348,18 @@ namespace PluginScreenshot
         }
 
         //  Internal -- start
+
+        // Clears elapsed/frame counters. Caller must hold _stateLock.
+        // Sets _recordingStart to MinValue so RecordingElapsed stays 0 until
+        // StartRecordingInternal stamps a real start time.
+        private static void ClearLiveStatsLocked()
+        {
+            _recordingStart  = DateTime.MinValue;
+            _pausedDuration  = TimeSpan.Zero;
+            _pauseStartUtc   = DateTime.MinValue;
+            _pauseRequested  = false;
+            _framesCaptured  = 0;
+        }
 
         private static void StartRecordingInternal(Settings settings,
                                                    GifCaptureMode mode,
@@ -626,6 +650,7 @@ namespace PluginScreenshot
                     _state         = State.Idle;
                     _captureThread = null;
                     _cache         = null;
+                    ClearLiveStatsLocked();
                 }
                 Logger.Log("GifCaptureManager.EncodeAndFinish: state reset to Idle.");
             }
