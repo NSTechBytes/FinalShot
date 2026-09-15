@@ -1,6 +1,6 @@
 # FinalShot
 
-FinalShot is a free, open-source [Rainmeter](https://www.rainmeter.net/) plugin for capturing screenshots, recording animated GIFs, and extracting text with OCR—directly from your skins.
+FinalShot is a free, open-source [Rainmeter](https://www.rainmeter.net/) plugin for capturing screenshots, recording animated GIFs, and extracting text with OCR directly from your skins.
 
 Trigger captures with bangs or global hotkeys, choose full screen, region, window, or smart snap selection, and style the built-in UI to match your desktop with Dark, Light, or System themes.
 
