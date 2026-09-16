@@ -177,6 +177,18 @@ namespace PluginScreenshot
         [DllImport("user32.dll")]
         public static extern bool DrawIcon(IntPtr hDC, int X, int Y, IntPtr hIcon);
 
+        // ShareX-style: draw cursor at its native pixel size (avoids blurry DrawIcon scaling).
+        [DllImport("user32.dll", SetLastError = true)]
+        public static extern bool DrawIconEx(IntPtr hdc, int xLeft, int yTop, IntPtr hIcon,
+            int cxWidth, int cyHeight, int istepIfAniCur, IntPtr hbrFlickerFreeDraw, int diFlags);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        public static extern IntPtr CopyIcon(IntPtr hIcon);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool DestroyIcon(IntPtr hIcon);
+
         [DllImport("user32.dll", SetLastError = true)]
         public static extern bool GetIconInfo(IntPtr hIcon, out ICONINFO pIconInfo);
 
@@ -185,6 +197,8 @@ namespace PluginScreenshot
         public static extern bool DeleteObject(IntPtr hObject);
 
         public const int CURSOR_SHOWING = 0x00000001;
+        public const int DI_NORMAL     = 0x0003; // DI_IMAGE | DI_MASK
+
 
         // Low-level keyboard hook
 

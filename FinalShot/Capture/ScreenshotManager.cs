@@ -58,34 +58,51 @@ namespace PluginScreenshot
 
         public static void DrawCursor(Graphics g, Rectangle bounds)
         {
+            if (g == null) return;
+
             var ci = new NativeMethods.CURSORINFO { cbSize = Marshal.SizeOf(typeof(NativeMethods.CURSORINFO)) };
             if (!NativeMethods.GetCursorInfo(out ci) || ci.flags != NativeMethods.CURSOR_SHOWING)
                 return;
 
-            if (!NativeMethods.GetIconInfo(ci.hCursor, out NativeMethods.ICONINFO iconInfo))
+            // CopyIcon so we own a stable handle (ShareX CursorData pattern).
+            IntPtr iconHandle = NativeMethods.CopyIcon(ci.hCursor);
+            if (iconHandle == IntPtr.Zero)
                 return;
 
-            // GetIconInfo allocates mask/color bitmaps — must DeleteObject both.
             try
             {
-                IntPtr hdc = g.GetHdc();
+                if (!NativeMethods.GetIconInfo(iconHandle, out NativeMethods.ICONINFO iconInfo))
+                    return;
+
                 try
                 {
                     int x = ci.ptScreenPos.x - bounds.Left - iconInfo.xHotspot;
                     int y = ci.ptScreenPos.y - bounds.Top - iconInfo.yHotspot;
-                    NativeMethods.DrawIcon(hdc, x, y, ci.hCursor);
+
+                    // Draw at native cursor size (cx/cy = 0). DrawIcon alone often
+                    // scales via SM_CXICON and looks soft/blurry on HiDPI.
+                    IntPtr hdc = g.GetHdc();
+                    try
+                    {
+                        NativeMethods.DrawIconEx(hdc, x, y, iconHandle,
+                            0, 0, 0, IntPtr.Zero, NativeMethods.DI_NORMAL);
+                    }
+                    finally
+                    {
+                        g.ReleaseHdc(hdc);
+                    }
                 }
                 finally
                 {
-                    g.ReleaseHdc(hdc);
+                    if (iconInfo.hbmMask != IntPtr.Zero)
+                        NativeMethods.DeleteObject(iconInfo.hbmMask);
+                    if (iconInfo.hbmColor != IntPtr.Zero)
+                        NativeMethods.DeleteObject(iconInfo.hbmColor);
                 }
             }
             finally
             {
-                if (iconInfo.hbmMask != IntPtr.Zero)
-                    NativeMethods.DeleteObject(iconInfo.hbmMask);
-                if (iconInfo.hbmColor != IntPtr.Zero)
-                    NativeMethods.DeleteObject(iconInfo.hbmColor);
+                NativeMethods.DestroyIcon(iconHandle);
             }
         }
 
@@ -98,9 +115,13 @@ namespace PluginScreenshot
             var bmp = new Bitmap(screen.Width, screen.Height, PixelFormat.Format32bppArgb);
             using (Graphics g = Graphics.FromImage(bmp))
             {
+                g.CompositingMode = CompositingMode.SourceCopy;
                 g.CopyFromScreen(screen.Location, Point.Empty, screen.Size);
                 if (includeCursor)
+                {
+                    g.CompositingMode = CompositingMode.SourceOver;
                     DrawCursor(g, screen);
+                }
             }
             return bmp;
         }
