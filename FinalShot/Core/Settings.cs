@@ -27,6 +27,12 @@ namespace PluginScreenshot
         public string SavePath { get; private set; }
         public string FinishAction { get; private set; }
         public bool ShowCursor { get; private set; }
+
+        // ShareX-style snap overlay: stamp the live cursor into the frozen desktop
+        // snapshot and use Cursors.Cross as the secondary moving cursor.
+        // Default false so existing skins keep prior snap behavior.
+        public bool SnapFreezeCursor { get; private set; }
+
         public int JpegQuality { get; private set; }
         public Rectangle PredefinedRegion { get; private set; }
         public bool ShowNotification { get; private set; }
@@ -125,6 +131,7 @@ namespace PluginScreenshot
             SavePath         = api.ReadString("SavePath", "");
             FinishAction     = api.ReadString("ScreenshotFinishAction", "");
             ShowCursor       = api.ReadInt("ShowCursor", 0) > 0;
+            SnapFreezeCursor = api.ReadInt("SnapFreezeCursor", 0) > 0;
             JpegQuality      = api.ReadInt("JpgQuality", 70);
             ShowNotification = api.ReadInt("ShowNotification", 0) > 0;
             PlayNotificationSound = api.ReadInt("NotificationSound", 1) > 0;
@@ -267,7 +274,7 @@ namespace PluginScreenshot
         {
             return HotkeyConfigKey
                 + "|" + DetectWindows + "|" + DetectControls + "|" + RoundWindowCorners
-                + "|" + ShowCursor + "|" + ShowNotification + "|" + PlayNotificationSound
+                + "|" + ShowCursor + "|" + SnapFreezeCursor + "|" + ShowNotification + "|" + PlayNotificationSound
                 + "|" + UsePrintWindow + "|" + JpegQuality + "|" + UITheme
                 + "|" + PredefinedRegion
                 + "|" + (FinishAction ?? "")

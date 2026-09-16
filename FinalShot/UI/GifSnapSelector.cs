@@ -87,11 +87,10 @@ namespace PluginScreenshot
                 Bounds   = screen;
                 Location = screen.Location;
 
-                // Snapshot the desktop before showing the overlay so we can
-                // render the dimmed background without depending on Opacity.
-                _desktopSnapshot = new Bitmap(screen.Width, screen.Height);
-                using (Graphics g = Graphics.FromImage(_desktopSnapshot))
-                    g.CopyFromScreen(screen.Location, Point.Empty, screen.Size);
+                // ShareX-style freeze when SnapFreezeCursor=1 (Cross = secondary cursor).
+                // Stamp cursor only when ShowCursor=1.
+                _desktopSnapshot = ScreenshotManager.CaptureDesktopSnapshot(
+                    _settings != null && _settings.SnapFreezeCursor && _settings.ShowCursor);
             }
 
             protected override void OnLoad(EventArgs e)

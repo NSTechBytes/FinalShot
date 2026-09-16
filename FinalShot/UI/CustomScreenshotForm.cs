@@ -86,12 +86,11 @@ namespace PluginScreenshot
             // Window-handle pick always enables detection (plan: window-only select).
             _detectWindows  = mode == CustomScreenshotMode.WindowHandlePick || settings.DetectWindows;
 
-            // Snapshot the desktop before the overlay appears so we can render
-            // the dimmed background and the undimmed highlighted region ourselves.
+            // ShareX-style freeze when SnapFreezeCursor=1: Cross is the secondary cursor.
+            // Cursor is stamped into the snapshot only when ShowCursor=1 as well.
             Rectangle screen = SystemInformation.VirtualScreen;
-            _desktopSnapshot = new Bitmap(screen.Width, screen.Height);
-            using (Graphics g = Graphics.FromImage(_desktopSnapshot))
-                g.CopyFromScreen(screen.Location, Point.Empty, screen.Size);
+            _desktopSnapshot = ScreenshotManager.CaptureDesktopSnapshot(
+                _settings.SnapFreezeCursor && _settings.ShowCursor);
 
             DoubleBuffered  = true;
             FormBorderStyle = FormBorderStyle.None;
@@ -295,7 +294,11 @@ namespace PluginScreenshot
                     : IntPtr.Zero;
                 Logger.Log("Window capture: " + captureRect + " roundCorners=" + (roundHwnd != IntPtr.Zero));
                 Hide();
-                ScreenshotManager.CompositeCapture(captureRect, _settings, roundHwnd);
+                if (_settings.SnapFreezeCursor)
+                    ScreenshotManager.CompositeCaptureFromSnapshot(
+                        _desktopSnapshot, captureRect, _settings, roundHwnd);
+                else
+                    ScreenshotManager.CompositeCapture(captureRect, _settings, roundHwnd);
                 _finishCallback?.Invoke();
                 Close();
                 return;
@@ -325,7 +328,10 @@ namespace PluginScreenshot
                 _selection.Width,
                 _selection.Height);
 
-            ScreenshotManager.CompositeCapture(absRect, _settings);
+            if (_settings.SnapFreezeCursor)
+                ScreenshotManager.CompositeCaptureFromSnapshot(_desktopSnapshot, absRect, _settings);
+            else
+                ScreenshotManager.CompositeCapture(absRect, _settings);
             _finishCallback?.Invoke();
             Close();
         }

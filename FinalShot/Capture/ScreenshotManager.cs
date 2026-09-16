@@ -88,6 +88,77 @@ namespace PluginScreenshot
                     NativeMethods.DeleteObject(iconInfo.hbmColor);
             }
         }
+
+        // ShareX-style desktop freeze for snap overlays: CopyFromScreen, then optionally
+        // stamp the live cursor into the bitmap. The overlay uses Cursors.Cross as the
+        // secondary moving cursor while this frozen cursor stays on the snapshot.
+        public static Bitmap CaptureDesktopSnapshot(bool includeCursor)
+        {
+            Rectangle screen = SystemInformation.VirtualScreen;
+            var bmp = new Bitmap(screen.Width, screen.Height, PixelFormat.Format32bppArgb);
+            using (Graphics g = Graphics.FromImage(bmp))
+            {
+                g.CopyFromScreen(screen.Location, Point.Empty, screen.Size);
+                if (includeCursor)
+                    DrawCursor(g, screen);
+            }
+            return bmp;
+        }
+
+        // Crop a virtual-screen snapshot (same size/origin as CaptureDesktopSnapshot) and save.
+        public static void CompositeCaptureFromSnapshot(Bitmap snapshot, Rectangle absRect,
+            Settings settings, IntPtr roundCornersForWindow = default(IntPtr))
+        {
+            if (snapshot == null || settings == null || string.IsNullOrWhiteSpace(settings.SavePath))
+            {
+                Logger.Log("CompositeCaptureFromSnapshot: missing snapshot or SavePath.");
+                return;
+            }
+            if (absRect.Width <= 0 || absRect.Height <= 0)
+            {
+                Logger.Log("CompositeCaptureFromSnapshot: invalid rectangle.");
+                return;
+            }
+
+            Rectangle screen = SystemInformation.VirtualScreen;
+            var rel = new Rectangle(
+                absRect.X - screen.X,
+                absRect.Y - screen.Y,
+                absRect.Width,
+                absRect.Height);
+            rel = Rectangle.Intersect(rel, new Rectangle(0, 0, snapshot.Width, snapshot.Height));
+            if (rel.Width <= 0 || rel.Height <= 0)
+            {
+                Logger.Log("CompositeCaptureFromSnapshot: rectangle outside snapshot.");
+                return;
+            }
+
+            Bitmap bmp = null;
+            try
+            {
+                bmp = snapshot.Clone(rel, PixelFormat.Format32bppArgb);
+                if (roundCornersForWindow != IntPtr.Zero && settings.RoundWindowCorners)
+                    bmp = WindowCornerHelper.ApplyRoundedCornersIfNeeded(bmp, roundCornersForWindow);
+
+                SaveImageSafely(bmp, settings);
+
+                if (settings.ShowNotification)
+                {
+                    Logger.Log("CompositeCaptureFromSnapshot: ShowNotification is enabled");
+                    ShowNotificationWithImage(settings.SavePath, "Custom Region", settings);
+                }
+                ExecuteFinishAction(settings);
+            }
+            catch (Exception ex)
+            {
+                Logger.Log("CompositeCaptureFromSnapshot: " + ex.Message);
+            }
+            finally
+            {
+                bmp?.Dispose();
+            }
+        }
+
         private static void WithHighDpiContext(Action action)
         {
             IntPtr old = NativeMethods.SetThreadDpiAwarenessContext(NativeMethods.DPI_PER_MONITOR_AWARE_V2);

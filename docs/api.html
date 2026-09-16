@@ -201,7 +201,30 @@ SavePath=#@#Screenshots\shot_#DATE#.png</code></pre>
 
                         <p><strong>Why use this?</strong> If you are creating a tutorial or need to point to something on screen, set this to <code>1</code> so the cursor appears in the capture. For clean screenshots (e.g. wallpaper captures), leave it at <code>0</code>.</p>
 
-                        <p><strong>Related settings:</strong> This applies to all screenshot modes and GIF recording.</p>
+                        <p><strong>Related settings:</strong> This applies to all screenshot modes and GIF recording. For ShareX-style frozen cursor on the snap overlay, also enable <a href="#screenshot-settings"><code>SnapFreezeCursor</code></a>.</p>
+                    </div>
+                </div>
+
+                <div class="api-block">
+                    <div class="api-block-header">
+                        <span class="api-name">SnapFreezeCursor</span>
+                        <span class="api-default">Default: 0</span>
+                    </div>
+                    <div class="api-block-content">
+                        <span class="api-type">int (0 or 1)</span>
+                        <p>Freezes the mouse appearance into the desktop snapshot when the overlay opens, then shows a secondary crosshair cursor for selecting the region.</p>
+                        <ul>
+                            <li><code>0</code> (default): Previous behavior. Snap overlay has no frozen cursor stamp; final capture is taken live from the screen.</li>
+                            <li><code>1</code>: Freeze the desktop under the overlay. The selection cursor is always a crosshair. The saved region is cropped from the frozen snapshot.</li>
+                        </ul>
+
+                        <p>The frozen cursor graphic is only stamped when <a href="#screenshot-settings"><code>ShowCursor</code></a> is also <code>1</code> (same idea as ShareX). With <code>SnapFreezeCursor=1</code> and <code>ShowCursor=0</code>, the desktop still freezes, but without a cursor drawn on it.</p>
+
+                        <p><strong>Example:</strong></p>
+<pre><code>ShowCursor=1
+SnapFreezeCursor=1</code></pre>
+
+                        <p><strong>Applies to:</strong> custom screenshot (<code>-cs</code>), window-handle pick overlay, GIF snap region select, and OCR region select.</p>
                     </div>
                 </div>
 
